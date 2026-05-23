@@ -244,9 +244,25 @@ function countCoLocatedAccordionRows(node) {
   for (let i = 0; i < lim; i++) {
     const child = node.children[i];
     if (!isNodeVisible(child)) continue;
+    const box = child.absoluteBoundingBox;
+    if (!box || box.height < 40 || box.height > 80) continue;
     if (subtreeHasText(child, 4) && subtreeHasChevronName(child, 4)) rows++;
   }
   return rows;
+}
+
+function averageDirectChildWidth(node) {
+  if (!node || !("children" in node)) return 0;
+  let sum = 0;
+  let n = 0;
+  const lim = Math.min(node.children.length, 30);
+  for (let i = 0; i < lim; i++) {
+    const c = node.children[i];
+    if (!isNodeVisible(c)) continue;
+    const box = c.absoluteBoundingBox;
+    if (box && box.width > 0) { sum += box.width; n++; }
+  }
+  return n > 0 ? sum / n : 0;
 }
 
 function countPillChildren(node) {
@@ -338,7 +354,9 @@ function gatherContext(node, allTextNodes) {
   const nearbyText = findSpatiallyNearbyText(node, 250, allTextNodes);
 
   const childNames = "children" in node
-    ? node.children.map((c) => ({ name: c.name, type: c.type }))
+    ? node.children
+        .filter(function(c) { return isNodeVisible(c); })
+        .map((c) => ({ name: c.name, type: c.type }))
     : [];
 
   const childCount = childNames.length;
@@ -987,7 +1005,7 @@ function generateAriaSchema(spec, ariaLabel, identifier, ctx) {
     };
   } else if (spec.role === "accordion") {
     schema = {
-      "structure":   "heading[aria-level=N] > button[aria-expanded][aria-controls] + div[role=region][aria-labelledby]",
+      "structure": "heading > button[aria-expanded][aria-controls] + div[role=region][aria-labelledby]",
       "trigger": {
         "role":          "button",
         "aria-expanded": false,
@@ -996,12 +1014,9 @@ function generateAriaSchema(spec, ariaLabel, identifier, ctx) {
       "panel": {
         "role":            "region",
         "aria-labelledby": "[trigger-id]",
-        "hidden":          true,
       },
-      "heading-level": "Ask the designer: what h-level fits this page context?",
-      "chevron-icon":  { "aria-hidden": true },
-      "critical-note": "button MUST be a child of heading. heading INSIDE button = wrong (ARIA APG violation).",
-      "wcag": spec.wcagRefs,
+      "chevron-icon": { "aria-hidden": true },
+      "wcag": ["2.4.6", "4.1.2"],
       "apg":  "https://www.w3.org/WAI/ARIA/apg/patterns/accordion/",
     };
   } else if (spec.role === "combobox") {
@@ -1487,8 +1502,7 @@ const COMPONENT_SPECS = [
 //   variant keyword      → 1 pt
 //   nearby text keyword  → 1 pt
 
-function scoreAccordionSignals(ctx) {
-  let bonus = 0;
+function scoreAccordionSignals(ctx, node) {
   const reasons = [];
 
   if (ctx.accordionLayoutBlocked) {
@@ -1498,45 +1512,23 @@ function scoreAccordionSignals(ctx) {
     return { bonus: 0, reasons: ["accordion cancelled: multi-select / checkbox-group copy"] };
   }
 
-  if (ctx.accordionVerticalOk && ctx.accordionCoLocatedRows >= 2) {
-    bonus += 4;
-    reasons.push(ctx.accordionCoLocatedRows + " rows with co-located text+chevron");
+  const avgW = averageDirectChildWidth(node);
+  if (avgW > 0 && avgW < 200) {
+    return { bonus: 0, reasons: ["accordion blocked: avg child width " + Math.round(avgW) + "px < 200px"] };
   }
 
-  const nameList = [];
-  if (ctx.childNames) {
-    for (let ci = 0; ci < ctx.childNames.length; ci++) nameList.push(ctx.childNames[ci].name);
-  }
-  if (ctx.allChildNames) {
-    for (let ai = 0; ai < ctx.allChildNames.length; ai++) nameList.push(ctx.allChildNames[ai]);
-  }
-  const specificPatterns = ["accordion-item", "accordion-header", "accordion-panel"];
-  for (let pi = 0; pi < specificPatterns.length; pi++) {
-    let hits = 0;
-    for (let ni = 0; ni < nameList.length; ni++) {
-      if (layerNameMatchesPattern(nameList[ni], specificPatterns[pi])) hits++;
-    }
-    if (hits >= 2) {
-      bonus += 2;
-      reasons.push(hits + " layers match '" + specificPatterns[pi] + "'");
-      break;
-    }
-  }
-
-  if (ctx.pillChildCount >= 2) {
-    bonus -= 6;
-    reasons.push("counter: " + ctx.pillChildCount + " pill-shaped children");
-  }
-  if (ctx.smallRepeatingRowCount >= 2) {
-    bonus -= 4;
-    reasons.push("counter: small repeating items (<44px tall)");
-  }
   if (!ctx.accordionVerticalOk) {
-    bonus = 0;
-    reasons.push("counter: layout not vertical stack");
+    return { bonus: 0, reasons: ["accordion blocked: layout not vertical stack"] };
   }
 
-  return { bonus: Math.max(0, bonus), reasons: reasons };
+  if (ctx.accordionCoLocatedRows >= 2) {
+    return {
+      bonus: 8,
+      reasons: [ctx.accordionCoLocatedRows + " compound rows (text+chevron, 40–80px, vertical)"],
+    };
+  }
+
+  return { bonus: 0, reasons: ["no compound accordion match (chevron alone is insufficient)"] };
 }
 
 function scoreSpec(spec, ctx, node) {
@@ -1629,9 +1621,9 @@ function scoreSpec(spec, ctx, node) {
     }
   }
 
-  // Accordion: compound co-located rows only (not global chevron / generic "item")
+  // Accordion: compound co-located rows only (+8 or 0)
   if (spec.role === "accordion" && node) {
-    const acc = scoreAccordionSignals(ctx);
+    const acc = scoreAccordionSignals(ctx, node);
     count += acc.bonus;
     for (let ri = 0; ri < acc.reasons.length; ri++) reasons.push(acc.reasons[ri]);
   }
@@ -2678,6 +2670,233 @@ function setSharedA11y(node, key, value) {
   try { node.setSharedPluginData("a11y", key, value); } catch (_e) {}
 }
 
+var ANNOTATION_DEST_STORAGE_KEY = "annotation-destination";
+
+async function getAnnotationDestination() {
+  const v = await figma.clientStorage.getAsync(ANNOTATION_DEST_STORAGE_KEY);
+  if (v === "devmode" || v === "both") return v;
+  return "ask";
+}
+
+async function createCanvasA11yTag(node, key, value) {
+  if (!node || !isNodeVisible(node)) return null;
+  const fontName = await loadInter("Regular");
+  const tag = figma.createText();
+  if (fontName) tag.fontName = fontName;
+  const label = key + "=" + String(value).slice(0, 48);
+  tag.characters = label;
+  tag.fontSize = 10;
+  tag.fills = [{ type: "SOLID", color: { r: 0.35, g: 0.55, b: 0.95 } }];
+  tag.name = "a11y-tag / " + key;
+  tag.setPluginData("a11y.generated", "true");
+  tag.setPluginData("a11y.canvasTag", "true");
+  const box = node.absoluteBoundingBox;
+  if (box) {
+    tag.x = box.x + box.width + 6;
+    tag.y = box.y;
+  } else if ("x" in node) {
+    tag.x = node.x + (node.width || 0) + 6;
+    tag.y = node.y;
+  }
+  const parent = node.parent;
+  if (parent && "appendChild" in parent) parent.appendChild(tag);
+  else figma.currentPage.appendChild(tag);
+  return tag;
+}
+
+async function writeA11yAnnotation(node, key, value, destination) {
+  setSharedA11y(node, key, value);
+  if (destination === "both") {
+    await createCanvasA11yTag(node, key, value);
+  }
+}
+
+var FOCUS_STATE_ISSUE_CODES = {
+  MISSING_FOCUS_RING: true,
+  MISSING_STATE_FOCUS: true,
+  FOCUS_RING_CONTRAST_FAIL: true,
+};
+
+function isFocusStateIssue(issue) {
+  if (!issue) return false;
+  if (FOCUS_STATE_ISSUE_CODES[issue.code]) return true;
+  if (issue.code === "STATE_MISSING" && /focus/i.test(issue.message || "")) return true;
+  return false;
+}
+
+function getIssueTargetNode(issue, rootNode) {
+  if (issue && issue.nodeId) {
+    const n = figma.getNodeById(issue.nodeId);
+    if (n) return n;
+  }
+  return rootNode || null;
+}
+
+function readDesignerPending(node) {
+  if (!node || !node.getPluginData) return null;
+  try {
+    const raw = node.getPluginData("a11y-pending");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_e) { return null; }
+}
+
+function countDesignerPendingIssues(issues) {
+  if (!issues) return 0;
+  let n = 0;
+  for (let i = 0; i < issues.length; i++) {
+    if (issues[i].designerPending && !issues[i].fixed) n++;
+  }
+  return n;
+}
+
+var TYPE_NAME_KEYWORDS = {
+  button:     ["button", "btn"],
+  textField:  ["input", "textfield", "text-field", "field"],
+  checkbox:   ["checkbox", "check"],
+  "radio-group": ["radio", "radiogroup"],
+  select:     ["select", "dropdown", "combobox", "combo"],
+  modal:      ["modal", "dialog"],
+  tabs:       ["tab"],
+  slider:     ["slider", "range"],
+  "star-rating": ["star", "rating"],
+  toggle:     ["toggle", "switch"],
+  accordion:  ["accordion", "faq"],
+};
+
+function componentNameMatchesType(componentName, typeKey) {
+  const kws = TYPE_NAME_KEYWORDS[typeKey] || [typeKey];
+  const nl = (componentName || "").toLowerCase();
+  for (let i = 0; i < kws.length; i++) {
+    if (nl.indexOf(kws[i]) >= 0) return true;
+  }
+  return false;
+}
+
+function appendNonComponentIssue(issues, node, spec, typeKey) {
+  if (!node || !typeKey || !spec) return;
+  if (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "COMPONENT_SET") return;
+  if (node.type !== "FRAME" && node.type !== "GROUP" && node.type !== "VECTOR") return;
+  const label = spec.role || typeKey;
+  issues.push(makeIssue("MED", "NON_COMPONENT_ELEMENT", "4.1.2",
+    "This element looks like a " + label + " but is not a Figma component. " +
+    "Screen readers and developers rely on component structure.",
+    node.id));
+}
+
+function buildFocusStateComponentPrompt(node, rootNode) {
+  const target = node || rootNode;
+  const box = target.absoluteBoundingBox;
+  const w = box ? Math.round(box.width) : Math.round(target.width || 44);
+  const h = box ? Math.round(box.height) : Math.round(target.height || 44);
+  let textContent = "";
+  if ("findAllWithCriteria" in target) {
+    const texts = target.findAllWithCriteria({ types: ["TEXT"] });
+    for (let i = 0; i < texts.length && textContent.length < 120; i++) {
+      const t = (texts[i].characters || "").trim();
+      if (t) textContent = textContent ? textContent + " | " + t : t;
+    }
+  }
+  const role = getPluginA11y(target, "ariaRole") || getSharedA11y(target, "ariaRole") || "button";
+  return (
+    "Create an accessible " + role + " component based on ARIA APG pattern.\n" +
+    "Requirements:\n" +
+    "Root: role=\"" + role + "\"\n" +
+    "States required: default, hover, focus, disabled\n" +
+    "Focus state: 2px solid outline, 2px offset, color must achieve 3:1 contrast against adjacent colors\n" +
+    "Preserve this text content: \"" + (textContent || target.name) + "\"\n" +
+    "Approximate size: " + w + "×" + h + "px\n" +
+    "Place the new component 120px to the right of node [" + target.id + '] named "' + target.name + "\"\n" +
+    "Do not modify the original node\n" +
+    "Add ARIA annotations as Figma annotations on each layer"
+  );
+}
+
+function buildComponentLinkAIPrompt(node, typeKey, role) {
+  const target = node;
+  const box = target.absoluteBoundingBox;
+  const w = box ? Math.round(box.width) : Math.round(target.width || 44);
+  const h = box ? Math.round(box.height) : Math.round(target.height || 44);
+  let textContent = "";
+  if ("findAllWithCriteria" in target) {
+    const texts = target.findAllWithCriteria({ types: ["TEXT"] });
+    for (let i = 0; i < texts.length; i++) {
+      const t = (texts[i].characters || "").trim();
+      if (t) { textContent = t; break; }
+    }
+  }
+  const ariaRole = role || typeKey || "button";
+  return (
+    "Create an accessible " + ariaRole + " component based on ARIA APG pattern.\n" +
+    "Requirements:\n" +
+    "Root: role=\"" + ariaRole + "\"\n" +
+    "States required: default, hover, focus, disabled\n" +
+    "Focus state: 2px solid outline, 2px offset, color must achieve 3:1 contrast against adjacent colors\n" +
+    "Preserve this text content: \"" + (textContent || target.name) + "\"\n" +
+    "Approximate size: " + w + "×" + h + "px\n" +
+    "Place the new component 120px to the right of node [" + target.id + '] named "' + target.name + "\"\n" +
+    "Do not modify the original node\n" +
+    "Add ARIA annotations as Figma annotations on each layer"
+  );
+}
+
+async function copyTextOverridesToInstance(originalNode, instance) {
+  if (!originalNode || !instance || !("findAllWithCriteria" in originalNode)) return;
+  const originalTexts = originalNode.findAllWithCriteria({ types: ["TEXT"] });
+  const instanceTexts = instance.findAllWithCriteria({ types: ["TEXT"] });
+  const limit = Math.min(originalTexts.length, instanceTexts.length);
+  for (let i = 0; i < limit; i++) {
+    const src = originalTexts[i];
+    const dst = instanceTexts[i];
+    if (!src.characters) continue;
+    try {
+      if (dst.fontName !== figma.mixed) {
+        await figma.loadFontAsync(dst.fontName);
+        dst.characters = src.characters;
+      }
+    } catch (_e) {}
+  }
+}
+
+async function linkNodeToComponentInstance(originalNode, componentNode) {
+  const instance = componentNode.createInstance();
+  await copyTextOverridesToInstance(originalNode, instance);
+  instance.x = originalNode.x;
+  instance.y = originalNode.y;
+  const parent = originalNode.parent;
+  if (parent && "insertChild" in parent && "children" in parent) {
+    const idx = parent.children.indexOf(originalNode);
+    parent.insertChild(idx >= 0 ? idx : parent.children.length, instance);
+  } else {
+    figma.currentPage.appendChild(instance);
+  }
+  originalNode.visible = false;
+  return instance;
+}
+
+async function findAccessibleComponentCandidates(typeKey) {
+  const candidates = [];
+  const pages = figma.root.children;
+  for (let p = 0; p < pages.length; p++) {
+    const page = pages[p];
+    if (!("findAll" in page)) continue;
+    const found = page.findAll(function(n) {
+      return n.type === "COMPONENT" && componentNameMatchesType(n.name, typeKey);
+    });
+    for (let i = 0; i < found.length; i++) candidates.push(found[i]);
+  }
+  return candidates;
+}
+
+async function auditCandidateIssueCount(candidate, typeKey) {
+  const spec = COMPONENT_SPECS.find(function(s) { return s.role === typeKey; }) ||
+    COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
+  if (!spec) return 999;
+  const ctx = gatherContext(candidate);
+  const result = auditNode(candidate, spec, ctx);
+  return result.issues ? result.issues.length : 0;
+}
+
 function hasAccessibleName(node, ctx) {
   const inner = (ctx.innerText || []).join(" ").trim();
   if (inner.length > 0) return true;
@@ -2713,8 +2932,12 @@ function checkerHasHeading(node, ctx, typeKey) {
   const ariaLabel = getPluginA11y(node, "ariaLabel");
   const labelledBy = getPluginA11y(node, "ariaLabelledby");
   let sharedLabel = "";
-  try { sharedLabel = node.getSharedPluginData("a11y", "ariaLabel") || ""; } catch (_e) {}
-  if (ariaLabel.trim() || labelledBy.trim() || sharedLabel.trim()) return [];
+  let sharedLabelledBy = "";
+  try {
+    sharedLabel = node.getSharedPluginData("a11y", "aria-label") || "";
+    sharedLabelledBy = node.getSharedPluginData("a11y", "aria-labelledby") || "";
+  } catch (_e) {}
+  if (ariaLabel.trim() || labelledBy.trim() || sharedLabel.trim() || sharedLabelledBy.trim()) return [];
 
   if (ctx.textHierarchy) {
     for (let i = 0; i < ctx.textHierarchy.length; i++) {
@@ -2783,16 +3006,32 @@ function checkerRoleAnnotated(node, ctx, expectedRole, code) {
     node.id)];
 }
 
+function checkerAccordionHeadersAreButtons(node, ctx) {
+  const issues = [];
+  if (!node || !("children" in node)) return issues;
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i];
+    if (!isNodeVisible(child) || child.type === "TEXT") continue;
+    const role = getSharedA11y(child, "ariaRole");
+    if (role === "button") continue;
+    issues.push(makeIssue("HIGH", "ACCORDION_HEADER_NOT_BUTTON", "4.1.2",
+      "Accordion row \"" + child.name + "\" must annotate aria-role=\"button\" on the trigger (Dev Mode handoff)",
+      child.id));
+  }
+  return issues;
+}
+
 function checkerAriaExpandedAnnotated(node, ctx, typeKey) {
+  if (typeKey === "accordion") {
+    if (getSharedA11y(node, "ariaExpanded")) return [];
+    return [makeIssue("MED", "ARIA_EXPANDED_MISSING", "4.1.2",
+      "Document aria-expanded on accordion root in Dev Mode handoff (setSharedPluginData)",
+      node.id)];
+  }
   const stateMap = findStateVariants(node);
   const hasExp = stateMap["expanded"] || stateMap["collapsed"] || stateMap["open"] || stateMap["closed"];
   if (hasExp) return [];
   if (getSharedA11y(node, "ariaExpanded")) return [];
-  if (typeKey === "accordion" && ctx.hasChevrons) {
-    return [makeIssue("MED", "ARIA_EXPANDED_MISSING", "4.1.2",
-      "Add expanded/collapsed variants and document aria-expanded on accordion triggers",
-      node.id)];
-  }
   if (typeKey === "select") {
     return [makeIssue("MED", "ARIA_EXPANDED_MISSING", "4.1.2",
       "Document aria-expanded on the combobox trigger for open/closed states",
@@ -2802,18 +3041,10 @@ function checkerAriaExpandedAnnotated(node, ctx, typeKey) {
 }
 
 function checkerPanelHasRegionRole(node, ctx) {
-  if (!("findAll" in node)) return [];
-  const panels = node.findAll(function(n) {
-    const nl = n.name.toLowerCase();
-    return nl.indexOf("panel") >= 0 || nl.indexOf("content") >= 0 || nl.indexOf("body") >= 0;
-  });
-  if (panels.length === 0) {
-    if (getSharedA11y(node, "ariaRole") === "region") return [];
-    return [makeIssue("MED", "ACCORDION_PANEL_REGION", "4.1.2",
-      "Accordion should expose panel regions (role=\"region\" + aria-labelledby) for expanded content",
-      node.id)];
-  }
-  return [];
+  if (getSharedA11y(node, "ariaRole") === "region") return [];
+  return [makeIssue("MED", "ACCORDION_PANEL_REGION", "4.1.2",
+    "Document role=\"region\" on accordion panel in Dev Mode handoff (setSharedPluginData on root)",
+    node.id)];
 }
 
 function checkerTabsStructure(node, ctx) {
@@ -3047,7 +3278,7 @@ const SPEC_CHECKERS = {
   ON_OFF_STATE_NOT_COLOR_ONLY: function(node, ctx) {
     return matrixIssuesFromAudit(auditColorOnlyDisabled, node, { role: "switch", requiredStates: [] }, ctx);
   },
-  ACCORDION_HEADERS_ARE_BUTTONS: function(node, ctx) { return matrixIssuesFromAudit(auditHasHeadingStructure, node, { role: "accordion", requiredStates: [] }, ctx); },
+  ACCORDION_HEADERS_ARE_BUTTONS: function(node, ctx) { return checkerAccordionHeadersAreButtons(node, ctx); },
   ARIA_EXPANDED_ANNOTATED: function(node, ctx, typeKey) { return checkerAriaExpandedAnnotated(node, ctx, typeKey || "accordion"); },
   PANEL_HAS_REGION_ROLE: function(node, ctx) { return checkerPanelHasRegionRole(node, ctx); },
 };
@@ -3116,7 +3347,10 @@ const AUDIT_FUNCTIONS = {
 function auditNode(node, spec, ctx) {
   const typeKey = normalizeMatrixTypeKey(spec.role);
   if (typeKey && COMPONENT_SPEC_MATRIX[typeKey]) {
-    return runMatrixChecks(node, ctx, typeKey, spec);
+    const result = runMatrixChecks(node, ctx, typeKey, spec);
+    appendNonComponentIssue(result.issues, node, spec, typeKey);
+    enrichIssueFixMeta(result.issues, node);
+    return result;
   }
 
   // Legacy path (e.g. status/chip) — spec.audits list
@@ -3294,12 +3528,14 @@ function createDocFrame(rootNode, issues, ariaSchemaStr, componentType) {
 // mode: "copy"     → clone component 120px right, apply fixes to clone only
 // mode: "annotate" → only write pluginData / sharedPluginData — no renames, no visual changes
 
-async function applyFixes(suggestions, rootNodeId, mode) {
+async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) {
   mode = mode || "inplace";
   const rootNode = figma.getNodeById(rootNodeId);
   if (!rootNode) {
     return { applied: 0, skipped: (suggestions || []).length, details: ["Root node not found — did the selection change?"] };
   }
+  let dest = annotationDestination || await getAnnotationDestination();
+  if (dest === "ask") dest = "devmode";
 
   let targetNode         = rootNode;
   let reviewIndicatorId  = null;
@@ -3372,14 +3608,13 @@ async function applyFixes(suggestions, rootNodeId, mode) {
         } else if (sug.type === "setPluginData") {
           const dataKey  = sug.key || "a11y.v1.componentType";
           node.setPluginData(dataKey, sug.value);
-          // Mirror to sharedPluginData — visible in Dev Mode and Figma REST API
-          try {
-            const parts    = dataKey.split(".");
-            const shortKey = parts[parts.length - 1];
-            node.setSharedPluginData("a11y", shortKey, sug.value);
-          } catch (_e) { /* sharedPluginData unavailable in some contexts */ }
+          const parts    = dataKey.split(".");
+          const shortKey = parts[parts.length - 1];
+          const sharedKey = SHARED_A11Y_KEY_MAP[shortKey] || shortKey.replace(/([A-Z])/g, function(m) {
+            return "-" + m.toLowerCase();
+          });
+          await writeA11yAnnotation(node, sharedKey, sug.value, dest);
           applied++;
-          const shortKey = (sug.key || "componentType").split(".").pop();
           details.push("\u2713 " + node.name + " [" + shortKey + "] \u2190 \"" + sug.value.slice(0, 40) + "\"");
         }
       } catch (e) {
@@ -3550,9 +3785,14 @@ function buildClipboardPrompt(issueCode, node, rootNode) {
       return "Add close control to dialog [" + nodeId + '] named "' + nodeName + "\".\n" +
              "Action: Place icon button top-right named 'button / close' with aria-label 'Close dialog'.";
     case "DIALOG_NO_HEADING":
-    case "ACCORDION_NO_HEADING":
       return "Add heading to [" + nodeId + '] named "' + nodeName + "\".\n" +
              "Action: Create visible heading text layer 'heading / title' with correct aria-level (1–6).";
+    case "ACCORDION_NO_HEADING":
+      return "Add accessible name to accordion [" + nodeId + '] named "' + nodeName + "\".\n" +
+             "Action: Set aria-label on root via Dev Mode handoff (setSharedPluginData \"a11y\" \"aria-label\").";
+    case "ACCORDION_HEADER_NOT_BUTTON":
+      return "Annotate accordion row triggers on [" + nodeId + '] named "' + nodeName + "\".\n" +
+             "Action: Set aria-role=button on each direct row child via setSharedPluginData.";
     case "TOUCH_TARGET_SMALL":
     case "TOUCH_TARGET_CRITICAL":
       return "Increase touch target for [" + nodeId + '] named "' + nodeName + "\".\n" +
@@ -3794,8 +4034,125 @@ async function fixDialogNoHeading(p) {
            message: "Added heading \u201C" + headingText + "\u201D" };
 }
 
-async function fixAccordionNoHeading(p) {
-  return fixDialogNoHeading(p); // same strategy — promote an existing layer or create one
+async function fixLinkToComponent(p) {
+  const originalNode = p.node || p.rootNode;
+  const rootNode = p.rootNode || originalNode;
+  const typeKey = normalizeMatrixTypeKey(p.detectedRole || p.role || "button");
+  const spec = COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
+  const ariaRole = (spec && spec.ariaRole) || typeKey;
+
+  if (!originalNode) {
+    return { ok: false, code: "NON_COMPONENT_ELEMENT", message: "Selection changed." };
+  }
+
+  if (p.linkAction === "build_new") {
+    const prompt = buildComponentLinkAIPrompt(originalNode, typeKey, ariaRole);
+    return {
+      ok: true,
+      code: "NON_COMPONENT_ELEMENT",
+      source: "prompt",
+      promptForClipboard: prompt,
+      message: "No suitable component found — copy the prompt and paste into Figma AI chat.",
+    };
+  }
+
+  const candidates = await findAccessibleComponentCandidates(typeKey);
+  const skipSet = {};
+  const skipList = p.skipCandidateIds || [];
+  for (let si = 0; si < skipList.length; si++) skipSet[skipList[si]] = true;
+
+  let chosen = null;
+  let blocker = null;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (skipSet[c.id]) continue;
+    const count = await auditCandidateIssueCount(c, typeKey);
+    if (count < 2) {
+      chosen = c;
+      break;
+    }
+    if (!blocker) blocker = { comp: c, count: count };
+  }
+
+  if (chosen) {
+    const instance = await linkNodeToComponentInstance(originalNode, chosen);
+    figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+    return {
+      ok: true,
+      code: "NON_COMPONENT_ELEMENT",
+      source: "generic",
+      message: "Linked to " + chosen.name + ". Original layer hidden (not deleted). Cmd+Z to undo.",
+      createdNodeId: instance.id,
+    };
+  }
+
+  if (blocker && p.linkAction !== "force") {
+    return {
+      ok: false,
+      code: "NON_COMPONENT_ELEMENT",
+      needsComponentLinkChoice: true,
+      candidateId: blocker.comp.id,
+      candidateName: blocker.comp.name,
+      candidateIssueCount: blocker.count,
+      message: "Found " + blocker.comp.name + " but it has " + blocker.count + " accessibility issues.",
+    };
+  }
+
+  if (blocker && p.linkAction === "force") {
+    const instance = await linkNodeToComponentInstance(originalNode, blocker.comp);
+    figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+    return {
+      ok: true,
+      code: "NON_COMPONENT_ELEMENT",
+      message: "Linked to " + blocker.comp.name + " (issues remain). Original hidden. Cmd+Z to undo.",
+      createdNodeId: instance.id,
+    };
+  }
+
+  const prompt = buildComponentLinkAIPrompt(originalNode, typeKey, ariaRole);
+  return {
+    ok: true,
+    code: "NON_COMPONENT_ELEMENT",
+    source: "prompt",
+    promptForClipboard: prompt,
+    message: "No suitable component found — copy the prompt and paste into Figma AI chat.",
+  };
+}
+
+async function fixAccordionNoHeadingAnnotation(p) {
+  const target = p.rootNode || p.node;
+  if (!target) return { ok: false, code: p.issueCode, message: "No target node." };
+  let label = (target.name || "Accordion")
+    .replace(/^(accordion|faq)[\s\/_-]*/i, "")
+    .replace(/[_\-]+/g, " ")
+    .trim();
+  if (!label) label = target.name || "Accordion";
+  const dest = p.annotationDestination || await getAnnotationDestination();
+  await writeA11yAnnotation(target, "aria-label", label, dest === "ask" ? "devmode" : dest);
+  figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+  return { ok: true, code: p.issueCode, source: "annotation", message: "Applied fix. Cmd+Z to undo." };
+}
+
+async function fixAccordionHeaderButtons(p) {
+  const root = p.rootNode || p.node;
+  if (!root || !("children" in root)) {
+    return { ok: false, code: p.issueCode, message: "Accordion root not found." };
+  }
+  const dest = p.annotationDestination || await getAnnotationDestination();
+  const effectiveDest = dest === "ask" ? "devmode" : dest;
+  let count = 0;
+  for (let i = 0; i < root.children.length; i++) {
+    const child = root.children[i];
+    if (!isNodeVisible(child) || child.type === "TEXT") continue;
+    await writeA11yAnnotation(child, "aria-role", "button", effectiveDest);
+    count++;
+  }
+  if (count === 0) {
+    return { ok: false, code: p.issueCode, message: "No accordion row children to annotate." };
+  }
+  figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+  return { ok: true, code: p.issueCode, source: "annotation", message: "Applied fix. Cmd+Z to undo." };
 }
 
 // ─── Annotation autofix map (Part A) ─────────────────────────────────────────
@@ -3845,20 +4202,22 @@ var ISSUE_TO_ANNOTATION_CHECK = {
   ACCORDION_PANEL_REGION:    "PANEL_HAS_REGION_ROLE",
 };
 
-function fixAnnotation(node, checkId) {
+async function fixAnnotation(node, checkId, destination) {
   const spec = ANNOTATION_FIX_MAP[checkId];
   if (!spec || !node) return false;
+  const dest = destination || "devmode";
   try {
     if (spec.target === "root") {
-      setSharedA11y(node, spec.key, spec.value);
+      await writeA11yAnnotation(node, spec.key, spec.value, dest);
       if (spec.extra) {
         for (let i = 0; i < spec.extra.length; i++) {
-          setSharedA11y(node, spec.extra[i].key, spec.extra[i].value);
+          await writeA11yAnnotation(node, spec.extra[i].key, spec.extra[i].value, dest);
         }
       }
     } else if (spec.target === "children" && "children" in node) {
       for (let i = 0; i < node.children.length; i++) {
-        setSharedA11y(node.children[i], spec.key, spec.value);
+        if (!isNodeVisible(node.children[i])) continue;
+        await writeA11yAnnotation(node.children[i], spec.key, spec.value, dest);
       }
     } else {
       return false;
@@ -3870,7 +4229,8 @@ function fixAnnotation(node, checkId) {
 function makeAnnotationFixHandler(checkId) {
   return async function(p) {
     const target = p.rootNode || p.node;
-    const ok = fixAnnotation(target, checkId);
+    const dest = p.annotationDestination || await getAnnotationDestination();
+    const ok = await fixAnnotation(target, checkId, dest === "ask" ? "devmode" : dest);
     figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
     return {
       ok: ok,
@@ -3884,8 +4244,10 @@ function makeAnnotationFixHandler(checkId) {
 async function fixFocusTrapDescribed(p) {
   const target = p.rootNode || p.node;
   if (!target) return { ok: false, code: p.issueCode, message: "No target node." };
-  setSharedA11y(target, "focus-trap", "true");
-  setSharedA11y(target, "keyboard-pattern", "Tab cycles within dialog. Escape closes.");
+  const dest = p.annotationDestination || await getAnnotationDestination();
+  const effectiveDest = dest === "ask" ? "devmode" : dest;
+  await writeA11yAnnotation(target, "focus-trap", "true", effectiveDest);
+  await writeA11yAnnotation(target, "keyboard-pattern", "Tab cycles within dialog. Escape closes.", effectiveDest);
   figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
   return { ok: true, code: p.issueCode, source: "annotation", message: "Applied fix. Cmd+Z to undo." };
 }
@@ -4403,7 +4765,8 @@ var ISSUE_FIX_META = {
   SLIDER_ARIA_VALUE_MISSING: { fixKind: "annotation" },
   RATING_ROLE_MISSING:       { fixKind: "annotation" },
   ROLE_SWITCH_MISSING:       { fixKind: "annotation" },
-  ACCORDION_PANEL_REGION:    { fixKind: "annotation" },
+  ACCORDION_NO_HEADING:        { fixKind: "annotation" },
+  ACCORDION_HEADER_NOT_BUTTON: { fixKind: "annotation" },
   FOCUS_TRAP_VERIFY:         { fixKind: "annotation" },
   STAR_MISSING_ARIA_LABEL:   { fixKind: "annotation" },
 };
@@ -4417,8 +4780,22 @@ function enrichIssueFixMeta(issues, rootNode) {
   for (let qi = 0; qi < issues.length; qi++) {
     const code = issues[qi].code;
     const meta = ISSUE_FIX_META[code] || {};
-    issues[qi].autoFixable = AUTO_FIX_HANDLERS.hasOwnProperty(code) && meta.fixKind !== "message_only";
-    issues[qi].fixKind = meta.fixKind || (issues[qi].autoFixable ? "visual" : null);
+    const targetNode = getIssueTargetNode(issues[qi], rootNode);
+    const pending = readDesignerPending(targetNode);
+    if (pending && pending.issueCode === code) {
+      issues[qi].designerPending = true;
+      issues[qi].pendingSince = pending.markedAt;
+      issues[qi].pendingMessage = pending.message || "";
+      issues[qi].autoFixable = false;
+      if (isFocusStateIssue(issues[qi])) issues[qi].fixKind = "focus_state";
+    }
+    if (isFocusStateIssue(issues[qi]) && !issues[qi].designerPending) {
+      issues[qi].fixKind = "focus_state";
+      issues[qi].autoFixable = false;
+    } else if (!issues[qi].designerPending) {
+      issues[qi].autoFixable = AUTO_FIX_HANDLERS.hasOwnProperty(code) && meta.fixKind !== "message_only";
+      issues[qi].fixKind = meta.fixKind || (issues[qi].autoFixable ? "visual" : null);
+    }
     if (meta.designerMessage) issues[qi].designerMessage = meta.designerMessage;
     if (ackMap[code]) issues[qi].acknowledged = true;
   }
@@ -4434,7 +4811,9 @@ const AUTO_FIX_HANDLERS = {
   "TOUCH_TARGET_SMALL":     fixTouchTargetSmall,
   "DIALOG_NO_CLOSE":        fixDialogNoClose,
   "DIALOG_NO_HEADING":      fixDialogNoHeading,
-  "ACCORDION_NO_HEADING":   fixAccordionNoHeading,
+  "ACCORDION_NO_HEADING":        fixAccordionNoHeadingAnnotation,
+  "ACCORDION_HEADER_NOT_BUTTON": fixAccordionHeaderButtons,
+  "NON_COMPONENT_ELEMENT":     fixLinkToComponent,
   "CONTRAST_TEXT_FAIL":     fixLowContrast,
   "LOW_CONTRAST":           fixLowContrast,
   "CONTRAST_FAIL":          fixLowContrast,
@@ -4496,7 +4875,7 @@ var MATRIX_CHECK_FIX_BRIDGE = {
   TOUCH_TARGET_24_WITH_SPACING: ["TOUCH_TARGET_SMALL"],
   HAS_HEADING:                ["DIALOG_NO_HEADING", "ACCORDION_NO_HEADING"],
   CLOSE_BUTTON_HAS_LABEL:     ["DIALOG_NO_CLOSE"],
-  ACCORDION_HEADERS_ARE_BUTTONS: ["ACCORDION_NO_HEADING"],
+  ACCORDION_HEADERS_ARE_BUTTONS: ["ACCORDION_HEADER_NOT_BUTTON"],
   ROLE_BUTTON_ANNOTATED:      ["ROLE_BUTTON_MISSING"],
   ROLE_TEXTBOX_ANNOTATED:     ["ROLE_TEXTBOX_MISSING"],
   ROLE_CHECKBOX_ANNOTATED:    ["ROLE_CHECKBOX_MISSING"],
@@ -4631,6 +5010,16 @@ const ISSUE_EXPLANATIONS = {
     wcagLink: "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
     apgLink:  "https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/",
   },
+  "NON_COMPONENT_ELEMENT": {
+    staticTitle: "Interactive element is not a Figma component",
+    why:         "Developers and assistive tech rely on stable component structure. A loose frame or group does not carry variants, states, or Dev Mode metadata the way a component does.",
+    example: {
+      before: "Frame named \"button / submit\" (not a component)",
+      after:  "Component instance with default, hover, focus, and disabled variants",
+    },
+    wcagLink: "https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html",
+    apgLink:  "https://www.w3.org/WAI/ARIA/apg/patterns/",
+  },
   "MISSING_FOCUS_RING": {
     staticTitle: "Component has no visible focus indicator",
     why:         "When a sighted user navigates with the keyboard, they need a visible signal showing which element has focus. Removing the outline without a replacement makes the interface unusable for them.",
@@ -4672,13 +5061,23 @@ const ISSUE_EXPLANATIONS = {
     apgLink:  "https://www.w3.org/WAI/ARIA/apg/patterns/accordion/",
   },
   "ACCORDION_NO_HEADING": {
-    staticTitle: "Accordion item is missing its heading wrapper",
-    why:         "Each accordion panel trigger must live inside a heading element so the document outline reflects the section structure. Without it, screen reader users can't jump between sections via heading navigation.",
+    staticTitle: "Accordion is missing an accessible heading label",
+    why:         "Accordions need a section title for screen reader users — via visible heading text, aria-label, or aria-labelledby. Without it, users cannot orient themselves in the FAQ or section list.",
     example: {
-      before: "<button aria-expanded=\"false\">FAQ Section</button>",
-      after:  "<h3>\n  <button aria-expanded=\"false\">FAQ Section</button>\n</h3>",
+      before: "No heading text or aria-label on accordion root",
+      after:  "aria-label=\"Frequently asked questions\" on accordion container",
     },
-    wcagLink: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html",
+    wcagLink: "https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html",
+    apgLink:  "https://www.w3.org/WAI/ARIA/apg/patterns/accordion/",
+  },
+  "ACCORDION_HEADER_NOT_BUTTON": {
+    staticTitle: "Accordion row trigger is not annotated as a button",
+    why:         "Each accordion row trigger must expose role=\"button\" with aria-expanded so assistive tech knows it is expandable. Dev Mode handoff requires aria-role=button on each direct row child.",
+    example: {
+      before: "Row frame with no aria-role annotation",
+      after:  "setSharedPluginData(\"a11y\", \"aria-role\", \"button\") on each row trigger",
+    },
+    wcagLink: "https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html",
     apgLink:  "https://www.w3.org/WAI/ARIA/apg/patterns/accordion/",
   },
   "DIALOG_NO_HEADING": {
@@ -4922,23 +5321,31 @@ async function enrichIssuesWithTitlesAndExplanations(issues, rootNode, ctx, apiK
 }
 
 async function autoFixIssue(params) {
-  // params: { issueCode, nodeId, rootNodeId, strategy }
-  // strategy: "ai" | "generic" | "prompt"
+  // params: { issueCode, nodeId, rootNodeId, strategy, annotationDestination, detectedRole, linkAction }
   const node     = figma.getNodeById(params.nodeId)     || figma.getNodeById(params.rootNodeId);
   const rootNode = figma.getNodeById(params.rootNodeId) || node;
   if (!rootNode) {
     return { ok: false, code: params.issueCode, message: "Selection changed. Please re-run analysis." };
   }
 
-  // "Copy prompt" branch never mutates — main thread can't write to clipboard;
-  // we hand the canonical text to the UI which copies it via document.execCommand.
   if (params.strategy === "prompt") {
+    let prompt;
+    if (isFocusStateIssue({ code: params.issueCode, message: params.message || "" })) {
+      prompt = buildFocusStateComponentPrompt(node, rootNode);
+    } else if (params.issueCode === "NON_COMPONENT_ELEMENT") {
+      const typeKey = normalizeMatrixTypeKey(params.detectedRole || "button");
+      const spec = COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
+      const ariaRole = (spec && spec.ariaRole) || typeKey;
+      prompt = buildComponentLinkAIPrompt(node || rootNode, typeKey, ariaRole);
+    } else {
+      prompt = buildClipboardPrompt(params.issueCode, node, rootNode);
+    }
     return {
-      ok:             true,
-      code:           params.issueCode,
-      source:         "prompt",
-      promptForClipboard: buildClipboardPrompt(params.issueCode, node, rootNode),
-      message:        "Prompt copied — paste into Figma AI assistant",
+      ok:                 true,
+      code:               params.issueCode,
+      source:             "prompt",
+      promptForClipboard: prompt,
+      message:            "Prompt copied — paste into Figma AI assistant",
     };
   }
 
@@ -4951,15 +5358,20 @@ async function autoFixIssue(params) {
     };
   }
 
-  figma.commitUndo(); // group every mutation below into one undo step
+  figma.commitUndo();
   const apiKey = await figma.clientStorage.getAsync("openai-api-key");
   try {
     return await handler({
-      node:      node,
-      rootNode:  rootNode,
-      strategy:  params.strategy || "ai",
-      apiKey:    apiKey,
-      issueCode: params.issueCode,
+      node:                  node,
+      rootNode:              rootNode,
+      strategy:              params.strategy || "ai",
+      apiKey:                apiKey,
+      issueCode:             params.issueCode,
+      annotationDestination: params.annotationDestination,
+      detectedRole:          params.detectedRole,
+      role:                  params.detectedRole,
+      linkAction:            params.linkAction,
+      skipCandidateIds:      params.skipCandidateIds,
     });
   } catch (e) {
     return { ok: false, code: params.issueCode, message: "Auto-fix failed: " + String(e) };
@@ -5054,12 +5466,9 @@ function findSpecByRoleHint(roleHint) {
 
 // Re-run full spec matrix for a resolved component type (text or vision hint).
 function runSpecsForType(roleHint, rootNode, ctx) {
-  const spec    = findSpecByRoleHint(roleHint);
-  const typeKey = normalizeMatrixTypeKey(spec ? spec.role : roleHint);
-  if (!typeKey || !COMPONENT_SPEC_MATRIX[typeKey]) {
-    return { spec: spec, issues: [], auditLog: [] };
-  }
-  const audited = runMatrixChecks(rootNode, ctx, typeKey, spec);
+  const spec = findSpecByRoleHint(roleHint);
+  if (!spec) return { spec: null, issues: [], auditLog: [] };
+  const audited = auditNode(rootNode, spec, ctx);
   return { spec: spec, issues: audited.issues, auditLog: audited.auditLog };
 }
 
@@ -5393,7 +5802,7 @@ figma.ui.onmessage = async (msg) => {
         // Start a fresh undo group so all mutations below can be undone in one Cmd+Z
         figma.commitUndo();
       }
-      const result = await applyFixes(msg.suggestions, msg.rootNodeId, msg.mode);
+      const result = await applyFixes(msg.suggestions, msg.rootNodeId, msg.mode, msg.annotationDestination);
 
       const modeNote =
         msg.mode === "inplace"  ? "Cmd+Z undoes all changes" :
@@ -5414,10 +5823,15 @@ figma.ui.onmessage = async (msg) => {
   // msg: { issueCode, nodeId, rootNodeId, strategy: "ai" | "generic" | "prompt", issueIdx }
   if (msg.type === "AUTO_FIX_ISSUE") {
     const result = await autoFixIssue({
-      issueCode:  msg.issueCode,
-      nodeId:     msg.nodeId,
-      rootNodeId: msg.rootNodeId,
-      strategy:   msg.strategy,
+      issueCode:             msg.issueCode,
+      nodeId:                msg.nodeId,
+      rootNodeId:            msg.rootNodeId,
+      strategy:              msg.strategy,
+      annotationDestination: msg.annotationDestination,
+      detectedRole:          msg.detectedRole,
+      linkAction:            msg.linkAction,
+      skipCandidateIds:      msg.skipCandidateIds,
+      message:               msg.message,
     });
     // Echo issueIdx so the UI knows which row to mark fixed
     figma.ui.postMessage(Object.assign(
@@ -5477,11 +5891,13 @@ figma.ui.onmessage = async (msg) => {
     const storedKey   = await figma.clientStorage.getAsync("openai-api-key");
     const threshold   = await figma.clientStorage.getAsync("confidence-threshold") || 3;
     const aiModel     = await figma.clientStorage.getAsync("ai-model") || "gpt-4o-mini";
+    const annotationDestination = await getAnnotationDestination();
     figma.ui.postMessage({
       type: "SETTINGS_LOADED",
       hasApiKey: !!storedKey,
       threshold: Number(threshold),
       aiModel: String(aiModel),
+      annotationDestination: annotationDestination,
     });
     return;
   }
@@ -5489,7 +5905,31 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === "SAVE_SETTINGS") {
     if (msg.threshold !== undefined) await figma.clientStorage.setAsync("confidence-threshold", msg.threshold);
     if (msg.aiModel   !== undefined) await figma.clientStorage.setAsync("ai-model", msg.aiModel);
+    if (msg.annotationDestination !== undefined) {
+      await figma.clientStorage.setAsync(ANNOTATION_DEST_STORAGE_KEY, msg.annotationDestination);
+    }
     figma.ui.postMessage({ type: "SETTINGS_SAVED" });
+    return;
+  }
+
+  if (msg.type === "MARK_PENDING_DESIGNER") {
+    const target = figma.getNodeById(msg.nodeId) || figma.getNodeById(msg.rootNodeId);
+    if (!target) {
+      figma.ui.postMessage({ type: "PENDING_RESULT", ok: false, issueIdx: msg.issueIdx, message: "Selection changed." });
+      return;
+    }
+    target.setPluginData("a11y-pending", JSON.stringify({
+      issueCode: msg.issueCode,
+      markedAt: Date.now(),
+      message: "Designer committed to build focus state",
+    }));
+    figma.ui.postMessage({
+      type: "PENDING_RESULT",
+      ok: true,
+      issueCode: msg.issueCode,
+      issueIdx: msg.issueIdx,
+      message: "Marked as pending — build the focus state variant, then re-scan.",
+    });
     return;
   }
 
@@ -5672,6 +6112,7 @@ figma.ui.onmessage = async (msg) => {
     const auditResult  = detection.spec ? auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
     const issues       = auditResult.issues;
     const auditLog     = auditResult.auditLog;
+    const pendingDesignerCount = countDesignerPendingIssues(issues);
 
     // Two-layer issue messaging:
     //   LAYER 1 — designer-friendly title (AI when available, static fallback otherwise)
@@ -5713,6 +6154,7 @@ figma.ui.onmessage = async (msg) => {
         nodeType: rootNode.type,
         result:   resultPayload,
         usedSpec: !!detection.spec,
+        pendingDesignerCount: pendingDesignerCount,
       });
       return;
     }
@@ -5728,6 +6170,7 @@ figma.ui.onmessage = async (msg) => {
         result:   resultPayload,
         noApiKey: true,
         usedSpec: !!detection.spec,
+        pendingDesignerCount: pendingDesignerCount,
       });
       return;
     }
@@ -5775,7 +6218,9 @@ figma.ui.onmessage = async (msg) => {
       if (finalIssues.length > 0) {
         ctx.componentType = (activeSpec && activeSpec.role) || aiResult.role || ctx.nodeType;
         await enrichIssuesWithTitlesAndExplanations(finalIssues, rootNode, ctx, apiKey);
+        enrichIssueFixMeta(finalIssues, rootNode);
       }
+      const pendingAfterAi = countDesignerPendingIssues(finalIssues);
 
       const estimatedTokens = Math.round(JSON.stringify(ctx).length / 4) +
         (detectionPath === "vision-ai" ? 900 : 200);
@@ -5795,6 +6240,7 @@ figma.ui.onmessage = async (msg) => {
         }),
         usedAI:     true,
         usedVision: detectionPath === "vision-ai",
+        pendingDesignerCount: pendingAfterAi,
         estimatedTokens,
         usedSpec:   !!activeSpec,
       });
@@ -5807,6 +6253,7 @@ figma.ui.onmessage = async (msg) => {
         result:   resultPayload,
         aiError:  String(e),
         usedSpec: !!detection.spec,
+        pendingDesignerCount: pendingDesignerCount,
       });
     }
   }

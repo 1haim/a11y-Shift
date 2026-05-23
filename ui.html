@@ -582,6 +582,32 @@
   .ai-consent-dialog p { font-size: 11px; color: var(--text-dim); margin: 0 0 12px; line-height: 1.5; }
   .ai-consent-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .ai-consent-check { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); margin-bottom: 12px; }
+  .pending-banner {
+    margin: 0 14px 10px; padding: 8px 12px; border-radius: var(--radius-sm);
+    background: #1e1400; border: 1px solid #5e4a00; font-size: 11px; color: #f5c842;
+  }
+  .issue-pending .issue-sev { background: #3d3200; color: #f5c842; }
+  .issue-pending-note { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
+  .btn-focus-ai, .btn-focus-pending {
+    padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 12px; cursor: pointer; border: 1px solid;
+    white-space: nowrap;
+  }
+  .btn-focus-ai { border-color: #3a2a7e; background: #1e1a4e; color: #a78bfa; }
+  .btn-focus-pending { border-color: #5e4a00; background: #1e1400; color: #f5c842; }
+  .settings-radio-group { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 16px; }
+  .settings-radio {
+    display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); cursor: pointer; align-items: flex-start;
+  }
+  .settings-radio.selected { border-color: var(--accent-blue); background: #0a1220; }
+  .settings-radio input { margin-top: 2px; flex-shrink: 0; }
+  .settings-radio-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .settings-radio-desc { font-size: 10px; color: var(--text-dim); line-height: 1.45; }
+  .annotation-dest-block {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+    display: none;
+  }
+  .annotation-dest-block.open { display: block; }
 
   /* ── Component preview panel ────────────────────────────────────── */
   .preview-panel {
@@ -934,6 +960,38 @@
   </div>
   <p class="field-hint" style="margin-top:-6px">Score ≥ this value → rule engine result used directly (no AI call).</p>
 
+  <hr class="divider" />
+
+  <div class="field-label">Where to show accessibility labels</div>
+  <p class="field-hint" style="margin-top:0">
+    When A11y Shift adds ARIA labels and roles, choose where they appear.
+    Developers always see them in Dev Mode — this setting controls whether
+    designers and reviewers see them too.
+  </p>
+  <div class="settings-radio-group" id="annotation-dest-group">
+    <label class="settings-radio selected" data-dest="ask">
+      <input type="radio" name="annotation-dest" value="ask" checked />
+      <div>
+        <div class="settings-radio-title">Ask me each time (default)</div>
+        <div class="settings-radio-desc">You'll be asked when applying a fix that adds labels.</div>
+      </div>
+    </label>
+    <label class="settings-radio" data-dest="devmode">
+      <input type="radio" name="annotation-dest" value="devmode" />
+      <div>
+        <div class="settings-radio-title">Dev Mode only</div>
+        <div class="settings-radio-desc">Labels are invisible on the canvas. Clean design view, but only developers see them when they open Dev Mode.</div>
+      </div>
+    </label>
+    <label class="settings-radio" data-dest="both">
+      <input type="radio" name="annotation-dest" value="both" />
+      <div>
+        <div class="settings-radio-title">Canvas + Dev Mode</div>
+        <div class="settings-radio-desc">Labels appear as small tags on the canvas next to each element. Useful for accessibility reviews with your team.</div>
+      </div>
+    </label>
+  </div>
+
   <div style="display:flex;gap:8px">
     <button class="btn-save" id="btn-save-settings" style="flex:1">Save Settings</button>
   </div>
@@ -1020,7 +1078,7 @@ document.addEventListener('keydown', e => {
 let currentState    = null;
 let currentScanData = null;
 let isDevMode       = false;
-let settings        = { threshold: 3, aiModel: 'gpt-4o-mini' };
+let settings        = { threshold: 3, aiModel: 'gpt-4o-mini', annotationDestination: 'ask' };
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1059,8 +1117,10 @@ if (btnFixCoverage) {
 $('btn-save-settings').addEventListener('click', () => {
   const model     = $('ai-model-select').value;
   const threshold = parseInt($('threshold-slider').value, 10);
-  settings = { threshold, aiModel: model };
-  parent.postMessage({ pluginMessage: { type: 'SAVE_SETTINGS', threshold, aiModel: model } }, '*');
+  const destEl    = document.querySelector('#annotation-dest-group input[name="annotation-dest"]:checked');
+  const annotationDestination = destEl ? destEl.value : 'ask';
+  settings = { threshold, aiModel: model, annotationDestination };
+  parent.postMessage({ pluginMessage: { type: 'SAVE_SETTINGS', threshold, aiModel: model, annotationDestination } }, '*');
 });
 
 // ── Preview panel ──────────────────────────────────────────────────────────
@@ -1305,8 +1365,123 @@ function wireFrameworkTabs(container, ariaSchemaStr) {
   });
 }
 
+function getAnnotationDestSession() {
+  try { return sessionStorage.getItem('a11y-annotation-dest-session'); } catch (_e) { return null; }
+}
+
+function setAnnotationDestSession(dest) {
+  try { sessionStorage.setItem('a11y-annotation-dest-session', dest); } catch (_e) {}
+}
+
+function formatPendingAge(ts) {
+  if (!ts) return '';
+  const days = Math.floor((Date.now() - ts) / 86400000);
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day ago';
+  return days + ' days ago';
+}
+
+function needsAnnotationDestPrompt(issue) {
+  if (!issue || issue.fixKind !== 'annotation') return false;
+  const pref = settings.annotationDestination || 'ask';
+  if (pref === 'devmode' || pref === 'both') return false;
+  return !getAnnotationDestSession();
+}
+
+function showAnnotationDestDialog(onChosen) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">Where should ARIA labels appear for this fix?</div>
+      <div class="modal-option selected" data-dest="devmode">
+        <div class="modal-radio"></div>
+        <div class="modal-option-text">
+          <div class="modal-option-title">Dev Mode only</div>
+          <div class="modal-option-desc">Visible to developers only</div>
+        </div>
+      </div>
+      <div class="modal-option" data-dest="both">
+        <div class="modal-radio"></div>
+        <div class="modal-option-text">
+          <div class="modal-option-title">Canvas + Dev Mode</div>
+          <div class="modal-option-desc">Visible to everyone on the canvas</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" id="ann-dest-cancel">Cancel</button>
+        <button class="modal-btn primary" id="ann-dest-apply">Apply fix</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  let chosen = 'devmode';
+  overlay.querySelectorAll('.modal-option').forEach(el => {
+    el.addEventListener('click', () => {
+      overlay.querySelectorAll('.modal-option').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      chosen = el.dataset.dest;
+    });
+  });
+  overlay.querySelector('#ann-dest-cancel').addEventListener('click', () => document.body.removeChild(overlay));
+  overlay.querySelector('#ann-dest-apply').addEventListener('click', () => {
+    setAnnotationDestSession(chosen);
+    document.body.removeChild(overlay);
+    onChosen(chosen);
+  });
+}
+
+function runAutoFix(issueIdx, strategy, extra) {
+  if (!currentState) return;
+  const issue = (currentState.result.issues || [])[issueIdx];
+  if (!issue) return;
+  extra = extra || {};
+  if (issue.code === 'NON_COMPONENT_ELEMENT' && !extra.skipCandidateIds && !extra.linkAction) {
+    pendingLinkSkipIds = [];
+  }
+  const row = document.querySelector('[data-issue-idx="' + issueIdx + '"].issue-item');
+  const btn = row ? row.querySelector('.btn-autofix, .btn-autofix-direct, .btn-focus-ai') : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="autofix-spinner"></span> Fixing…';
+  }
+  parent.postMessage({ pluginMessage: Object.assign({
+    type:       'AUTO_FIX_ISSUE',
+    issueCode:  issue.code,
+    nodeId:     issue.nodeId || currentState.nodeId,
+    rootNodeId: currentState.nodeId,
+    strategy:   strategy,
+    issueIdx:   issueIdx,
+    detectedRole: currentState.result.role,
+    message:    issue.message,
+  }, extra) }, '*');
+  pendingAutoFixIdx = issueIdx;
+}
+
 // ── Inline auto-fix control on each issue row ─────────────────────────────
 function renderAutoFixControl(issue, idx) {
+  if (issue.designerPending) {
+    const age = formatPendingAge(issue.pendingSince);
+    return `
+    <div class="issue-actions issue-message-only">
+      <span class="ack-badge">Pending</span>
+      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+        <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
+      </div>
+    </div>`;
+  }
+  if (issue.fixKind === 'focus_state') {
+    const age = issue.pendingSince ? formatPendingAge(issue.pendingSince) : '';
+    return `
+    <div class="issue-actions issue-message-only">
+      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+        <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
+      </div>
+    </div>`;
+  }
   if (issue.acknowledged) {
     return '<div class="issue-actions"><span class="ack-badge">✓ Acknowledged</span></div>';
   }
@@ -1376,7 +1551,7 @@ document.addEventListener('click', e => {
   document.querySelectorAll('.btn-autofix[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 });
 
-function dispatchAutoFix(issueIdx, strategy) {
+function dispatchAutoFix(issueIdx, strategy, extra) {
   if (!currentState) return;
   const issue = (currentState.result.issues || [])[issueIdx];
   if (!issue) return;
@@ -1384,24 +1559,20 @@ function dispatchAutoFix(issueIdx, strategy) {
     showAiConsentDialog(issueIdx, strategy);
     return;
   }
-  const row = document.querySelector('[data-issue-idx="' + issueIdx + '"].issue-item');
-  const btn = row ? row.querySelector('.btn-autofix') : null;
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="autofix-spinner"></span> Fixing…';
+  if (needsAnnotationDestPrompt(issue)) {
+    showAnnotationDestDialog(function(dest) {
+      runAutoFix(issueIdx, strategy, { annotationDestination: dest });
+    });
+    return;
   }
-  parent.postMessage({ pluginMessage: {
-    type:       'AUTO_FIX_ISSUE',
-    issueCode:  issue.code,
-    nodeId:     issue.nodeId || currentState.nodeId,
-    rootNodeId: currentState.nodeId,
-    strategy:   strategy,
-    issueIdx:   issueIdx,
-  } }, '*');
-  pendingAutoFixIdx = issueIdx;
+  const dest = (settings.annotationDestination === 'ask')
+    ? (getAnnotationDestSession() || 'devmode')
+    : settings.annotationDestination;
+  runAutoFix(issueIdx, strategy, Object.assign({ annotationDestination: dest }, extra || {}));
 }
 
 let pendingAutoFixIdx = null;
+let pendingLinkSkipIds = [];
 
 // ── Persistent state plumbing ──────────────────────────────────────────────
 // Persist the current analysis snapshot to node pluginData + clientStorage index.
@@ -1659,6 +1830,61 @@ function refreshSummaryBanner() {
   }
 }
 
+function handlePendingResult(msg) {
+  const idx = msg.issueIdx;
+  const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
+  if (msg.ok && currentState && currentState.result && currentState.result.issues && idx != null) {
+    currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx], {
+      designerPending: true,
+      pendingSince: Date.now(),
+      fixKind: 'focus_state',
+    });
+    renderResult(currentState);
+  } else if (row) {
+    const btn = row.querySelector('.btn-focus-pending');
+    if (btn) btn.disabled = false;
+  }
+}
+
+function showComponentLinkModal(msg) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">Component has accessibility issues</div>
+      <p style="font-size:11px;color:var(--text-dim);line-height:1.5;margin:0 0 12px">
+        Found <strong>${escapeHtml(msg.candidateName || 'component')}</strong> but it has
+        ${msg.candidateIssueCount || 0} accessibility issue(s). What would you like to do?
+      </p>
+      <div class="modal-footer" style="flex-direction:column;align-items:stretch">
+        <button class="modal-btn primary" id="link-force">Fix and link</button>
+        <button class="modal-btn" id="link-search">Search for another component</button>
+        <button class="modal-btn" id="link-build">Build new with AI prompt</button>
+        <button class="modal-btn" id="link-cancel">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#link-force').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    dispatchAutoFix(pendingAutoFixIdx, 'generic', { linkAction: 'force', skipCandidateIds: pendingLinkSkipIds.slice() });
+  });
+  overlay.querySelector('#link-search').addEventListener('click', () => {
+    if (msg.candidateId) pendingLinkSkipIds.push(msg.candidateId);
+    document.body.removeChild(overlay);
+    dispatchAutoFix(pendingAutoFixIdx, 'generic', { skipCandidateIds: pendingLinkSkipIds.slice() });
+  });
+  overlay.querySelector('#link-build').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    pendingLinkSkipIds = [];
+    dispatchAutoFix(pendingAutoFixIdx, 'prompt', { linkAction: 'build_new' });
+  });
+  overlay.querySelector('#link-cancel').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    pendingAutoFixIdx = null;
+    pendingLinkSkipIds = [];
+  });
+}
+
 function handleAcknowledgeResult(msg) {
   const idx = msg.issueIdx;
   const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
@@ -1676,17 +1902,40 @@ function handleAcknowledgeResult(msg) {
 
 function handleAutoFixResult(msg) {
   const idx = (typeof msg.issueIdx === 'number') ? msg.issueIdx : pendingAutoFixIdx;
-  pendingAutoFixIdx = null;
   const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
-  const btn = row ? row.querySelector('.btn-autofix') : null;
+  const btn = row ? row.querySelector('.btn-autofix, .btn-autofix-direct, .btn-focus-ai') : null;
+
+  if (msg.needsComponentLinkChoice) {
+    pendingAutoFixIdx = idx;
+    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Auto-fix <span class="caret">▾</span>'; }
+    showComponentLinkModal(msg);
+    return;
+  }
+  pendingLinkSkipIds = [];
+
+  pendingAutoFixIdx = null;
 
   // Strategy === "prompt": copy to clipboard, don't touch the row severity
   if (msg.strategy === 'prompt' && msg.promptForClipboard) {
     copyToClipboard(msg.promptForClipboard);
+    const issue = (currentState && currentState.result && currentState.result.issues && idx != null)
+      ? currentState.result.issues[idx] : null;
+    const isFocus = issue && (issue.fixKind === 'focus_state' || issue.designerPending);
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = '✓ Prompt copied';
-      setTimeout(() => { btn.innerHTML = '✨ Auto-fix <span class="caret">▾</span>'; }, 2000);
+      const restore = isFocus ? 'Build with AI' : '✨ Auto-fix <span class="caret">▾</span>';
+      setTimeout(() => { btn.innerHTML = restore; }, 2500);
+    }
+    if (row) {
+      let hint = row.querySelector('.ai-prompt-hint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'issue-pending-note ai-prompt-hint';
+        const host = row.querySelector('.issue-actions') || row;
+        host.appendChild(hint);
+      }
+      hint.textContent = 'Paste this prompt into Figma AI chat';
     }
     return;
   }
@@ -1784,14 +2033,22 @@ function renderResult(data) {
         </div>`).join('')}
     </div>`;
 
+  const pendingCount = data.pendingDesignerCount != null
+    ? data.pendingDesignerCount
+    : issues.filter(i => i.designerPending && !i.fixed).length;
+  const pendingBanner = pendingCount > 0
+    ? `<div class="pending-banner" id="pending-banner">${pendingCount} pending designer action${pendingCount !== 1 ? 's' : ''}</div>`
+    : '';
+
   const issuesHtml = issues.length === 0 ? '' : `
     <div class="issues-section" id="issues-section">
+      ${pendingBanner}
       <div class="issues-header">
         <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} issue${issues.length !== 1 ? 's' : ''} found</span>
       </div>
       ${issues.map((i, idx) => `
-        <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️'} ${i.severity}</span>
+        <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
+          <span class="issue-sev">${i.designerPending ? 'Pending' : (i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️') + ' ' + i.severity}</span>
           <div class="issue-body">
             <div class="issue-title-row">
               <div class="issue-msg">${escapeHtml(i.displayTitle || i.message)}</div>
@@ -1930,6 +2187,28 @@ function renderResult(data) {
       dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), btn.dataset.strategy || 'generic');
     });
   });
+  document.querySelectorAll('#content .btn-focus-ai').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), 'prompt');
+    });
+  });
+  document.querySelectorAll('#content .btn-focus-pending').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.issueIdx, 10);
+      const issue = (currentState.result.issues || [])[idx];
+      if (!issue) return;
+      btn.disabled = true;
+      parent.postMessage({ pluginMessage: {
+        type: 'MARK_PENDING_DESIGNER',
+        issueCode: issue.code,
+        nodeId: issue.nodeId || currentState.nodeId,
+        rootNodeId: currentState.nodeId,
+        issueIdx: idx,
+      } }, '*');
+    });
+  });
   document.querySelectorAll('#content .btn-acknowledge').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -2041,6 +2320,9 @@ function renderResult(data) {
 
 // ── Fix action dialog (three-option) ──────────────────────────────────────
 function showApplyModal() {
+  const hasPluginDataSugs = (currentState.result.suggestions || []).some(s => s.type === 'setPluginData');
+  const showAnnDest = (settings.annotationDestination === 'ask') && hasPluginDataSugs && !getAnnotationDestSession();
+
   const OPTIONS = [
     {
       id:    'inplace',
@@ -2074,6 +2356,23 @@ function showApplyModal() {
             <div class="modal-option-desc">${o.desc}</div>
           </div>
         </div>`).join('')}
+      <div class="annotation-dest-block ${showAnnDest ? 'open' : ''}" id="apply-ann-dest-block">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Where should ARIA labels appear for this fix?</div>
+        <label class="modal-option selected" data-adest="devmode" style="margin-bottom:6px">
+          <div class="modal-radio"></div>
+          <div class="modal-option-text">
+            <div class="modal-option-title">Dev Mode only</div>
+            <div class="modal-option-desc">Visible to developers only</div>
+          </div>
+        </label>
+        <label class="modal-option" data-adest="both">
+          <div class="modal-radio"></div>
+          <div class="modal-option-text">
+            <div class="modal-option-title">Canvas + Dev Mode</div>
+            <div class="modal-option-desc">Visible to everyone on the canvas</div>
+          </div>
+        </label>
+      </div>
       <div class="modal-footer">
         <button class="modal-btn" id="modal-cancel-btn">Cancel</button>
         <button class="modal-btn primary" id="modal-apply-btn">Apply →</button>
@@ -2081,10 +2380,21 @@ function showApplyModal() {
     </div>`;
   document.body.appendChild(overlay);
 
-  // Radio selection
-  overlay.querySelectorAll('.modal-option').forEach(el => {
+  let applyAnnDest = showAnnDest ? 'devmode' : (settings.annotationDestination === 'both' ? 'both' : 'devmode');
+  if (showAnnDest) {
+    overlay.querySelectorAll('#apply-ann-dest-block .modal-option').forEach(el => {
+      el.addEventListener('click', () => {
+        overlay.querySelectorAll('#apply-ann-dest-block .modal-option').forEach(x => x.classList.remove('selected'));
+        el.classList.add('selected');
+        applyAnnDest = el.dataset.adest;
+      });
+    });
+  }
+
+  // Fix mode radio (do not toggle annotation-dest options)
+  overlay.querySelectorAll('.modal-option[data-mode]').forEach(el => {
     el.addEventListener('click', () => {
-      overlay.querySelectorAll('.modal-option').forEach(x => x.classList.remove('selected'));
+      overlay.querySelectorAll('.modal-option[data-mode]').forEach(x => x.classList.remove('selected'));
       el.classList.add('selected');
       selectedMode = el.dataset.mode;
     });
@@ -2095,14 +2405,20 @@ function showApplyModal() {
   });
 
   overlay.querySelector('#modal-apply-btn').addEventListener('click', () => {
+    if (showAnnDest) setAnnotationDestSession(applyAnnDest);
+    const annDest = showAnnDest ? applyAnnDest
+      : (settings.annotationDestination === 'ask'
+        ? (getAnnotationDestSession() || 'devmode')
+        : (settings.annotationDestination || 'devmode'));
     document.body.removeChild(overlay);
     const applyBtn = $('btn-apply');
     if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
     parent.postMessage({ pluginMessage: {
-      type:          'APPLY_WITH_MODE',
-      mode:          selectedMode,
-      suggestions:   currentState.result.suggestions,
-      rootNodeId:    currentState.nodeId,
+      type:                  'APPLY_WITH_MODE',
+      mode:                  selectedMode,
+      suggestions:           currentState.result.suggestions,
+      rootNodeId:            currentState.nodeId,
+      annotationDestination: annDest,
     } }, '*');
   });
 }
@@ -2265,7 +2581,19 @@ window.reportFixCoverage = function() {
 };
 
 function handleSettingsLoaded(msg) {
-  settings = { threshold: msg.threshold, aiModel: msg.aiModel };
+  settings = {
+    threshold: msg.threshold,
+    aiModel: msg.aiModel,
+    annotationDestination: msg.annotationDestination || 'ask',
+  };
+  if (msg.annotationDestination) {
+    document.querySelectorAll('#annotation-dest-group .settings-radio').forEach(el => {
+      const isSel = el.dataset.dest === msg.annotationDestination;
+      el.classList.toggle('selected', isSel);
+      const inp = el.querySelector('input');
+      if (inp) inp.checked = isSel;
+    });
+  }
   $('threshold-slider').value    = msg.threshold;
   $('threshold-val').textContent = msg.threshold;
   $('ai-model-select').value     = msg.aiModel;
@@ -2381,6 +2709,7 @@ window.onmessage = function(event) {
     SETTINGS_SAVED:         handleSettingsSaved,
     KEY_SAVED:              handleKeySaved,
     AUTO_FIX_RESULT:        handleAutoFixResult,
+    PENDING_RESULT:         handlePendingResult,
     ACKNOWLEDGE_RESULT:     handleAcknowledgeResult,
     REFRESH_SUMMARY_BANNER: function() { refreshSummaryBanner(); },
     PREVIEW_IMAGE:          handlePreviewImage,
