@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>A11y Shift</title>
+<script>
+/* Debug API — must load first (available in UI iframe DevTools before main script) */
+(function (g) {
+  function reportFixCoverage() {
+    g.parent.postMessage({ pluginMessage: { type: 'DEBUG_FIX_COVERAGE' } }, '*');
+    g.console.log('[A11y Shift] Coverage report loading…');
+  }
+  g.reportFixCoverage = reportFixCoverage;
+  if (typeof g.globalThis !== 'undefined') g.globalThis.reportFixCoverage = reportFixCoverage;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --border2: #333;
+    --text: #f0f0f0;
+    --text-muted: #666;
+    --text-dim: #999;
+    --accent-blue: #4da3ff;
+    --accent-green: #3ecf8e;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --chip-high: #0d2e1a;
+    --chip-high-text: #3ecf8e;
+    --chip-med: #2e1f00;
+    --chip-med-text: #f59e0b;
+    --chip-low: #2a0a0a;
+    --chip-low-text: #ef4444;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; }
+  .logo-icon {
+    width: 24px; height: 24px;
+    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+  }
+  .logo-name { font-size: 14px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo-sub  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
+  .dev-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px;
+    background: #1e1a4e; color: #a78bfa; border: 1px solid #3a2a7e;
+    display: none;
+  }
+  .dev-badge.visible { display: inline-block; }
+
+  /* ── Tab bar ─────────────────────────────────────────────────────── */
+  .tab-bar { display: flex; padding-bottom: 12px; gap: 0; }
+  .tab-btn {
+    padding: 5px 12px; font-size: 12px; font-weight: 500;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); border-bottom: 2px solid transparent;
+    transition: all 0.15s; letter-spacing: 0.2px;
+  }
+  .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+  .tab-btn:hover:not(.active) { color: var(--text-dim); }
+
+  /* ── Scan button row ─────────────────────────────────────────────── */
+  .scan-area { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+  .scan-row  { display: flex; gap: 8px; }
+  .btn-scan {
+    flex: 1; height: 36px;
+    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
+    border: none; border-radius: var(--radius);
+    color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity 0.15s;
+  }
+  .btn-scan:hover { opacity: 0.88; }
+  .btn-scan:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-scan-frame {
+    height: 36px; padding: 0 14px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius); color: var(--text-dim);
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .btn-scan-frame:hover { background: var(--border2); color: var(--text); }
+
+  /* ── Content area ────────────────────────────────────────────────── */
+  .content { padding: 14px 16px; }
+
+  /* ── Empty state ─────────────────────────────────────────────────── */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 40px 20px;
+    color: var(--text-muted); text-align: center;
+  }
+  .empty-state .icon { font-size: 28px; opacity: 0.4; }
+  .empty-state p { font-size: 12px; line-height: 1.6; }
+
+  /* ── Loading ─────────────────────────────────────────────────────── */
+  .loading {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 10px; padding: 32px 20px;
+    color: var(--text-muted); font-size: 12px;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result card ─────────────────────────────────────────────────── */
+  .result-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 12px;
+  }
+  .result-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  .node-info { flex: 1; min-width: 0; }
+  .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-type { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+  .confidence-chip {
+    flex-shrink: 0; padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .chip-HIGH { background: var(--chip-high); color: var(--chip-high-text); }
+  .chip-MED  { background: var(--chip-med);  color: var(--chip-med-text);  }
+  .chip-LOW  { background: var(--chip-low);  color: var(--chip-low-text);  }
+  .result-role { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .role-label  { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .role-value  { font-size: 15px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.3px; }
+  .result-reasoning { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+
+  /* ── Issues ──────────────────────────────────────────────────────── */
+  .issues-section { padding: 10px 14px; border-top: 1px solid var(--border); }
+  .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .issues-count   { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
+  .issues-count.has-high { color: var(--accent-red); }
+  .issue-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 10px; border-radius: var(--radius-sm);
+    border: 1px solid transparent; margin-bottom: 5px;
+    font-size: 12px; line-height: 1.5;
+  }
+  .issue-item:last-child { margin-bottom: 0; }
+  .issue-HIGH   { background: #200a0a; border-color: #5e1a1a; }
+  .issue-MED    { background: #1e1400; border-color: #5e3d00; }
+  .issue-LOW    { background: #0a1220; border-color: #1a3050; }
+  .issue-MANUAL { background: #101020; border-color: #2a2a5e; }
+  .issue-sev  {
+    flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-top: 1px;
+  }
+  .issue-HIGH   .issue-sev { background: #5e1a1a; color: #ef4444; }
+  .issue-MED    .issue-sev { background: #5e3d00; color: #f59e0b; }
+  .issue-LOW    .issue-sev { background: #1a3050; color: #4da3ff; }
+  .issue-MANUAL .issue-sev { background: #2a2a5e; color: #a78bfa; }
+  .issue-body { flex: 1; min-width: 0; }
+  .issue-msg  { color: var(--text); }
+  .issue-wcag { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Suggestions ─────────────────────────────────────────────────── */
+  .suggestions-section { padding: 10px 14px; }
+  .section-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+  .suggestion-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px;
+  }
+  .suggestion-item:last-child { margin-bottom: 0; }
+  .sug-icon  { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
+  .sug-label { flex: 1; font-size: 12px; color: var(--text-dim); }
+  .sug-value {
+    font-size: 11px; color: var(--text);
+    font-family: "SF Mono", "Menlo", monospace;
+    background: var(--border); padding: 1px 6px; border-radius: 4px;
+    max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ── Dev Code panel ──────────────────────────────────────────────── */
+  .devcode-section { border-top: 1px solid var(--border); }
+  .devcode-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; cursor: pointer; user-select: none;
+    font-size: 11px; font-weight: 600; color: #a78bfa;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    transition: background 0.12s;
+  }
+  .devcode-toggle:hover { background: #0d0d1a; }
+  .devcode-toggle .toggle-arrow { font-size: 10px; transition: transform 0.2s; }
+  .devcode-toggle.open .toggle-arrow { transform: rotate(90deg); }
+  .devcode-body { display: none; padding: 0 14px 12px; }
+  .devcode-body.open { display: block; }
+  .devcode-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .devcode-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .btn-copy {
+    padding: 3px 10px; background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text-dim); font-size: 11px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-copy:hover { background: var(--border2); color: var(--accent-blue); }
+  .btn-copy.copied { color: var(--accent-green); border-color: #1a5e38; }
+  .code-block {
+    background: #0d0d0d; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 12px;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 11px; line-height: 1.7; color: #b5c9e8;
+    white-space: pre; overflow-x: auto;
+    max-height: 240px; overflow-y: auto;
+  }
+  .code-block .code-comment { color: #4a6a4a; }
+  .code-block .code-attr { color: #9ecbff; }
+
+  /* ── ASK ─────────────────────────────────────────────────────────── */
+  .ask-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px;
+  }
+  .ask-header   { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .ask-dot      { width: 6px; height: 6px; background: var(--accent-amber); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .ask-title    { font-size: 11px; font-weight: 600; color: var(--accent-amber); text-transform: uppercase; letter-spacing: 0.5px; }
+  .ask-question { font-size: 13px; color: var(--text); margin-bottom: 10px; line-height: 1.5; }
+  .ask-options  { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn-ask-opt  {
+    padding: 6px 14px; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: 20px;
+    color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-ask-opt:hover { background: var(--border2); color: var(--text); border-color: var(--accent-blue); }
+  .btn-ask-opt.selected { background: #0d2033; border-color: var(--accent-blue); color: var(--accent-blue); }
+
+  /* ── Apply ───────────────────────────────────────────────────────── */
+  .apply-row { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-apply {
+    flex: 1; height: 36px; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-apply:hover { background: var(--border2); }
+  .btn-apply.primary {
+    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
+    border-color: transparent; color: #fff;
+  }
+  .btn-apply.primary:hover { opacity: 0.88; }
+  .btn-apply:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-apply.blocked {
+    background: var(--chip-low) !important;
+    border-color: var(--accent-red) !important;
+    color: var(--accent-red) !important;
+    opacity: 1 !important;
+  }
+  .apply-result {
+    padding: 10px 14px; border-radius: var(--radius);
+    font-size: 12px; line-height: 1.8; margin-top: 10px;
+  }
+  .apply-result.success { background: var(--chip-high); color: var(--chip-high-text); border: 1px solid #1a5e38; }
+  .apply-result.error   { background: var(--chip-low);  color: var(--chip-low-text);  border: 1px solid #5e1a1a; }
+  .apply-detail { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Meta row ────────────────────────────────────────────────────── */
+  .meta-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--text-muted);
+  }
+  .meta-badge { padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+  .badge-ai   { background: #2e1a5e; color: #a78bfa; }
+  .badge-rule { background: #1a2e1e; color: #3ecf8e; }
+
+  /* ── "How I decided" collapsible ────────────────────────────────── */
+  .decided-section { border-top: 1px solid var(--border); }
+  .decided-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .decided-toggle:hover { background: #111; }
+  .decided-toggle .toggle-arrow { transition: transform 0.2s; }
+  .decided-toggle.open .toggle-arrow { transform: rotate(90deg); }
+  .decided-body { display: none; padding: 4px 14px 12px; }
+  .decided-body.open { display: block; }
+  .decided-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .decided-row:last-child { border-bottom: none; }
+  .decided-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
+  .decided-value { flex: 1; color: var(--text-dim); word-break: break-word; }
+  .decided-score { color: var(--accent-blue); font-weight: 700; margin-right: 6px; }
+  .decided-sig { font-size: 10px; background: #0d2033; color: var(--accent-blue);
+                 padding: 1px 6px; border-radius: 10px; margin: 1px 2px; display: inline-block; }
+
+  /* ── Audit log (all checks, pass + fail) ────────────────────────── */
+  .audit-log-section { border-top: 1px solid var(--border); }
+  .audit-log-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .audit-log-toggle:hover { background: #111; }
+  .audit-log-toggle.open .toggle-arrow { transform: rotate(90deg); }
+  .audit-log-body { display: none; padding: 4px 14px 12px; }
+  .audit-log-body.open { display: block; }
+  .audit-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0; border-bottom: 1px dotted var(--border);
+    font-size: 11px;
+  }
+  .audit-row:last-child { border-bottom: none; }
+  .audit-status {
+    width: 48px; flex-shrink: 0; text-align: center;
+    font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.5px;
+  }
+  .audit-status.PASS   { background: #0d2e1a; color: #3ecf8e; }
+  .audit-status.WARN   { background: #2e1f00; color: #f59e0b; }
+  .audit-status.BLOCK  { background: #2a0a0a; color: #ef4444; }
+  .audit-status.MANUAL { background: #101020; color: #a78bfa; }
+  .audit-status.ERROR  { background: #2a1a00; color: #f59e0b; }
+  .audit-name { flex: 1; color: var(--text-dim); }
+  .audit-wcag { font-size: 10px; color: var(--text-muted); }
+
+  /* ── Stored-state banner above analysis result ─────────────────── */
+  .stored-banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; margin: 0 16px 12px;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-size: 12px;
+  }
+  .stored-banner-icon { font-size: 16px; flex-shrink: 0; }
+  .stored-banner-body { flex: 1; min-width: 0; }
+  .stored-banner-line1 { color: var(--text-dim); font-weight: 500; margin-bottom: 4px; }
+  .stored-banner-line2 { display: flex; align-items: center; gap: 8px; }
+  .stored-progress {
+    flex: 1; height: 6px; max-width: 120px;
+    background: var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .stored-progress-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 0.25s ease-out;
+  }
+  .stored-progress-fill.zero  { background: var(--accent-red);   }
+  .stored-progress-fill.mid   { background: var(--accent-amber); }
+  .stored-progress-fill.full  { background: var(--accent-green); }
+  .stored-progress-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  .stored-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn-mini {
+    padding: 4px 10px; font-size: 11px; font-weight: 600;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text-dim); border-radius: var(--radius-sm); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .btn-mini:hover { background: var(--border2); color: var(--text); }
+  .btn-mini.primary { background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%); color: #fff; border-color: transparent; }
+  .btn-mini.primary:hover { opacity: 0.88; }
+
+  /* ── Components dashboard tab ──────────────────────────────────── */
+  .dashboard-area { padding: 14px 16px; }
+  .dashboard-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .dashboard-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .dashboard-title-count { color: var(--text-muted); font-weight: 400; margin-left: 6px; }
+  .dashboard-sort {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 11px;
+    padding: 4px 8px; outline: none; appearance: none; cursor: pointer;
+  }
+  .dashboard-empty { padding: 36px 20px; text-align: center; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+  .dashboard-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--radius); overflow: hidden; }
+  .dashboard-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: var(--surface);
+    transition: background 0.12s;
+  }
+  .dashboard-row:hover { background: #181818; }
+  .dash-status-icon { width: 18px; flex-shrink: 0; text-align: center; font-size: 14px; }
+  .dash-name {
+    flex: 1; min-width: 0; font-size: 12px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dash-role { font-size: 10px; color: var(--text-muted); margin-left: 4px; }
+  .dash-progress {
+    width: 80px; height: 5px; background: var(--border2); border-radius: 3px;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .dash-progress-fill { height: 100%; transition: width 0.25s; }
+  .dash-pct { font-size: 11px; color: var(--text-muted); width: 36px; text-align: right; flex-shrink: 0; }
+  .dash-time { font-size: 10px; color: var(--text-muted); width: 60px; text-align: right; flex-shrink: 0; }
+  .btn-dash-open {
+    flex-shrink: 0;
+    width: 24px; height: 24px; padding: 0;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text-dim); font-size: 13px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  .btn-dash-open:hover { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+  /* ── Issue title with [?] explain button ─────────────────────────── */
+  .issue-title-row { display: flex; align-items: flex-start; gap: 6px; }
+  .issue-title-row .issue-msg { flex: 1; }
+  .btn-explain {
+    flex-shrink: 0; width: 18px; height: 18px; padding: 0;
+    border: 1px solid var(--border2); border-radius: 50%;
+    background: transparent; color: var(--text-muted);
+    font-size: 11px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s; line-height: 1;
+  }
+  .btn-explain:hover { background: var(--surface2); color: var(--accent-blue); border-color: var(--accent-blue); }
+
+  /* ── Why-it-matters slide-in panel (right side) ─────────────────── */
+  .explain-panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 240px;
+    background: #14141e; border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.22s ease-out;
+    z-index: 90;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .explain-panel.open { transform: translateX(0); }
+  .explain-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; background: #14141e; z-index: 1;
+  }
+  .explain-title { font-size: 11px; font-weight: 700; color: var(--accent-blue); letter-spacing: 0.4px; text-transform: uppercase; }
+  .btn-explain-close {
+    background: none; border: none; color: var(--text-muted); font-size: 16px;
+    cursor: pointer; padding: 0; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center; border-radius: 4px;
+  }
+  .btn-explain-close:hover { background: var(--surface2); color: var(--text); }
+  .explain-body { padding: 14px; flex: 1; font-size: 12px; line-height: 1.55; color: var(--text-dim); }
+  .explain-issue-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; line-height: 1.4; }
+  .explain-section-label {
+    font-size: 9px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.7px;
+    margin: 16px 0 6px;
+  }
+  .explain-section-label:first-of-type { margin-top: 0; }
+  .explain-why { color: var(--text-dim); }
+  .explain-example {
+    background: #0d0d0d; border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px 10px;
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 10px; line-height: 1.55; color: #b5c9e8;
+    white-space: pre-wrap; word-break: break-word;
+    margin-top: 4px;
+  }
+  .explain-example-tag {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
+    text-transform: uppercase; color: var(--text-muted);
+    margin: 8px 0 3px;
+  }
+  .explain-example-tag.before { color: #ef4444; }
+  .explain-example-tag.after  { color: #3ecf8e; }
+  .explain-links { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .explain-link {
+    color: var(--accent-blue); font-size: 11px; text-decoration: none;
+    word-break: break-all;
+  }
+  .explain-link:hover { text-decoration: underline; color: #7fb8ff; }
+  .explain-overlay {
+    position: fixed; inset: 0;
+    background: transparent;
+    z-index: 89;
+    display: none;
+  }
+  .explain-overlay.open { display: block; }
+
+  /* ── Inline auto-fix dropdown on issue rows ─────────────────────── */
+  .issue-actions { position: relative; flex-shrink: 0; margin-left: 6px; }
+  .btn-autofix-direct {
+    padding: 3px 9px; font-size: 10px; font-weight: 700;
+    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
+    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: all 0.12s;
+  }
+  .btn-autofix-direct:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix-direct:disabled { opacity: 0.4; cursor: wait; }
+  .btn-autofix {
+    padding: 3px 9px; font-size: 10px; font-weight: 700;
+    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
+    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: all 0.12s;
+  }
+  .btn-autofix:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix:disabled { opacity: 0.4; cursor: wait; }
+  .btn-autofix .caret { font-size: 8px; opacity: 0.7; }
+  .autofix-menu {
+    position: absolute; right: 0; top: 26px; z-index: 30;
+    background: #14141e; border: 1px solid #3a2a7e;
+    border-radius: 6px; padding: 4px; min-width: 220px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    display: none;
+  }
+  .autofix-menu.open { display: block; }
+  .autofix-opt {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; font-size: 11px; cursor: pointer; color: var(--text-dim);
+    border-radius: 4px; white-space: nowrap;
+  }
+  .autofix-opt:hover { background: #1e1a4e; color: var(--text); }
+  .autofix-opt-icon { font-size: 13px; width: 16px; text-align: center; }
+  .issue-fixed {
+    border-color: #1a5e38 !important;
+    background: #0d2e1a !important;
+  }
+  .issue-fixed .issue-msg::before {
+    content: "\2705  Auto-fixed: "; color: var(--chip-high-text); font-weight: 600;
+  }
+  .autofix-spinner {
+    width: 10px; height: 10px;
+    border: 1.5px solid transparent; border-top-color: currentColor;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  .btn-acknowledge {
+    padding: 3px 9px; font-size: 10px; font-weight: 700;
+    border-radius: 12px; cursor: pointer; border: 1px solid #2a4a2a;
+    background: #0d2e1a; color: var(--accent-green); letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .btn-acknowledge:hover { background: #1a5e38; }
+  .ack-badge { font-size: 10px; color: var(--accent-green); font-weight: 700; }
+  .issue-acknowledged { opacity: 0.55; }
+  .issue-acknowledged .issue-msg { text-decoration: line-through; }
+  .designer-fix-msg {
+    font-size: 10px; color: var(--text-dim); max-width: 180px;
+    line-height: 1.4; margin-bottom: 4px;
+  }
+  .issue-message-only { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .ai-consent-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    z-index: 200; display: none; align-items: center; justify-content: center;
+  }
+  .ai-consent-overlay.open { display: flex; }
+  .ai-consent-dialog {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 16px 18px; max-width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .ai-consent-dialog h3 { font-size: 13px; margin: 0 0 8px; }
+  .ai-consent-dialog p { font-size: 11px; color: var(--text-dim); margin: 0 0 12px; line-height: 1.5; }
+  .ai-consent-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .ai-consent-check { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); margin-bottom: 12px; }
+
+  /* ── Component preview panel ────────────────────────────────────── */
+  .preview-panel {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .preview-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 16px;
+    font-size: 11px; cursor: pointer; user-select: none;
+  }
+  .preview-toolbar-left {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    letter-spacing: 0.3px;
+  }
+  .preview-collapse-icon { font-size: 9px; transition: transform 0.2s; }
+  .preview-bg-btns { display: flex; gap: 4px; }
+  .btn-preview-bg {
+    padding: 3px 9px; font-size: 10px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border2); border-radius: 12px;
+    background: none; transition: all 0.15s; letter-spacing: 0.2px;
+  }
+  .btn-preview-bg.active { background: var(--surface2); color: var(--text); border-color: var(--accent-blue); }
+  .btn-preview-bg:not(.active) { color: var(--text-muted); }
+  .preview-body {
+    padding: 0 20px 20px;
+    transition: opacity 0.15s;
+  }
+  .preview-body.collapsed { display: none; }
+  .preview-inner {
+    width: 520px; height: 200px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s;
+    overflow: hidden;
+  }
+  .preview-inner img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .preview-placeholder {
+    color: var(--text-muted); font-size: 11px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .preview-placeholder .ph-icon { font-size: 24px; opacity: 0.3; }
+
+  /* ── Fix action dialog ───────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-box {
+    background: #14141e; border: 1px solid #3a2a7e;
+    border-radius: var(--radius); padding: 20px 22px; width: 360px;
+  }
+  .modal-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+  .modal-option {
+    display: flex; gap: 12px; padding: 12px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); margin-bottom: 8px; cursor: pointer;
+    background: var(--surface2); transition: border-color 0.12s, background 0.12s;
+    position: relative;
+  }
+  .modal-option:hover { border-color: #555; }
+  .modal-option.selected { border-color: var(--accent-blue); background: #0a1828; }
+  .modal-radio {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border2); flex-shrink: 0; margin-top: 2px;
+    transition: border-color 0.12s;
+  }
+  .modal-option.selected .modal-radio { border-color: var(--accent-blue); background: var(--accent-blue); }
+  .modal-option-text { flex: 1; }
+  .modal-option-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+  .modal-option-desc  { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .modal-btn {
+    padding: 7px 18px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; border: 1px solid var(--border2);
+    background: var(--surface2); color: var(--text);
+  }
+  .modal-btn:hover { background: var(--border2); }
+  .modal-btn.primary {
+    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
+    border-color: transparent; color: #fff;
+  }
+  .modal-btn.primary:hover { opacity: 0.88; }
+  .modal-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Framework selector (Dev Mode) ──────────────────────────────── */
+  .fw-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .fw-tab  {
+    padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border2); border-radius: 20px;
+    background: none; color: var(--text-muted); transition: all 0.15s;
+  }
+  .fw-tab.active { background: #0d2033; color: var(--accent-blue); border-color: var(--accent-blue); }
+  .fw-code-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .fw-code-label  { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Settings panel ──────────────────────────────────────────────── */
+  .settings-tab { padding: 16px; display: none; }
+  .settings-tab.active { display: block; }
+  .field-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .field-row   { display: flex; gap: 8px; margin-bottom: 14px; }
+  .field-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 12px;
+    padding: 7px 10px; outline: none; font-family: "SF Mono", monospace; transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: var(--accent-blue); }
+  .field-input::placeholder { color: var(--text-muted); }
+  .field-select {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 12px;
+    padding: 7px 10px; outline: none; transition: border-color 0.15s;
+    appearance: none; cursor: pointer;
+  }
+  .field-select:focus { border-color: var(--accent-blue); }
+  .btn-save {
+    padding: 7px 14px; background: var(--accent-blue); border: none;
+    border-radius: var(--radius-sm); color: #fff; font-size: 12px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+  }
+  .btn-save:hover { opacity: 0.85; }
+  .field-hint  { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px; }
+  .key-status  { font-size: 11px; color: var(--chip-high-text); margin-bottom: 6px; }
+  .divider     { border: none; border-top: 1px solid var(--border); margin: 4px 0 16px; }
+  .slider-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  input[type="range"] { flex: 1; accent-color: var(--accent-blue); }
+  .slider-val  { font-size: 12px; font-weight: 700; color: var(--accent-blue); min-width: 14px; }
+
+  /* ── Batch scan results ──────────────────────────────────────────── */
+  .scan-tab { padding: 0; display: none; }
+  .scan-tab.active { display: block; }
+  .scan-summary {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    padding: 12px 16px; background: var(--surface);
+  }
+  .summary-stat {
+    flex: 1; text-align: center; padding: 0 8px; border-right: 1px solid var(--border);
+  }
+  .summary-stat:last-child { border-right: none; }
+  .stat-val  { font-size: 20px; font-weight: 800; line-height: 1.2; }
+  .stat-val.red    { color: var(--accent-red); }
+  .stat-val.amber  { color: var(--accent-amber); }
+  .stat-val.blue   { color: var(--accent-blue); }
+  .stat-val.muted  { color: var(--text-dim); }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+  .scan-list { padding: 10px 14px; overflow-y: auto; max-height: 380px; }
+  .scan-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .scan-row:hover { border-color: var(--accent-blue); }
+  .scan-row:last-child { margin-bottom: 0; }
+  .scan-role { font-size: 11px; font-weight: 600; color: var(--accent-blue); min-width: 70px; }
+  .scan-name { flex: 1; font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scan-badges { display: flex; gap: 4px; flex-shrink: 0; }
+  .scan-badge {
+    font-size: 9px; font-weight: 800; padding: 2px 5px;
+    border-radius: 3px; letter-spacing: 0.4px;
+  }
+  .scan-badge.h { background: #5e1a1a; color: #ef4444; }
+  .scan-badge.m { background: #5e3d00; color: #f59e0b; }
+  .scan-badge.l { background: #1a3050; color: #4da3ff; }
+  .export-row { padding: 10px 14px; border-top: 1px solid var(--border); }
+  .btn-export {
+    width: 100%; height: 32px; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: var(--radius-sm);
+    color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-export:hover { background: var(--border2); color: var(--text); }
+
+  /* ── Dev Inspector ───────────────────────────────────────────────── */
+  .dev-inspector { padding: 14px 16px; display: none; }
+  .dev-inspector.active { display: block; }
+  .inspector-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 12px;
+  }
+  .inspector-header {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .inspector-node-name { font-size: 12px; font-weight: 600; }
+  .inspector-node-type { font-size: 10px; color: var(--text-muted); }
+  .attr-list { padding: 8px 0; }
+  .attr-row  {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 5px 14px; border-bottom: 1px solid #181818;
+  }
+  .attr-row:last-child { border-bottom: none; }
+  .attr-key   { font-size: 11px; color: var(--accent-blue); font-family: "SF Mono", monospace; min-width: 90px; flex-shrink: 0; }
+  .attr-val   { font-size: 11px; color: var(--text-dim); font-family: "SF Mono", monospace; word-break: break-all; }
+  .no-data-msg { padding: 20px; text-align: center; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .btn-inspect {
+    width: 100%; height: 36px;
+    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
+    border: none; border-radius: var(--radius);
+    color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity 0.15s; margin-bottom: 12px;
+  }
+  .btn-inspect:hover { opacity: 0.88; }
+</style>
+</head>
+<body>
+<div class="ai-consent-overlay" id="ai-consent-overlay">
+  <div class="ai-consent-dialog">
+    <h3>Allow AI-generated text?</h3>
+    <p>This fix will use AI to generate text content. Allow?</p>
+    <label class="ai-consent-check">
+      <input type="checkbox" id="ai-consent-dont-ask" />
+      Don't ask again for AI fixes in this session
+    </label>
+    <div class="ai-consent-actions">
+      <button class="btn-mini" id="ai-consent-cancel">Cancel</button>
+      <button class="btn-mini primary" id="ai-consent-allow">Allow</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Why-it-matters slide-in panel ───────────────────────────────── -->
+<div class="explain-overlay" id="explain-overlay"></div>
+<aside class="explain-panel" id="explain-panel" role="dialog" aria-labelledby="explain-heading" aria-hidden="true">
+  <div class="explain-header">
+    <span class="explain-title" id="explain-heading">Why it matters</span>
+    <button class="btn-explain-close" id="btn-explain-close" aria-label="Close explanation panel">✕</button>
+  </div>
+  <div class="explain-body" id="explain-body"></div>
+</aside>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">♿</div>
+    <div>
+      <div class="logo-name">A11y Shift <span class="dev-badge" id="dev-badge">Dev Mode</span></div>
+      <div class="logo-sub">WCAG 2.2 · ARIA APG</div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="analyze">Analyze</button>
+    <button class="tab-btn" data-tab="scan">Scan</button>
+    <button class="tab-btn" data-tab="components">Components</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+  </div>
+</div>
+
+<!-- ── ANALYZE TAB ─────────────────────────────────────────────────── -->
+<div class="tab-pane active" id="tab-analyze">
+  <div class="scan-area">
+    <div class="scan-row">
+      <button class="btn-scan" id="btn-scan"><span>⚡</span><span>Start Analysis</span></button>
+    </div>
+  </div>
+
+  <!-- Component preview panel -->
+  <div class="preview-panel" id="preview-panel">
+    <div class="preview-toolbar" id="preview-toolbar">
+      <div class="preview-toolbar-left">
+        <span class="preview-collapse-icon" id="preview-collapse-icon">▲</span>
+        <span>Preview</span>
+      </div>
+      <div class="preview-bg-btns">
+        <button class="btn-preview-bg active" id="btn-bg-light" title="Light background">☀ Light</button>
+        <button class="btn-preview-bg"        id="btn-bg-dark"  title="Dark background">☾ Dark</button>
+      </div>
+    </div>
+    <div class="preview-body" id="preview-body">
+      <div class="preview-inner" id="preview-inner" style="background:#F5F5F5">
+        <div class="preview-placeholder">
+          <span class="ph-icon">◎</span>
+          <span>Select a component and run analysis</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+    <div class="empty-state">
+      <div class="icon">◎</div>
+      <p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCAN FRAME TAB ─────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-scan" style="display:none">
+  <div class="scan-tab" id="scan-panel">
+    <div class="scan-area">
+      <div class="scan-row">
+        <button class="btn-scan" id="btn-scan-frame"><span>🔍</span><span>Scan Selected Frame</span></button>
+      </div>
+    </div>
+    <div id="scan-content" style="padding:14px 16px">
+      <div class="empty-state">
+        <div class="icon">⬚</div>
+        <p>Select a Frame or Group on the canvas<br>and click <strong>Scan Selected Frame</strong></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── COMPONENTS TAB (history dashboard) ─────────────────────────── -->
+<div class="tab-pane" id="tab-components" style="display:none">
+  <div class="dashboard-area">
+    <div class="dashboard-header">
+      <div class="dashboard-title">🗂 Components <span class="dashboard-title-count" id="dash-count">(0 scanned)</span></div>
+      <select class="dashboard-sort" id="dash-sort">
+        <option value="status">Sort by status</option>
+        <option value="date">Sort by date</option>
+        <option value="name">Sort by name</option>
+      </select>
+    </div>
+    <div id="dashboard-content">
+      <div class="dashboard-empty">No components scanned yet.<br>Run analysis on a component to track it here.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SETTINGS TAB ───────────────────────────────────────────────── -->
+<div class="tab-pane settings-tab" id="tab-settings" style="display:none">
+  <div class="field-label">OpenAI API Key</div>
+  <div class="field-row">
+    <input class="field-input" id="api-key-input" type="password" placeholder="sk-…" autocomplete="off" />
+    <button class="btn-save" id="btn-save-key">Save</button>
+  </div>
+  <div class="key-status" id="key-status" style="display:none">✓ Key saved</div>
+  <p class="field-hint">Stored locally in Figma. Used only when rule engine confidence is too low.</p>
+
+  <hr class="divider" />
+
+  <div class="field-label">AI Model</div>
+  <div class="field-row">
+    <select class="field-select" id="ai-model-select">
+      <option value="gpt-4o-mini">gpt-4o-mini (faster, cheaper)</option>
+      <option value="gpt-4o">gpt-4o (more accurate)</option>
+    </select>
+  </div>
+
+  <div class="field-label">Min detection score to skip AI</div>
+  <div class="slider-row">
+    <span style="font-size:11px;color:var(--text-muted)">Low</span>
+    <input type="range" id="threshold-slider" min="2" max="5" step="1" value="3" />
+    <span style="font-size:11px;color:var(--text-muted)">High</span>
+    <span class="slider-val" id="threshold-val">3</span>
+  </div>
+  <p class="field-hint" style="margin-top:-6px">Score ≥ this value → rule engine result used directly (no AI call).</p>
+
+  <div style="display:flex;gap:8px">
+    <button class="btn-save" id="btn-save-settings" style="flex:1">Save Settings</button>
+  </div>
+  <div id="settings-status" style="font-size:11px;color:var(--chip-high-text);margin-top:8px;display:none">✓ Settings saved</div>
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+    <div class="section-label">Developer</div>
+    <button type="button" class="btn-save" id="btn-fix-coverage" style="width:100%;margin-top:8px">Run fix coverage report</button>
+    <p style="font-size:10px;color:var(--text-muted);margin-top:8px;line-height:1.45">
+      Prints MISSING/IMPLEMENTED checks to this DevTools console.
+      Shortcut: <code style="color:var(--text-dim)">reportFixCoverage()</code>
+    </p>
+  </div>
+</div>
+
+<!-- ── DEV INSPECTOR (shown only in Dev Mode) ─────────────────────── -->
+<div class="dev-inspector" id="dev-inspector">
+  <button class="btn-inspect" id="btn-inspect">
+    <span>🔬</span><span>Read ARIA Annotations</span>
+  </button>
+  <div id="inspector-content">
+    <div class="empty-state">
+      <div class="icon">🏷</div>
+      <p>Select a layer that has been analysed<br>with A11y Shift, then click the button above</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Why-it-matters slide-in panel ──────────────────────────────────────────
+function openExplainPanel(issue) {
+  if (!issue || !issue.explanation) return;
+  const exp = issue.explanation;
+  $('explain-body').innerHTML = `
+    <div class="explain-issue-title">${escapeHtml(issue.displayTitle || issue.message)}</div>
+
+    <div class="explain-section-label">Why this matters</div>
+    <div class="explain-why">${escapeHtml(exp.why)}</div>
+
+    ${exp.example ? `
+      <div class="explain-section-label">Example</div>
+      ${exp.example.before ? `
+        <div class="explain-example-tag before">Before</div>
+        <pre class="explain-example">${escapeHtml(exp.example.before)}</pre>
+      ` : ''}
+      ${exp.example.after ? `
+        <div class="explain-example-tag after">After</div>
+        <pre class="explain-example">${escapeHtml(exp.example.after)}</pre>
+      ` : ''}
+    ` : ''}
+
+    <div class="explain-section-label">Learn more</div>
+    <div class="explain-links">
+      ${exp.wcagLink ? `<a class="explain-link" href="${escapeHtml(exp.wcagLink)}" target="_blank" rel="noopener">WCAG 2.2 reference →</a>` : ''}
+      ${exp.apgLink  ? `<a class="explain-link" href="${escapeHtml(exp.apgLink)}"  target="_blank" rel="noopener">ARIA APG pattern →</a>` : ''}
+    </div>`;
+  $('explain-panel').classList.add('open');
+  $('explain-panel').setAttribute('aria-hidden', 'false');
+  $('explain-overlay').classList.add('open');
+}
+
+function closeExplainPanel() {
+  $('explain-panel').classList.remove('open');
+  $('explain-panel').setAttribute('aria-hidden', 'true');
+  $('explain-overlay').classList.remove('open');
+}
+
+$('btn-explain-close').addEventListener('click', closeExplainPanel);
+$('explain-overlay').addEventListener('click', closeExplainPanel);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('explain-panel').classList.contains('open')) closeExplainPanel();
+});
+
+let currentState    = null;
+let currentScanData = null;
+let isDevMode       = false;
+let settings        = { threshold: 3, aiModel: 'gpt-4o-mini' };
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    const pane = $('tab-' + btn.dataset.tab);
+    if (pane) pane.style.display = 'block';
+    // Lazy-fetch the dashboard whenever the Components tab is opened
+    if (btn.dataset.tab === 'components') {
+      parent.postMessage({ pluginMessage: { type: 'GET_COMPONENT_INDEX' } }, '*');
+    }
+  });
+});
+
+// ── Settings controls ──────────────────────────────────────────────────────
+$('threshold-slider').addEventListener('input', () => {
+  $('threshold-val').textContent = $('threshold-slider').value;
+});
+
+$('btn-save-key').addEventListener('click', () => {
+  const key = $('api-key-input').value.trim();
+  if (!key.startsWith('sk-')) { alert('Key must start with sk-'); return; }
+  parent.postMessage({ pluginMessage: { type: 'SAVE_API_KEY', key } }, '*');
+});
+
+var btnFixCoverage = $('btn-fix-coverage');
+if (btnFixCoverage) {
+  btnFixCoverage.addEventListener('click', function() {
+    if (typeof window.reportFixCoverage === 'function') window.reportFixCoverage();
+    else parent.postMessage({ pluginMessage: { type: 'DEBUG_FIX_COVERAGE' } }, '*');
+  });
+}
+
+$('btn-save-settings').addEventListener('click', () => {
+  const model     = $('ai-model-select').value;
+  const threshold = parseInt($('threshold-slider').value, 10);
+  settings = { threshold, aiModel: model };
+  parent.postMessage({ pluginMessage: { type: 'SAVE_SETTINGS', threshold, aiModel: model } }, '*');
+});
+
+// ── Preview panel ──────────────────────────────────────────────────────────
+// State persistence uses figma.clientStorage via main thread — localStorage is
+// disabled inside the plugin's data: URL iframe (browser SecurityError).
+const BG_LIGHT = '#F5F5F5';
+const BG_DARK  = '#1A1A1A';
+const previewState = { collapsed: false, bgLight: true };
+
+function applyPreviewCollapsed() {
+  $('preview-body').classList.toggle('collapsed', previewState.collapsed);
+  $('preview-collapse-icon').textContent = previewState.collapsed ? '▼' : '▲';
+}
+function applyPreviewBg() {
+  $('preview-inner').style.background = previewState.bgLight ? BG_LIGHT : BG_DARK;
+  $('btn-bg-light').classList.toggle('active',  previewState.bgLight);
+  $('btn-bg-dark').classList.toggle('active',  !previewState.bgLight);
+}
+function savePreviewState() {
+  parent.postMessage({ pluginMessage: {
+    type: 'SAVE_PREVIEW_STATE',
+    collapsed: previewState.collapsed,
+    bgLight:   previewState.bgLight,
+  } }, '*');
+}
+
+(function wirePreview() {
+  applyPreviewCollapsed();
+  applyPreviewBg();
+
+  $('preview-toolbar').addEventListener('click', e => {
+    if (e.target.closest('.preview-bg-btns')) return;
+    previewState.collapsed = !previewState.collapsed;
+    applyPreviewCollapsed();
+    savePreviewState();
+  });
+  $('btn-bg-light').addEventListener('click', () => {
+    previewState.bgLight = true;  applyPreviewBg(); savePreviewState();
+  });
+  $('btn-bg-dark').addEventListener('click',  () => {
+    previewState.bgLight = false; applyPreviewBg(); savePreviewState();
+  });
+})();
+
+function showPreviewImage(bytes) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
+  const url  = URL.createObjectURL(blob);
+  const img  = document.createElement('img');
+  img.alt    = 'Component preview';
+  img.src    = url;
+  img.onload = () => URL.revokeObjectURL(url);
+  $('preview-inner').innerHTML = '';
+  $('preview-inner').appendChild(img);
+}
+
+// ── Analyze tab ────────────────────────────────────────────────────────────
+$('btn-scan').addEventListener('click', () => {
+  parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
+  $('btn-scan').disabled = true;
+  $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Reading context…</span></div>`;
+});
+
+(function initAiConsentDialog() {
+  const allowBtn = document.getElementById('ai-consent-allow');
+  const cancelBtn = document.getElementById('ai-consent-cancel');
+  const overlay = document.getElementById('ai-consent-overlay');
+  if (allowBtn) {
+    allowBtn.addEventListener('click', () => {
+      const cb = document.getElementById('ai-consent-dont-ask');
+      if (cb && cb.checked) {
+        try { sessionStorage.setItem('a11y-ai-consent', '1'); } catch (_e) {}
+      }
+      const pending = pendingAiFix;
+      hideAiConsentDialog();
+      if (pending) dispatchAutoFix(pending.issueIdx, pending.strategy);
+    });
+  }
+  if (cancelBtn) cancelBtn.addEventListener('click', hideAiConsentDialog);
+  if (overlay) {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) hideAiConsentDialog();
+    });
+  }
+})();
+
+// ── Scan frame tab ─────────────────────────────────────────────────────────
+$('btn-scan-frame').addEventListener('click', () => {
+  parent.postMessage({ pluginMessage: { type: 'SCAN_FRAME' } }, '*');
+  $('btn-scan-frame').disabled = true;
+  $('scan-content').innerHTML = `<div class="loading" style="padding:28px 20px"><div class="spinner"></div><span>Scanning components…</span></div>`;
+});
+
+// ── Dev inspector ──────────────────────────────────────────────────────────
+$('btn-inspect').addEventListener('click', () => {
+  parent.postMessage({ pluginMessage: { type: 'GET_NODE_DATA' } }, '*');
+});
+
+// ── Render analysis result ─────────────────────────────────────────────────
+function renderAriaSchema(schema) {
+  if (!schema) return '';
+  // Escape HTML for display
+  const escaped = schema
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // JSON syntax tinting: highlight keys (aria-*), string values, and booleans
+  const tinted = escaped
+    .replace(/"(aria-[\w-]+)":/g, '<span class="code-attr">"$1"</span>:')
+    .replace(/"(role|wcag|apg|note|states|structure|keyboard|focus-management|critical-note)":/g, '<span class="code-attr">"$1"</span>:')
+    .replace(/: (true|false|null)/g, ': <span style="color:#f59e0b">$1</span>');
+  const copyId = 'copy-schema-' + Date.now();
+  return `
+    <div class="devcode-section">
+      <div class="devcode-toggle" id="devcode-toggle">
+        <span>{ } ARIA Schema — copy &amp; implement in any framework</span>
+        <span class="toggle-arrow">▶</span>
+      </div>
+      <div class="devcode-body" id="devcode-body">
+        <div class="devcode-header-row">
+          <span class="devcode-title">Technology-agnostic ARIA attributes</span>
+          <button class="btn-copy" id="${copyId}" data-code="${encodeURIComponent(schema)}">Copy JSON</button>
+        </div>
+        <div class="code-block">${tinted}</div>
+      </div>
+    </div>`;
+}
+
+// ── Framework-aware Dev Mode schema panel ──────────────────────────────────
+function renderAriaSchemaWithFrameworks(schema) {
+  if (!schema) return '';
+  const escaped = schema.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const tinted  = escaped
+    .replace(/"(aria-[\w-]+)":/g, '<span class="code-attr">"$1"</span>:')
+    .replace(/"(role|wcag|apg|note|states|structure|keyboard)":/g, '<span class="code-attr">"$1"</span>:')
+    .replace(/: (true|false|null)/g, ': <span style="color:#f59e0b">$1</span>');
+
+  const panelId = 'fw-panel-' + Date.now();
+  return `
+    <div class="devcode-section" id="${panelId}">
+      <div class="devcode-toggle devcode-toggle-fw">
+        <span>{ } ARIA Schema &amp; Framework Code</span>
+        <span class="toggle-arrow">▶</span>
+      </div>
+      <div class="devcode-body devcode-body-fw">
+        <div class="fw-tabs" style="padding-top:8px">
+          <button class="fw-tab active" data-fw="schema">ARIA JSON</button>
+          <button class="fw-tab" data-fw="html">HTML</button>
+          <button class="fw-tab" data-fw="react">React</button>
+          <button class="fw-tab" data-fw="vue">Vue</button>
+        </div>
+        <div class="fw-code-pane" data-pane="schema">
+          <div class="fw-code-header">
+            <span class="fw-code-label">Technology-agnostic ARIA attributes</span>
+            <button class="btn-copy" data-code="${encodeURIComponent(schema)}">Copy JSON</button>
+          </div>
+          <div class="code-block">${tinted}</div>
+        </div>
+        <div class="fw-code-pane" data-pane="html" style="display:none">
+          <div class="fw-code-header">
+            <span class="fw-code-label">HTML / Vanilla</span>
+            <button class="btn-copy btn-copy-fw" data-fw="html">Copy</button>
+          </div>
+          <div class="code-block fw-code-output" data-fw="html">Generating…</div>
+        </div>
+        <div class="fw-code-pane" data-pane="react" style="display:none">
+          <div class="fw-code-header">
+            <span class="fw-code-label">React JSX</span>
+            <button class="btn-copy btn-copy-fw" data-fw="react">Copy</button>
+          </div>
+          <div class="code-block fw-code-output" data-fw="react">Generating…</div>
+        </div>
+        <div class="fw-code-pane" data-pane="vue" style="display:none">
+          <div class="fw-code-header">
+            <span class="fw-code-label">Vue SFC template</span>
+            <button class="btn-copy btn-copy-fw" data-fw="vue">Copy</button>
+          </div>
+          <div class="code-block fw-code-output" data-fw="vue">Generating…</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// After rendering, call this to wire up the framework tabs in a given container
+function wireFrameworkTabs(container, ariaSchemaStr) {
+  // Toggle
+  const toggleEl = container.querySelector('.devcode-toggle-fw');
+  const bodyEl   = container.querySelector('.devcode-body-fw');
+  if (toggleEl && bodyEl) {
+    toggleEl.addEventListener('click', () => {
+      toggleEl.classList.toggle('open');
+      bodyEl.classList.toggle('open');
+    });
+  }
+
+  // Tab switching + lazy framework code generation
+  const tabs = container.querySelectorAll('.fw-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const fw = tab.dataset.fw;
+      container.querySelectorAll('.fw-code-pane').forEach(p => {
+        p.style.display = p.dataset.pane === fw ? '' : 'none';
+      });
+      if (fw !== 'schema') {
+        // Request generated code from main thread
+        parent.postMessage({ pluginMessage: { type: 'GET_FRAMEWORK_CODE', framework: fw, ariaSchema: ariaSchemaStr } }, '*');
+        // Store which panel we're targeting for the response
+        container.dataset.pendingFw = fw;
+      }
+    });
+  });
+
+  // Copy buttons for framework panes
+  container.querySelectorAll('.btn-copy-fw').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fw   = btn.dataset.fw;
+      const out  = container.querySelector('.fw-code-output[data-fw="' + fw + '"]');
+      const text = out ? out.textContent : '';
+      const ta   = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+
+  // Regular JSON copy
+  container.querySelectorAll('.btn-copy:not(.btn-copy-fw)').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = decodeURIComponent(btn.dataset.code || '');
+      const ta   = document.createElement('textarea');
+      ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+}
+
+// ── Inline auto-fix control on each issue row ─────────────────────────────
+function renderAutoFixControl(issue, idx) {
+  if (issue.acknowledged) {
+    return '<div class="issue-actions"><span class="ack-badge">✓ Acknowledged</span></div>';
+  }
+  if (issue.fixKind === 'message_only') {
+    const msg = issue.designerMessage || issue.message || '';
+    return `
+    <div class="issue-actions issue-message-only">
+      <div class="designer-fix-msg">${escapeHtml(msg)}</div>
+      <button class="btn-acknowledge" data-issue-idx="${idx}">✓ Mark as acknowledged</button>
+    </div>`;
+  }
+  if (!issue.autoFixable) {
+    return `
+    <div class="issue-actions">
+      <button class="btn-acknowledge" data-issue-idx="${idx}">✓ Mark as acknowledged</button>
+    </div>`;
+  }
+  if (issue.fixKind === 'annotation') {
+    return `
+    <div class="issue-actions">
+      <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
+        ✨ Auto-fix
+      </button>
+    </div>`;
+  }
+  const isAiContent = issue.fixKind === 'ai_content';
+  return `
+    <div class="issue-actions">
+      <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">
+        ✨ Auto-fix <span class="caret">▾</span>
+      </button>
+      <div class="autofix-menu" data-menu-idx="${idx}">
+        ${isAiContent ? `
+          <div class="autofix-opt" data-strategy="ai" data-idx="${idx}"><span class="autofix-opt-icon">✨</span> Generate with AI</div>
+          <div class="autofix-opt" data-strategy="generic" data-idx="${idx}"><span class="autofix-opt-icon">📝</span> Use generic fallback</div>
+        ` : `
+          <div class="autofix-opt" data-strategy="generic" data-idx="${idx}"><span class="autofix-opt-icon">📝</span> Apply fix</div>
+        `}
+      </div>
+    </div>`;
+}
+
+let pendingAiFix = null;
+
+function hasAiConsent() {
+  try { return sessionStorage.getItem('a11y-ai-consent') === '1'; } catch (_e) { return false; }
+}
+
+function showAiConsentDialog(issueIdx, strategy) {
+  pendingAiFix = { issueIdx: issueIdx, strategy: strategy };
+  const overlay = document.getElementById('ai-consent-overlay');
+  if (overlay) overlay.classList.add('open');
+}
+
+function hideAiConsentDialog() {
+  pendingAiFix = null;
+  const overlay = document.getElementById('ai-consent-overlay');
+  if (overlay) overlay.classList.remove('open');
+  const cb = document.getElementById('ai-consent-dont-ask');
+  if (cb) cb.checked = false;
+}
+
+// Close any open auto-fix menus when clicking elsewhere
+document.addEventListener('click', e => {
+  if (e.target.closest('.btn-autofix') || e.target.closest('.autofix-menu')) return;
+  document.querySelectorAll('.autofix-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.btn-autofix[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+});
+
+function dispatchAutoFix(issueIdx, strategy) {
+  if (!currentState) return;
+  const issue = (currentState.result.issues || [])[issueIdx];
+  if (!issue) return;
+  if (strategy === 'ai' && issue.fixKind === 'ai_content' && !hasAiConsent()) {
+    showAiConsentDialog(issueIdx, strategy);
+    return;
+  }
+  const row = document.querySelector('[data-issue-idx="' + issueIdx + '"].issue-item');
+  const btn = row ? row.querySelector('.btn-autofix') : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="autofix-spinner"></span> Fixing…';
+  }
+  parent.postMessage({ pluginMessage: {
+    type:       'AUTO_FIX_ISSUE',
+    issueCode:  issue.code,
+    nodeId:     issue.nodeId || currentState.nodeId,
+    rootNodeId: currentState.nodeId,
+    strategy:   strategy,
+    issueIdx:   issueIdx,
+  } }, '*');
+  pendingAutoFixIdx = issueIdx;
+}
+
+let pendingAutoFixIdx = null;
+
+// ── Persistent state plumbing ──────────────────────────────────────────────
+// Persist the current analysis snapshot to node pluginData + clientStorage index.
+// Called after every fresh analysis AND after every successful autofix.
+function persistLastScan(payload) {
+  if (!payload || !payload.nodeId || !payload.result) return;
+  parent.postMessage({ pluginMessage: {
+    type:     'SAVE_LAST_SCAN',
+    nodeId:   payload.nodeId,
+    role:     payload.result.role,
+    nodeName: payload.nodeName,
+    nodeType: payload.nodeType,
+    issues:   payload.result.issues || [],
+  } }, '*');
+}
+
+// ── Stored-state banner ────────────────────────────────────────────────────
+// Appears above the analysis result when re-opening a previously scanned node.
+// The user can Re-scan (drop banner + run fresh analysis) or Keep (dismiss banner).
+let lastStoredState = null; // { nodeId, snapshot }
+let suppressStoredBannerFor = null; // nodeId of a node the user explicitly re-scanned
+
+function relativeTime(ts) {
+  if (!ts) return '—';
+  const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (seconds < 60)    return 'just now';
+  if (seconds < 3600)  return Math.floor(seconds / 60)   + 'm ago';
+  if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+  return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function progressClass(pct) {
+  if (pct >= 100) return 'full';
+  if (pct >= 1)   return 'mid';
+  return 'zero';
+}
+
+function renderStoredBanner(snapshot, nodeId) {
+  const total    = snapshot.totalIssues    || 0;
+  const resolved = snapshot.resolvedIssues || 0;
+  const pct      = total > 0 ? Math.round((resolved / total) * 100) : 100;
+  return `
+    <div class="stored-banner" id="stored-banner" data-nodeid="${nodeId}">
+      <div class="stored-banner-icon">📋</div>
+      <div class="stored-banner-body">
+        <div class="stored-banner-line1">Last scanned ${relativeTime(snapshot.timestamp)}</div>
+        <div class="stored-banner-line2">
+          <span class="stored-progress-label">${resolved} of ${total} resolved</span>
+          <div class="stored-progress"><div class="stored-progress-fill ${progressClass(pct)}" style="width:${pct}%"></div></div>
+          <span class="stored-progress-label">${pct}%</span>
+        </div>
+      </div>
+      <div class="stored-banner-actions">
+        <button class="btn-mini primary" id="btn-rescan">Re-scan</button>
+        <button class="btn-mini" id="btn-keep">Keep</button>
+      </div>
+    </div>`;
+}
+
+function handleStoredStateAvailable(msg) {
+  // Triggered by selectionchange on the main thread. Only inject if:
+  //   • we are on the Analyze tab
+  //   • the user didn't just hit Re-scan (suppression flag)
+  //   • the user isn't mid-flow with another node
+  if (!$('tab-analyze').classList.contains('active') &&
+      $('tab-analyze').style.display === 'none') return;
+  if (suppressStoredBannerFor === msg.nodeId) return;
+
+  lastStoredState = { nodeId: msg.nodeId, snapshot: msg.snapshot, nodeName: msg.nodeName, nodeType: msg.nodeType };
+  renderFromStoredSnapshot(msg);
+}
+
+function handleStoredStateMessage(msg) {
+  if (!msg.snapshot) {
+    if (msg.missing) {
+      $('content').innerHTML = `<div class="empty-state"><div class="icon">⚠</div><p>Component no longer exists on the canvas.</p></div>`;
+    }
+    return;
+  }
+  // Switch to analyze tab (used by [→] from dashboard)
+  if (msg.autoOpen) activateTab('analyze');
+  lastStoredState = { nodeId: msg.nodeId, snapshot: msg.snapshot, nodeName: msg.nodeName, nodeType: msg.nodeType };
+  renderFromStoredSnapshot(msg);
+}
+
+// Reuse the existing renderResult shape — feed it the stored snapshot framed as an
+// ANALYSIS_RESULTS-style payload, then prepend the banner.
+function renderFromStoredSnapshot(msg) {
+  const snap = msg.snapshot;
+  if (!snap) return;
+  const synthetic = {
+    nodeId:   msg.nodeId,
+    nodeName: msg.nodeName || snap.nodeName,
+    nodeType: msg.nodeType || snap.nodeType,
+    result: {
+      role:          snap.role,
+      confidence:    'HIGH',
+      reasoning:     '(restored from last scan)',
+      suggestions:   [],
+      issues:        snap.issues || [],
+      auditLog:      [],
+      signalDetails: [],
+      signalScore:   0,
+      detectionPath: 'stored',
+    },
+    fromStored: true,
+  };
+  renderResult(synthetic);
+  // Inject the banner at the top of #content
+  const bannerHTML = renderStoredBanner(snap, msg.nodeId);
+  $('content').insertAdjacentHTML('afterbegin', bannerHTML);
+  $('btn-rescan').addEventListener('click', () => {
+    suppressStoredBannerFor = msg.nodeId;
+    // Trigger a fresh analysis on this node — selection is already on it
+    parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
+    $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Re-scanning…</span></div>`;
+  });
+  $('btn-keep').addEventListener('click', () => {
+    const b = $('stored-banner'); if (b) b.remove();
+  });
+}
+
+// ── Components dashboard ─────────────────────────────────────────────────
+let lastComponentIndex = {};
+let dashboardSort = 'status';
+
+function activateTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+  document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+  const pane = $('tab-' + tabName);
+  if (pane) pane.style.display = 'block';
+}
+
+function sortDashboardEntries(entries) {
+  const arr = entries.slice();
+  if (dashboardSort === 'date') {
+    arr.sort((a, b) => (b[1].lastScanned || 0) - (a[1].lastScanned || 0));
+  } else if (dashboardSort === 'name') {
+    arr.sort((a, b) => String(a[1].name || '').localeCompare(String(b[1].name || '')));
+  } else {
+    // status: blockers first (unresolved %), then by date
+    arr.sort((a, b) => {
+      const aPct = a[1].total > 0 ? a[1].resolved / a[1].total : 1;
+      const bPct = b[1].total > 0 ? b[1].resolved / b[1].total : 1;
+      if (aPct !== bPct) return aPct - bPct; // less resolved = higher priority
+      return (b[1].lastScanned || 0) - (a[1].lastScanned || 0);
+    });
+  }
+  return arr;
+}
+
+function renderComponentDashboard(index) {
+  lastComponentIndex = index || {};
+  const entries = Object.entries(lastComponentIndex);
+  $('dash-count').textContent = '(' + entries.length + ' scanned)';
+
+  if (entries.length === 0) {
+    $('dashboard-content').innerHTML = `<div class="dashboard-empty">No components scanned yet.<br>Run analysis on a component to track it here.</div>`;
+    return;
+  }
+
+  const rowsHtml = sortDashboardEntries(entries).map(([nodeId, e]) => {
+    const total    = e.total    || 0;
+    const resolved = e.resolved || 0;
+    const pct      = total > 0 ? Math.round((resolved / total) * 100) : 100;
+    const cls      = progressClass(pct);
+    const icon     = pct >= 100 ? '✅' : (pct < 1 ? '❌' : '⚠️');
+    return `
+      <div class="dashboard-row" data-nodeid="${escapeHtml(nodeId)}">
+        <div class="dash-status-icon">${icon}</div>
+        <div class="dash-name">
+          ${escapeHtml(e.name || '(unnamed)')}
+          ${e.role ? `<span class="dash-role">· ${escapeHtml(e.role)}</span>` : ''}
+        </div>
+        <div class="dash-progress"><div class="dash-progress-fill stored-progress-fill ${cls}" style="width:${pct}%"></div></div>
+        <span class="dash-pct">${pct}%</span>
+        <span class="dash-time">${relativeTime(e.lastScanned)}</span>
+        <button class="btn-dash-open" data-nodeid="${escapeHtml(nodeId)}" aria-label="Open component">→</button>
+      </div>`;
+  }).join('');
+
+  $('dashboard-content').innerHTML = `<div class="dashboard-list">${rowsHtml}</div>`;
+
+  document.querySelectorAll('.btn-dash-open').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.nodeid;
+      parent.postMessage({ pluginMessage: { type: 'OPEN_STORED_COMPONENT', nodeId: id } }, '*');
+    });
+  });
+}
+
+$('dash-sort').addEventListener('change', () => {
+  dashboardSort = $('dash-sort').value;
+  renderComponentDashboard(lastComponentIndex);
+});
+
+// After a successful auto-fix the issue object is marked .fixed=true but the
+// surrounding UI (apply button, summary count, blocker banner) still reflects
+// the original issue list. Re-derive every dependent piece of state from the
+// filtered, non-fixed issues so the success cascade is visible end-to-end.
+function refreshSummaryBanner() {
+  if (!currentState || !currentState.result || !currentState.result.issues) return;
+  const all          = currentState.result.issues;
+  const activeIssues = all.filter(i => !i.fixed && !i.acknowledged);
+  const blockers     = activeIssues.filter(i => i.severity === 'HIGH').length;
+  const warnings     = activeIssues.filter(i => i.severity === 'MED').length;
+  const manuals      = activeIssues.filter(i => i.severity === 'MANUAL').length;
+
+  // Optional standalone banner (kept for forward compatibility — current UI
+  // embeds the blocker message in the Apply button itself)
+  const banner = document.getElementById('blocker-banner');
+  if (banner) {
+    if (blockers === 0) {
+      banner.style.display = 'none';
+    } else {
+      banner.style.display = '';
+      banner.textContent = `Fix ${blockers} blocker${blockers > 1 ? 's' : ''} first`;
+    }
+  }
+
+  // Apply Fixes button — text + disabled + .blocked class
+  const applyBtn = document.getElementById('btn-apply');
+  if (applyBtn) {
+    const stillHasBlockers = blockers > 0;
+    const noSuggestions    = !((currentState.result.suggestions || []).length);
+    applyBtn.disabled = stillHasBlockers || noSuggestions;
+    applyBtn.classList.toggle('blocked', stillHasBlockers);
+    applyBtn.textContent = stillHasBlockers
+      ? `⚠ Fix ${blockers} blocker${blockers > 1 ? 's' : ''} first`
+      : 'Apply Fixes…';
+    applyBtn.title = stillHasBlockers
+      ? `Resolve ${blockers} HIGH issue${blockers > 1 ? 's' : ''} before applying`
+      : '';
+  }
+
+  // Audit summary count line
+  const summaryEl = document.getElementById('audit-summary');
+  if (summaryEl) {
+    summaryEl.classList.toggle('has-high', blockers > 0);
+    summaryEl.textContent =
+      `${blockers} blocker${blockers !== 1 ? 's' : ''} · ` +
+      `${warnings} warning${warnings !== 1 ? 's' : ''} · ` +
+      `${manuals} manual`;
+  }
+
+  // Full success state — every issue resolved
+  if (activeIssues.length === 0) {
+    const section = document.getElementById('issues-section');
+    if (section) {
+      section.innerHTML = `
+        <div style="padding:16px;text-align:center;color:var(--chip-high-text);font-weight:600">
+          ✅ All issues resolved
+        </div>`;
+    }
+  }
+}
+
+function handleAcknowledgeResult(msg) {
+  const idx = msg.issueIdx;
+  const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
+  if (msg.ok && row) {
+    row.classList.add('issue-acknowledged');
+    const actions = row.querySelector('.issue-actions');
+    if (actions) actions.innerHTML = '<span class="ack-badge">✓ Acknowledged</span>';
+    if (currentState && currentState.result && currentState.result.issues && idx != null) {
+      currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx], { acknowledged: true });
+    }
+    refreshSummaryBanner();
+    persistLastScan(currentState);
+  }
+}
+
+function handleAutoFixResult(msg) {
+  const idx = (typeof msg.issueIdx === 'number') ? msg.issueIdx : pendingAutoFixIdx;
+  pendingAutoFixIdx = null;
+  const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
+  const btn = row ? row.querySelector('.btn-autofix') : null;
+
+  // Strategy === "prompt": copy to clipboard, don't touch the row severity
+  if (msg.strategy === 'prompt' && msg.promptForClipboard) {
+    copyToClipboard(msg.promptForClipboard);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '✓ Prompt copied';
+      setTimeout(() => { btn.innerHTML = '✨ Auto-fix <span class="caret">▾</span>'; }, 2000);
+    }
+    return;
+  }
+
+  // ok=true → mark row as fixed
+  if (msg.ok) {
+    if (row) {
+      row.classList.add('issue-fixed');
+      // The "Auto-fixed: " prefix is added via CSS ::before; replace inner message
+      const msgEl = row.querySelector('.issue-msg');
+      if (msgEl && msg.message) msgEl.textContent = msg.message;
+      const wcagEl = row.querySelector('.issue-wcag');
+      if (wcagEl && msg.source) wcagEl.textContent = 'Source: ' + msg.source + (msg.code ? ' · ' + msg.code : '');
+      // Remove the button — fix already applied
+      const actions = row.querySelector('.issue-actions');
+      if (actions) actions.remove();
+    }
+    // Update currentState.result.issues so subsequent re-renders reflect the fix
+    if (currentState && currentState.result && currentState.result.issues && idx != null) {
+      currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx],
+        { fixed: true, fixedSource: msg.source, fixedMessage: msg.message });
+    }
+    // Re-derive blocker banner, Apply Fixes button, and audit summary
+    refreshSummaryBanner();
+    // Persist updated resolved-count to node pluginData + clientStorage index
+    persistLastScan(currentState);
+  } else {
+    // Auto-fix failed — restore the button and show error inline
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '✨ Auto-fix <span class="caret">▾</span>';
+    }
+    if (row) {
+      const wcagEl = row.querySelector('.issue-wcag');
+      if (wcagEl) wcagEl.textContent = '⚠ ' + (msg.message || 'Auto-fix failed') + (msg.code ? ' · ' + msg.code : '');
+    }
+  }
+}
+
+function copyToClipboard(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (_e) {}
+  document.body.removeChild(ta);
+}
+
+function renderResult(data) {
+  currentState = data;
+  const r    = data.result;
+  const conf = r.confidence;
+  const sugIcons = { rename: '✏️', setPluginData: '🏷️', addAnnotation: '📌' };
+  const sugKeyLabels = {
+    'a11y.v1.componentType': 'component-type',
+    'a11y.v1.ariaRole':      'aria-role',
+    'a11y.v1.ariaLabel':     'aria-label',
+    'a11y.v1.ariaLevel':     'aria-level',
+    'a11y.v1.states':        'states',
+    'a11y.v1.wcagRef':       'wcag-ref',
+    'a11y.v1.issues':        'issues (JSON)',
+    'a11y.v1.ariaSchema':    'aria-schema (JSON)',
+  };
+
+  // Separate ariaSchema suggestion (shown in schema panel, not in suggestion list)
+  const schemaSug = (r.suggestions || []).find(s => s.key === 'a11y.v1.ariaSchema');
+  const otherSugs = (r.suggestions || []).filter(s => s.key !== 'a11y.v1.ariaSchema');
+
+  const sugHtml = otherSugs.map(s => {
+    const displayVal = s.type === 'setPluginData' && s.key
+      ? (sugKeyLabels[s.key] || s.key.split('.').pop()) + ': ' + s.value.slice(0, 30)
+      : (s.value || '').slice(0, 35);
+    return `<div class="suggestion-item">
+      <span class="sug-icon">${sugIcons[s.type] || '•'}</span>
+      <span class="sug-label">${s.label}</span>
+      <span class="sug-value">${displayVal}</span>
+    </div>`;
+  }).join('');
+
+  // ── Designer audit view: all checks, split into passed / issues
+  const issues    = r.issues || [];
+  const highCount = issues.filter(i => i.severity === 'HIGH').length;
+  const medCount  = issues.filter(i => i.severity === 'MED').length;
+  const hasHigh   = highCount > 0;
+
+  // Passed = audits in auditLog with status PASS
+  const auditLog     = r.auditLog || [];
+  const passedAudits = auditLog.filter(a => a.status === 'PASS');
+  const passedHtml   = passedAudits.length === 0 ? '' : `
+    <div style="padding:8px 14px 4px;">
+      <div class="section-label">Passed checks</div>
+      ${passedAudits.map(a => `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--chip-high-text)">
+          <span style="font-size:13px">✅</span>
+          <span style="color:var(--text-dim)">${a.name}</span>
+        </div>`).join('')}
+    </div>`;
+
+  const issuesHtml = issues.length === 0 ? '' : `
+    <div class="issues-section" id="issues-section">
+      <div class="issues-header">
+        <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} issue${issues.length !== 1 ? 's' : ''} found</span>
+      </div>
+      ${issues.map((i, idx) => `
+        <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
+          <span class="issue-sev">${i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️'} ${i.severity}</span>
+          <div class="issue-body">
+            <div class="issue-title-row">
+              <div class="issue-msg">${escapeHtml(i.displayTitle || i.message)}</div>
+              ${i.explanation ? `<button class="btn-explain" data-explain-idx="${idx}" aria-label="Why this matters">?</button>` : ''}
+            </div>
+            <div class="issue-wcag">WCAG ${i.wcagRef} · ${i.code}</div>
+          </div>
+          ${renderAutoFixControl(i, idx)}
+        </div>`).join('')}
+    </div>`;
+
+  // ── "How I decided" collapsible section
+  const signals = r.signalDetails || [];
+  const sigHtml = signals.length > 0
+    ? signals.map(s => `<span class="decided-sig">${s}</span>`).join(' ')
+    : '<span style="color:var(--text-muted);font-size:10px">No spec signals matched</span>';
+
+  const detectionBadge = r.detectionPath === 'spec-engine'
+    ? `<span class="meta-badge badge-rule">Spec engine · score ${r.signalScore || 0}</span>`
+    : r.detectionPath === 'vision-ai' || r.detectionPath === 'vision-tiebreak'
+    ? `<span class="meta-badge badge-ai">${r.detectionPath === 'vision-tiebreak' ? 'Vision tiebreak' : 'Vision AI (GPT-4o)'}</span>`
+    : r.detectionPath === 'text-ai'
+    ? `<span class="meta-badge badge-ai">Text AI + spec audit</span>`
+    : `<span class="meta-badge" style="background:#1a1a2e;color:var(--text-muted)">Rule engine fallback</span>`;
+
+  const auditLogRows = auditLog.map(a => `
+    <div class="audit-row">
+      <span class="audit-status ${a.status}">${a.status}</span>
+      <span class="audit-name">${a.name}</span>
+      ${a.wcagRefs ? `<span class="audit-wcag">WCAG ${a.wcagRefs}</span>` : ''}
+    </div>`).join('');
+
+  const howDecidedHtml = `
+    <div class="decided-section">
+      <div class="decided-toggle" id="decided-toggle">
+        <span>🔍 How I decided</span>
+        <span class="toggle-arrow">▶</span>
+      </div>
+      <div class="decided-body" id="decided-body">
+        <div class="decided-row">
+          <span class="decided-label">Detection path</span>
+          <span class="decided-value">${detectionBadge} ${data.usedAI ? '<span class="meta-badge badge-ai">+ AI</span>' : ''}</span>
+        </div>
+        <div class="decided-row">
+          <span class="decided-label">Reasoning</span>
+          <span class="decided-value">${r.reasoning || '—'}</span>
+        </div>
+        <div class="decided-row">
+          <span class="decided-label">Signals matched</span>
+          <span class="decided-value">${sigHtml}</span>
+        </div>
+        ${auditLog.length > 0 ? `
+        <div style="margin-top:8px">
+          <div class="audit-log-section">
+            <div class="audit-log-toggle" id="audit-log-toggle">
+              <span>Audit checks (${auditLog.length})</span>
+              <span class="toggle-arrow">▶</span>
+            </div>
+            <div class="audit-log-body" id="audit-log-body">
+              ${auditLogRows}
+            </div>
+          </div>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  let askHtml = '';
+  if (r.askQuestions && r.askQuestions.length > 0) {
+    const q = r.askQuestions[0];
+    const optsHtml = q.options.map(opt =>
+      `<button class="btn-ask-opt" data-qid="${q.id}" data-opt="${opt}">${opt}</button>`
+    ).join('');
+    askHtml = `
+      <div class="ask-section" id="ask-section">
+        <div class="ask-header"><div class="ask-dot"></div><span class="ask-title">Clarification needed</span></div>
+        <div class="ask-question">${q.question}</div>
+        <div class="ask-options">${optsHtml}</div>
+      </div>`;
+  }
+
+  let metaBadge = `<span class="meta-badge badge-rule">Rule Engine</span>`;
+  if (data.usedAI) metaBadge = `<span class="meta-badge badge-ai">AI · ~${(data.estimatedTokens||0).toLocaleString()} tokens</span>`;
+  if (data.aiError)  metaBadge += ` <span style="color:var(--accent-amber);font-size:10px">AI failed</span>`;
+  if (data.noApiKey) metaBadge += ` <span style="color:var(--text-muted);font-size:10px">No API key — add in Settings</span>`;
+
+  const devCodeHtml = renderAriaSchema(schemaSug ? schemaSug.value : null);
+
+  $('content').innerHTML = `
+    <div class="result-card">
+      <div class="result-header">
+        <div class="node-info">
+          <div class="node-name">${data.nodeName}</div>
+          <div class="node-type">${data.nodeType}</div>
+        </div>
+        <span class="confidence-chip chip-${conf}">${conf}</span>
+      </div>
+      <div class="result-role">
+        <div class="role-label">Identified role</div>
+        <div class="role-value">${r.role}</div>
+      </div>
+      ${passedHtml}
+      ${issuesHtml}
+      ${sugHtml ? `<div class="suggestions-section"><div class="section-label">Suggested fixes</div>${sugHtml}</div>` : ''}
+      ${howDecidedHtml}
+      ${devCodeHtml}
+      <div class="meta-row">${metaBadge}</div>
+    </div>
+    ${askHtml}
+    <div class="apply-row">
+      <button class="btn-apply" id="btn-back">← Back</button>
+      <button class="btn-apply primary ${hasHigh ? 'blocked' : ''}" id="btn-apply"
+        ${(r.suggestions || []).length === 0 || hasHigh ? 'disabled' : ''}>
+        ${hasHigh
+          ? '⚠ Fix ' + highCount + ' blocker' + (highCount !== 1 ? 's' : '') + ' first'
+          : 'Apply Fixes…'}
+      </button>
+    </div>
+    <div id="apply-feedback"></div>`;
+
+  $('btn-scan').disabled = false;
+
+  // [?] explain buttons — open the Why-it-matters slide-in panel
+  document.querySelectorAll('#content .btn-explain').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.explainIdx, 10);
+      const issue = (currentState.result.issues || [])[idx];
+      openExplainPanel(issue);
+    });
+  });
+
+  // Auto-fix buttons (open menu) + option clicks (dispatch fix)
+  document.querySelectorAll('#content .btn-autofix-direct').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), btn.dataset.strategy || 'generic');
+    });
+  });
+  document.querySelectorAll('#content .btn-acknowledge').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.issueIdx, 10);
+      const issue = (currentState.result.issues || [])[idx];
+      if (!issue) return;
+      btn.disabled = true;
+      parent.postMessage({ pluginMessage: {
+        type: 'ACKNOWLEDGE_ISSUE',
+        issueCode: issue.code,
+        rootNodeId: currentState.nodeId,
+        issueIdx: idx,
+      } }, '*');
+    });
+  });
+  document.querySelectorAll('#content .btn-autofix:not(.btn-autofix-direct)').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx  = btn.dataset.issueIdx;
+      const menu = document.querySelector('.autofix-menu[data-menu-idx="' + idx + '"]');
+      // Close any others
+      document.querySelectorAll('.autofix-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+      document.querySelectorAll('.btn-autofix[aria-expanded="true"]').forEach(b => { if (b !== btn) b.setAttribute('aria-expanded', 'false'); });
+      if (!menu) return;
+      const isOpen = menu.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(isOpen));
+    });
+  });
+  document.querySelectorAll('#content .autofix-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      // Block clicks on disabled rows
+      if (opt.style.cursor === 'not-allowed') return;
+      const idx = parseInt(opt.dataset.idx, 10);
+      const strategy = opt.dataset.strategy;
+      // Close the menu
+      const menu = opt.closest('.autofix-menu');
+      if (menu) menu.classList.remove('open');
+      const btn = document.querySelector('.btn-autofix[data-issue-idx="' + idx + '"]');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+      dispatchAutoFix(idx, strategy);
+    });
+  });
+
+  // Collapsibles: "How I decided" + audit log sub-toggle
+  ['decided-toggle', 'audit-log-toggle'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    const bodyId = id.replace('-toggle', '-body');
+    el.addEventListener('click', () => {
+      el.classList.toggle('open');
+      const body = $(bodyId);
+      if (body) body.classList.toggle('open');
+    });
+  });
+
+  // Dev code toggle
+  const toggle = $('devcode-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      $('devcode-body').classList.toggle('open');
+    });
+  }
+
+  // Copy code buttons
+  document.querySelectorAll('.btn-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = decodeURIComponent(btn.dataset.code || '');
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      });
+    });
+  });
+
+  $('btn-back').addEventListener('click', () => {
+    currentState = null;
+    $('content').innerHTML = `<div class="empty-state"><div class="icon">◎</div><p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p></div>`;
+  });
+
+  // "Apply Fixes…" → show "Fix in place vs copy" modal
+  $('btn-apply').addEventListener('click', () => {
+    if (!currentState) return;
+    showApplyModal();
+  });
+
+  document.querySelectorAll('.btn-ask-opt').forEach(btn => {
+    btn.addEventListener('click', e => {
+      document.querySelectorAll('.btn-ask-opt').forEach(x => x.classList.remove('selected'));
+      e.currentTarget.classList.add('selected');
+      parent.postMessage({ pluginMessage: {
+        type: 'ASK_ANSWER',
+        questionId: e.currentTarget.dataset.qid,
+        answer: e.currentTarget.dataset.opt,
+        rootNodeId: currentState.nodeId,
+      } }, '*');
+    });
+  });
+}
+
+// ── Fix action dialog (three-option) ──────────────────────────────────────
+function showApplyModal() {
+  const OPTIONS = [
+    {
+      id:    'inplace',
+      title: 'Fix in place',
+      desc:  'Modifies the original component. Renames layer + writes ARIA metadata. Changes can be undone (Cmd+Z).',
+    },
+    {
+      id:    'copy',
+      title: 'Create fixed copy',
+      desc:  'Clones the component 120px to the right, applies all fixes to the copy only. Original is untouched. A green indicator marks the copy.',
+    },
+    {
+      id:    'annotate',
+      title: 'Add annotations only',
+      desc:  'No visual changes. Writes all ARIA data to pluginData + sharedPluginData only. Ideal for Dev Mode handoff.',
+    },
+  ];
+
+  let selectedMode = 'inplace';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">How should I apply these fixes?</div>
+      ${OPTIONS.map(o => `
+        <div class="modal-option ${o.id === selectedMode ? 'selected' : ''}" data-mode="${o.id}">
+          <div class="modal-radio"></div>
+          <div class="modal-option-text">
+            <div class="modal-option-title">${o.title}</div>
+            <div class="modal-option-desc">${o.desc}</div>
+          </div>
+        </div>`).join('')}
+      <div class="modal-footer">
+        <button class="modal-btn" id="modal-cancel-btn">Cancel</button>
+        <button class="modal-btn primary" id="modal-apply-btn">Apply →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Radio selection
+  overlay.querySelectorAll('.modal-option').forEach(el => {
+    el.addEventListener('click', () => {
+      overlay.querySelectorAll('.modal-option').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedMode = el.dataset.mode;
+    });
+  });
+
+  overlay.querySelector('#modal-cancel-btn').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+  });
+
+  overlay.querySelector('#modal-apply-btn').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    const applyBtn = $('btn-apply');
+    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
+    parent.postMessage({ pluginMessage: {
+      type:          'APPLY_WITH_MODE',
+      mode:          selectedMode,
+      suggestions:   currentState.result.suggestions,
+      rootNodeId:    currentState.nodeId,
+    } }, '*');
+  });
+}
+
+// ── Render batch scan results ──────────────────────────────────────────────
+function renderScanResults(msg) {
+  currentScanData = msg;
+  $('btn-scan-frame').disabled = false;
+  if (msg.error) {
+    $('scan-content').innerHTML = `<div class="apply-result error" style="margin:14px 16px">✗ ${msg.error}</div>`;
+    return;
+  }
+  const { summary, results, frameName } = msg;
+  if (!results || results.length === 0) {
+    $('scan-content').innerHTML = `<div class="empty-state"><div class="icon">✓</div><p>No interactive components found in <strong>${frameName}</strong></p></div>`;
+    return;
+  }
+
+  const summaryHtml = `
+    <div class="scan-summary">
+      <div class="summary-stat"><div class="stat-val muted">${summary.total}</div><div class="stat-label">Found</div></div>
+      <div class="summary-stat"><div class="stat-val red">${summary.high}</div><div class="stat-label">Blockers</div></div>
+      <div class="summary-stat"><div class="stat-val amber">${summary.med}</div><div class="stat-label">Warnings</div></div>
+      <div class="summary-stat"><div class="stat-val" style="color:#a78bfa">${summary.manual||0}</div><div class="stat-label">Manual</div></div>
+    </div>`;
+
+  const rowsHtml = results.map(r => `
+    <div class="scan-row" data-nodeid="${r.nodeId}">
+      <span class="scan-role">${r.role}</span>
+      <span class="scan-name">${r.nodeName}</span>
+      <div class="scan-badges">
+        ${r.high   > 0 ? `<span class="scan-badge h">${r.high}H</span>` : ''}
+        ${r.med    > 0 ? `<span class="scan-badge m">${r.med}W</span>`  : ''}
+        ${r.manual > 0 ? `<span class="scan-badge" style="background:#2a2a5e;color:#a78bfa">${r.manual}M</span>` : ''}
+        ${r.low    > 0 ? `<span class="scan-badge l">${r.low}L</span>`  : ''}
+        ${r.high + r.med + r.low + (r.manual||0) === 0 ? `<span style="font-size:11px;color:var(--chip-high-text)">✓</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  $('scan-content').innerHTML = `
+    ${summaryHtml}
+    <div class="scan-list">${rowsHtml}</div>
+    <div class="export-row">
+      <button class="btn-export" id="btn-export-json">⬇ Export JSON report</button>
+    </div>`;
+
+  // Export JSON
+  $('btn-export-json').addEventListener('click', () => {
+    const report = {
+      frame:   frameName,
+      scanned: new Date().toISOString(),
+      summary: summary,
+      components: results,
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'a11y-shift-report.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+// ── Render Dev Mode inspector ──────────────────────────────────────────────
+function renderNodeData(msg) {
+  const data = msg.data;
+  if (!data || (!data.componentType && !data.ariaRole && !data.devCode)) {
+    $('inspector-content').innerHTML = `
+      <div class="no-data-msg">
+        No A11y Shift annotations found on this layer.<br><br>
+        Open in <strong>Design Mode</strong> → select the component → run <strong>Start Analysis</strong> and <strong>Apply Fixes</strong> first.
+      </div>`;
+    return;
+  }
+
+  const displayKeys = [
+    ['component-type', data.componentType],
+    ['aria-role',      data.ariaRole],
+    ['aria-label',     data.ariaLabel],
+    ['aria-level',     data.ariaLevel],
+    ['states',         data.states],
+    ['wcag-ref',       data.wcagRef],
+  ].filter(([, v]) => v);
+
+  const attrHtml = displayKeys.map(([k, v]) =>
+    `<div class="attr-row">
+       <span class="attr-key">${k}</span>
+       <span class="attr-val">${v.length > 60 ? v.slice(0, 57) + '…' : v}</span>
+     </div>`
+  ).join('');
+
+  const devCodeHtml = data.ariaSchema ? renderAriaSchemaWithFrameworks(data.ariaSchema) : '';
+
+  let issuesHtml = '';
+  if (data.issues) {
+    try {
+      const issues = JSON.parse(data.issues);
+      if (issues.length > 0) {
+        const highN = issues.filter(i => i.severity === 'HIGH').length;
+        issuesHtml = `<div class="issues-section" style="border-top:1px solid var(--border)">
+          <div class="issues-header"><span class="issues-count ${highN > 0 ? 'has-high' : ''}">${issues.length} stored issues</span></div>
+          ${issues.map(i => `<div class="issue-item issue-${i.severity}">
+            <span class="issue-sev">${i.severity}</span>
+            <div class="issue-body">
+              <div class="issue-msg">${i.code}</div>
+              <div class="issue-wcag">WCAG ${i.wcagRef}</div>
+            </div>
+          </div>`).join('')}
+        </div>`;
+      }
+    } catch(e) {}
+  }
+
+  $('inspector-content').innerHTML = `
+    <div class="inspector-card">
+      <div class="inspector-header">
+        <div>
+          <div class="inspector-node-name">${data.nodeName}</div>
+          <div class="inspector-node-type">${data.nodeType}</div>
+        </div>
+      </div>
+      ${attrHtml.length ? `<div class="attr-list">${attrHtml}</div>` : ''}
+      ${issuesHtml}
+      ${devCodeHtml}
+    </div>`;
+
+  // Wire up framework tabs (Dev Mode)
+  const fwContainer = document.querySelector('#inspector-content .devcode-section');
+  if (fwContainer && data.ariaSchema) {
+    wireFrameworkTabs(fwContainer, data.ariaSchema);
+  }
+}
+
+// ── Individual message handlers (all defined before the dispatch map) ────────
+
+function handleInit(msg) {
+  isDevMode = msg.editorType === 'dev';
+  if (isDevMode) {
+    $('dev-badge').classList.add('visible');
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    document.querySelector('.header .tab-bar').style.display = 'none';
+    $('dev-inspector').style.display = 'block';
+  }
+  parent.postMessage({ pluginMessage: { type: 'LOAD_SETTINGS' } }, '*');
+  parent.postMessage({ pluginMessage: { type: 'LOAD_PREVIEW_STATE' } }, '*');
+  if (msg.debugHint) {
+    console.log('[A11y Shift] ' + msg.debugHint);
+  }
+}
+
+// Debug: coverage report (UI iframe console — not the main plugin sandbox)
+function handleDebugFixCoverageResult(msg) {
+  (msg.lines || []).forEach(function(line) { console.log(line); });
+}
+
+window.reportFixCoverage = function() {
+  parent.postMessage({ pluginMessage: { type: 'DEBUG_FIX_COVERAGE' } }, '*');
+  console.log('[A11y Shift] Coverage report loading…');
+};
+
+function handleSettingsLoaded(msg) {
+  settings = { threshold: msg.threshold, aiModel: msg.aiModel };
+  $('threshold-slider').value    = msg.threshold;
+  $('threshold-val').textContent = msg.threshold;
+  $('ai-model-select').value     = msg.aiModel;
+  if (msg.hasApiKey) {
+    $('key-status').textContent   = '✓ API key is saved';
+    $('key-status').style.display = 'block';
+  }
+}
+
+function handleSettingsSaved() {
+  const s = $('settings-status');
+  s.style.display = 'block';
+  setTimeout(() => { s.style.display = 'none'; }, 2000);
+}
+
+function handleKeySaved() {
+  $('key-status').textContent   = '✓ Key saved';
+  $('key-status').style.display = 'block';
+  setTimeout(() => { $('key-status').style.display = 'none'; }, 2500);
+}
+
+function handlePreviewImage(msg) {
+  showPreviewImage(msg.bytes);
+}
+
+function handlePreviewStateLoaded(msg) {
+  if (typeof msg.collapsed === 'boolean') previewState.collapsed = msg.collapsed;
+  if (typeof msg.bgLight   === 'boolean') previewState.bgLight   = msg.bgLight;
+  applyPreviewCollapsed();
+  applyPreviewBg();
+}
+
+function handleAiLoading(msg) {
+  const label = (msg && msg.phase === 'vision')
+    ? 'Analyzing screenshot with Vision AI\u2026'
+    : 'Classifying component with AI\u2026';
+  $('content').innerHTML = '<div class="loading"><div class="spinner"></div><span>' + label + '</span></div>';
+}
+
+function handleScanProgress() {
+  // progress notification is shown via figma.notify on the main thread
+}
+
+function handleAnalysisResults(msg) {
+  renderResult(msg);
+  persistLastScan(msg);
+  setTimeout(() => {
+    parent.postMessage({ pluginMessage: { type: 'SCROLL_TO_NODE', nodeId: msg.nodeId } }, '*');
+  }, 300);
+}
+
+function handleComponentIndex(msg) {
+  renderComponentDashboard(msg.index);
+}
+
+function handleScanResults(msg) {
+  renderScanResults(msg);
+  $('btn-scan-frame').disabled = false;
+}
+
+function handleNodeData(msg) {
+  renderNodeData(msg);
+}
+
+function handleFrameworkCode(msg) {
+  document.querySelectorAll('.fw-code-output[data-fw="' + msg.framework + '"]').forEach(function(el) {
+    el.textContent = msg.code || '';
+  });
+}
+
+function handleApplyResult(msg) {
+  const ok         = msg.applied > 0;
+  const detailHtml = (msg.details || []).map(function(d) { return '<div class="apply-detail">' + d + '</div>'; }).join('');
+  const undoNote   = msg.mode === 'inplace' && ok
+    ? '<div class="apply-detail" style="color:var(--accent-blue);margin-top:5px">\u21a9 Cmd+Z undoes all changes</div>' : '';
+  const copyNote   = msg.reviewIndicatorId
+    ? '<div class="apply-detail" style="color:var(--accent-green)">\uD83D\uDCCB Fixed copy placed 120px right \u2014 original untouched</div>' : '';
+  const modeNote   = msg.modeNote && msg.mode === 'annotate'
+    ? '<div class="apply-detail" style="color:#a78bfa">' + msg.modeNote + '</div>' : '';
+  const fb = $('apply-feedback');
+  if (fb) {
+    const resultText = ok
+      ? ('\u2713 Applied ' + msg.applied + ' fix' + (msg.applied !== 1 ? 'es' : ''))
+      : '\u2717 Nothing applied \u2014 re-select and try again';
+    const skippedText = msg.skipped > 0 ? (' \u00b7 ' + msg.skipped + ' skipped') : '';
+    fb.innerHTML = '<div class="apply-result ' + (ok ? 'success' : 'error') + '">'
+      + resultText + skippedText
+      + undoNote + copyNote + modeNote
+      + detailHtml
+      + '</div>';
+  }
+  const b = $('btn-apply');
+  if (b) { b.disabled = false; b.textContent = 'Apply Fixes\u2026'; }
+}
+
+function handleAskAnswerSaved(msg) {
+  const sec = $('ask-section');
+  if (sec) sec.innerHTML = '<div style="padding:8px 0;font-size:12px;color:var(--chip-high-text)">\u2713 Answer saved: "' + msg.answer + '"</div>';
+}
+
+function handleError(msg) {
+  $('btn-scan').disabled = false;
+  $('content').innerHTML = '<div class="apply-result error" style="margin:0">\u2717 ' + msg.message + '</div>';
+}
+
+// ── Message dispatch map (built after all handlers are defined) ──────────────
+window.onmessage = function(event) {
+  const msg = event.data && event.data.pluginMessage;
+  if (!msg) return;
+  const handlers = {
+    INIT:                   handleInit,
+    SETTINGS_LOADED:        handleSettingsLoaded,
+    SETTINGS_SAVED:         handleSettingsSaved,
+    KEY_SAVED:              handleKeySaved,
+    AUTO_FIX_RESULT:        handleAutoFixResult,
+    ACKNOWLEDGE_RESULT:     handleAcknowledgeResult,
+    REFRESH_SUMMARY_BANNER: function() { refreshSummaryBanner(); },
+    PREVIEW_IMAGE:          handlePreviewImage,
+    PREVIEW_STATE_LOADED:   handlePreviewStateLoaded,
+    AI_LOADING:             handleAiLoading,
+    SCAN_PROGRESS:          handleScanProgress,
+    ANALYSIS_RESULTS:       handleAnalysisResults,
+    STORED_STATE_AVAILABLE: handleStoredStateAvailable,
+    STORED_STATE:           handleStoredStateMessage,
+    COMPONENT_INDEX:        handleComponentIndex,
+    SCROLL_TO_NODE_RESULT:  function() {},
+    SCAN_RESULTS:           handleScanResults,
+    NODE_DATA:              handleNodeData,
+    FRAMEWORK_CODE:         handleFrameworkCode,
+    APPLY_RESULT:           handleApplyResult,
+    ASK_ANSWER_SAVED:       handleAskAnswerSaved,
+    ERROR:                  handleError,
+    DEBUG_FIX_COVERAGE_RESULT: handleDebugFixCoverageResult,
+  };
+  const handler = handlers[msg.type];
+  if (handler) handler(msg);
+};
+</script>
+</body>
+</html>
