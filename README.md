@@ -1,220 +1,220 @@
 # A11y Shift
 
-פלאגין Figma לביקורת נגישות (WCAG 2.2 AA + ARIA APG) עם תיקון אוטומטי, AI טקסטואלי ו-Vision AI.
+A Figma plugin for WCAG 2.2 AA + ARIA APG accessibility auditing with inline autofix, text AI, and Vision AI fallback.
 
-מאגר: [github.com/1haim/a11y-Shift](https://github.com/1haim/a11y-Shift)
-
----
-
-## מה הפלאגין עושה
-
-- **מזהה** סוג קומפוננטה (כפתור, שדה טקסט, רדיו, דיאלוג, טאבים, סליידר, דירוג כוכבים, מתג, אקורדיון ועוד)
-- **מריץ ~48 בדיקות** לפי מטריצת spec ייעודית לכל סוג
-- **מציג** בעיות עם כותרת + הסבר (`[?]`) ורפרנס WCAG
-- **מתקן** בעיות inline (annotation, ויזואלי, או AI) — Cmd+Z מבטל
-- **שומר** היסטוריית סריקות ו-ARIA ב-Dev Mode (`setSharedPluginData`)
+Repository: [github.com/1haim/a11y-Shift](https://github.com/1haim/a11y-Shift)
 
 ---
 
-## דרישות
+## What it does
 
-| דרישה | חובה? | הערות |
-|--------|--------|--------|
-| Figma Desktop | כן | Design Mode + Dev Mode |
-| מפתח פלאגין | לפיתוח | Plugins → Development → Import plugin from manifest… |
-| מפתח OpenAI | אופציונלי | ל-AI classification, תיקוני טקסט, Vision fallback |
-| חיבור אינטרנט | עם API key | `manifest.json` מאשר רק `api.openai.com` |
-
----
-
-## הפעלה ב-Figma
-
-### משתמש / מעצב
-
-1. שכפלו את המאגר או הורידו את הקבצים.
-2. ב-Figma: **Plugins → Development → Import plugin from manifest…**
-3. בחרו את `manifest.json` מתיקיית הפרויקט.
-4. הפעילו: **Plugins → Development → A11y Shift** (או חפשו "A11y Shift" ב-Quick Actions).
-
-> אחרי שינוי קוד: **Plugins → Development → A11y Shift** (לחיצה חוזרת) או Reload מהתפריט Development — Figma לא טוען JS מחדש אוטומטית.
-
-### הגדרות (טאב Settings)
-
-1. **OpenAI API Key** — `sk-…` (נשמר ב-`figma.clientStorage`, לא ב-repo).
-2. **Confidence threshold** — רגישות ל-classification.
-3. **AI model** — ברירת מחדל `gpt-4o-mini` לטקסט; Vision משתמש ב-`gpt-4o`.
-4. **Run fix coverage report** — דוח כמה מבדיקות המטריצה מחוברות ל-autofix (48/48 אחרי העדכון האחרון).
+- **Detects** component type (button, text field, radio group, dialog, tabs, slider, star rating, toggle, accordion, and more)
+- **Runs ~48 checks** via a per-type spec matrix
+- **Surfaces** issues with contextual titles, explanations (`[?]`), and WCAG references
+- **Fixes** issues inline (annotation, visual, or AI) — one Cmd+Z undoes each fix
+- **Persists** scan history and Dev Mode ARIA via `setSharedPluginData`
 
 ---
 
-## איך משתמשים
+## Requirements
 
-### ניתוח קומפוננטה בודדת (Analyze)
+| Requirement | Required? | Notes |
+|-------------|-----------|-------|
+| Figma Desktop | Yes | Design Mode + Dev Mode |
+| Plugin development | For local dev | Plugins → Development → Import plugin from manifest… |
+| OpenAI API key | Optional | AI classification, text autofix, Vision fallback |
+| Internet | With API key | `manifest.json` allows only `api.openai.com` |
 
-1. בחרו **Frame / Component / Instance** אחד (לא שכבת TEXT בודדת).
-2. טאב **Analyze** → **Start Analysis**.
-3. קראו את התוצאה:
-   - **Role** — סוג שזוהה + badge (Spec engine / Text AI / Vision AI)
-   - **Issues** — חומרה, WCAG, כפתור **Auto-fix** או **Mark as acknowledged**
-   - **How I decided** — אותות classification + audit log
-4. לכל issue:
-   - **Auto-fix** — annotation / תיקון ויזואלי / AI (עם consent בפעם הראשונה)
-   - **Mark as acknowledged** — לבעיות שדורשות החלטת מעצב (למשל contrast ידני)
-   - **`[?]`** — הסבר למה זה חשוב
-5. **Apply Fixes…** — החלת suggestions (rename / plugin data) אחרי שאין blockers HIGH.
+---
 
-### סריקת Frame שלם (Components)
+## Running in Figma
 
-1. בחרו Frame או Group.
-2. טאב **Components** → **Scan Selected Frame**.
-3. רשימת קומפוננטות עם סיכום issues; לחיצה פותחת ניתוח מלא.
+### Designers
+
+1. Clone this repo or download the files.
+2. In Figma: **Plugins → Development → Import plugin from manifest…**
+3. Select `manifest.json` from the project root.
+4. Run: **Plugins → Development → A11y Shift** (or search “A11y Shift” in Quick Actions).
+
+> After code changes: re-run the plugin from **Plugins → Development** or use Reload — Figma does not hot-reload plugin JS.
+
+### Settings tab
+
+1. **OpenAI API Key** — `sk-…` (stored in `figma.clientStorage`, never committed).
+2. **Confidence threshold** — classification sensitivity.
+3. **AI model** — default `gpt-4o-mini` for text; Vision uses `gpt-4o`.
+4. **Run fix coverage report** — shows how many matrix checks have autofix handlers (48/48 after latest update).
+
+---
+
+## How to use
+
+### Analyze a single component (Analyze tab)
+
+1. Select one **Frame / Component / Instance** (not a lone TEXT layer).
+2. **Analyze** tab → **Start Analysis**.
+3. Review results:
+   - **Role** — detected type + badge (Spec engine / Text AI / Vision AI)
+   - **Issues** — severity, WCAG, **Auto-fix** or **Mark as acknowledged**
+   - **How I decided** — classification signals + audit log
+4. Per issue:
+   - **Auto-fix** — annotation / visual fix / AI (consent dialog on first AI fix)
+   - **Mark as acknowledged** — for designer-only decisions (e.g. manual contrast review)
+   - **`[?]`** — why this matters
+5. **Apply Fixes…** — apply rename / plugin-data suggestions once HIGH blockers are resolved.
+
+### Scan an entire frame (Components tab)
+
+1. Select a Frame or Group.
+2. **Components** tab → **Scan Selected Frame**.
+3. Browse components and open full analysis per row.
 
 ### Dev Mode
 
-- הפלאגין רשום גם ל-`dev` ב-`manifest.json`.
-- ARIA נכתב ל-**shared plugin data** (`namespace: a11y`) — נגיש דרך REST API ופלאגינים אחרים.
-- אין "Apply Fixes" הרסני — קריאה + העתקת attributes.
+- Plugin is registered for `dev` in `manifest.json`.
+- ARIA is written to **shared plugin data** (`namespace: a11y`) — readable via REST API and other plugins.
+- Read-only context: no destructive Apply Fixes; copy ARIA attributes for handoff.
 
 ---
 
-## איך לבדוק (QA)
+## How to test (QA)
 
-### לפני בדיקה
+### Before testing
 
-- Reload פלאגין אחרי כל שינוי ב-`dist/code.js` / `ui.html`.
-- DevTools ל-UI: קליק ימני על פאנל הפלאגין → **Inspect** (לא קונסול הקanvas של Figma).
+- Reload the plugin after any change to `dist/code.js` or `ui.html`.
+- UI DevTools: right-click the plugin panel → **Inspect** (not the Figma canvas console).
 
-### בדיקות מהירות
+### Quick checks
 
-| # | בחר | צפוי |
-|---|-----|------|
-| 1 | כפתור icon-only | `ICON_BUTTON_NO_LABEL` → Auto-fix |
-| 2 | שדה ללא label | `NO_INPUT_LABEL` |
-| 3 | טקסט contrast נמוך | `CONTRAST_TEXT_FAIL` → שינוי fill |
+| # | Select | Expected |
+|---|--------|----------|
+| 1 | Icon-only button | `ICON_BUTTON_NO_LABEL` → Auto-fix |
+| 2 | Input without label | `NO_INPUT_LABEL` |
+| 3 | Low text contrast | `CONTRAST_TEXT_FAIL` → fill adjusted |
 | 4 | Radio group | `RADIO_NO_LABEL` → AI consent → labels |
 | 5 | Star rating | `STAR_MISSING_ARIA_LABEL` per star |
-| 6 | Toggle disabled רק בצבע | `COLOR_ONLY_DISABLED` → הודעה + acknowledge |
-| 7 | Frame עם 3+ קומפוננטות | Scan Frame → רשימה + export |
+| 6 | Toggle disabled by color only | `COLOR_ONLY_DISABLED` → message + acknowledge |
+| 7 | Frame with 3+ components | Scan Frame → list + export |
 
-### דוח כיסוי autofix
+### Autofix coverage report
 
-ב-Settings: **Run fix coverage report**, או ב-DevTools של UI:
+In **Settings**: **Run fix coverage report**, or in the plugin UI DevTools:
 
 ```js
 reportFixCoverage()
 ```
 
-צפוי: **48 checks, 48 with autofix, 0 missing**.
+Expected: **48 checks, 48 with autofix, 0 missing**.
 
-### Regression חשוב
+### Important regressions
 
-- Cmd+Z אחרי autofix — undo אחד לכל fix
-- `refreshSummaryBanner` מתעדכן אחרי fix
-- Instance בתוך COMPONENT_SET — לא לקרוא `componentPropertyDefinitions` על ה-child
+- Cmd+Z after autofix — single undo group per fix
+- Summary banner updates after each fix (`refreshSummaryBanner`)
+- Instance inside COMPONENT_SET — never call `componentPropertyDefinitions` on the child
 
-מטריצת בדיקות מלאה: [`AGENT_PLAN.md`](AGENT_PLAN.md) (Manual Testing Plan).
+Full test matrix: [`AGENT_PLAN.md`](AGENT_PLAN.md) (Manual Testing Plan).
 
 ---
 
-## איך מוסיפים / מרחיבים קומפוננטות (למפתח)
+## Adding / extending components (developers)
 
-### מבנה הפרויקט
+### Project layout
 
 ```
 a11y-shift/
-├── manifest.json          # הגדרות Figma + networkAccess
-├── dist/code.js           # Main thread — כל הלוגיקה
+├── manifest.json          # Figma config + networkAccess
+├── dist/code.js           # Main thread — all logic
 ├── ui.html                # UI iframe — DOM + postMessage
-├── AGENT_PLAN.md          # מצב נוכחי + מטריצת QA (מקור אמת למפתח)
+├── AGENT_PLAN.md          # Current architecture + QA matrix
 └── .cursor/rules/
-    └── figma-a11y-developer.mdc   # כללי Cursor Agent
+    └── figma-a11y-developer.mdc   # Cursor agent rules
 ```
 
-### זרימת classification
+### Classification pipeline
 
 ```
 selection → getSemanticRoot()
          → gatherContext() + deepChildScan(depth 3)
          → detectComponent (spec engine)
-         → אם אין spec / confidence נמוך → classifyWithAI (gpt-4o-mini)
-         → אם unknown → classifyWithVision (gpt-4o)
+         → if no spec / low confidence → classifyWithAI (gpt-4o-mini)
+         → if unknown → classifyWithVision (gpt-4o)
          → runMatrixChecks(typeKey) → issues + auditLog
 ```
 
-### הוספת סוג קומפוננטה חדש
+### Adding a new component type
 
-1. **`COMPONENT_SPECS`** — signals ל-scoring (שמות ילדים, layout, chevrons…).
-2. **`COMPONENT_SPEC_MATRIX`** — רשימת check IDs (6–8 בדיקות).
-3. **`SPEC_CHECKERS`** — פונקציה לכל check ID; מחזירה `[]` או `makeIssue(...)`.
-4. **`normalizeMatrixTypeKey`** — מיפוי role string → מפתח matrix.
-5. **`AUTO_FIX_HANDLERS`** — handler לפי **issue code** (לא check ID).
-6. **`MATRIX_CHECK_FIX_BRIDGE`** — מיפוי check ID → issue codes (לדוח coverage).
-7. **`ISSUE_EXPLANATIONS`** — כותרת + הסבר ל-UI.
-8. בדיקה: `reportFixCoverage()` + ריצה ידנית ב-Figma.
+1. **`COMPONENT_SPECS`** — scoring signals (child names, layout, chevrons…).
+2. **`COMPONENT_SPEC_MATRIX`** — list of check IDs (6–8 per type).
+3. **`SPEC_CHECKERS`** — one function per check ID; returns `[]` or `makeIssue(...)`.
+4. **`normalizeMatrixTypeKey`** — maps role string → matrix key.
+5. **`AUTO_FIX_HANDLERS`** — handlers keyed by **issue code** (not check ID).
+6. **`MATRIX_CHECK_FIX_BRIDGE`** — check ID → issue codes (for coverage report).
+7. **`ISSUE_EXPLANATIONS`** — static title + explanation for the UI.
+8. Verify: `reportFixCoverage()` + manual run in Figma.
 
-### הוספת autofix
+### Adding autofix handlers
 
-| סוג | איפה |
-|-----|------|
-| Annotation (ARIA ב-Dev Mode) | `ANNOTATION_FIX_MAP` + `makeAnnotationFixHandler` |
-| ויזואלי (fills, variants, layers) | פונקציה ב-`AUTO_FIX_HANDLERS` |
-| AI טקסט | `callAILabel` + `fixKind: "ai_content"` ב-`ISSUE_FIX_META` |
-| הודעה בלבד | `fixKind: "message_only"` — UI מציג acknowledge |
+| Type | Where |
+|------|-------|
+| Annotation (Dev Mode ARIA) | `ANNOTATION_FIX_MAP` + `makeAnnotationFixHandler` |
+| Visual (fills, variants, layers) | function in `AUTO_FIX_HANDLERS` |
+| AI text | `callAILabel` + `fixKind: "ai_content"` in `ISSUE_FIX_META` |
+| Designer message only | `fixKind: "message_only"` — UI shows acknowledge |
 
-כל handler:
+Every handler:
 
-- **לא** קורא `figma.commitUndo()` — זה ב-`autoFixIssue()` פעם אחת
-- **כן** שולח `figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" })` אחרי שינוי
+- Must **not** call `figma.commitUndo()` — wrapped once in `autoFixIssue()`
+- **Must** post `figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" })` after mutations
 
-### שכבות threads — אסור לשבור
+### Two threads — do not break
 
-| פעולה | Thread |
-|--------|--------|
+| Operation | Thread |
+|-----------|--------|
 | Plugin API, fetch, clientStorage | `dist/code.js` (main) |
 | DOM, sessionStorage (AI consent) | `ui.html` |
-| תקשורת | `postMessage` בלבד — אובייקטים plain JSON |
+| Communication | `postMessage` only — plain JSON objects |
 
 ---
 
-## הערות למפתח שעובד על הפרויקט
+## Notes for contributors
 
-1. **קרא קודם** [`AGENT_PLAN.md`](AGENT_PLAN.md) ו-[`.cursor/rules/figma-a11y-developer.mdc`](.cursor/rules/figma-a11y-developer.mdc) — שם הארכיטקטורה המלאה.
-2. **Issue codes ≠ check IDs** — handlers רשומים על `ROLE_BUTTON_MISSING`, לא על `ROLE_BUTTON_ANNOTATED`.
-3. **`resolveSuggestions()`** — חובה לפני mutate על node IDs מה-AI.
-4. **COMPONENT_SET** — קרא variants מה-parent, לא מה-instance child.
-5. **ביצועים** — `findAllWithCriteria` + הגבלת depth; לא `findAll` על כל המסמך בלי scope.
-6. **אל תדחוף secrets** — API keys רק ב-clientStorage; `.env` ב-`.gitignore`.
-7. **Build** — אין bundler; עריכה ישירה ב-`dist/code.js` + `ui.html`. שמרו sync בין השניים.
-8. **Debug coverage** — `figma._a11yDebug.reportFixCoverage()` ב-main sandbox; `reportFixCoverage()` ב-UI iframe.
+1. Read [`AGENT_PLAN.md`](AGENT_PLAN.md) and [`.cursor/rules/figma-a11y-developer.mdc`](.cursor/rules/figma-a11y-developer.mdc) first.
+2. **Issue codes ≠ check IDs** — handlers register on `ROLE_BUTTON_MISSING`, not `ROLE_BUTTON_ANNOTATED`.
+3. **`resolveSuggestions()`** — required before mutating AI-returned node IDs.
+4. **COMPONENT_SET** — read variant definitions from the parent, not the instance child.
+5. **Performance** — prefer `findAllWithCriteria` with depth limits; avoid unscoped `findAll` on large files.
+6. **Secrets** — API keys only in `clientStorage`; `.env` is gitignored.
+7. **No bundler** — edit `dist/code.js` and `ui.html` directly; keep them in sync.
+8. **Debug** — `figma._a11yDebug.reportFixCoverage()` in main sandbox; `reportFixCoverage()` in UI iframe DevTools.
 
-### WCAG thresholds (מוטמע)
+### WCAG thresholds (built-in)
 
-| בדיקה | סף |
-|--------|-----|
-| Text contrast | 4.5:1 (רגיל), 3:1 (large/bold) |
+| Check | Threshold |
+|-------|-----------|
+| Text contrast | 4.5:1 (normal), 3:1 (large/bold) |
 | Non-text UI | 3:1 |
-| Touch target | 44×44 (מומלץ), 24×24 עם spacing |
+| Touch target | 44×44 recommended; 24×24 with spacing |
 
 ---
 
-## API Key & עלויות
+## API key & cost
 
-- מפתח נשמר: `figma.clientStorage` key `openai-api-key`.
-- Text classification: ~gpt-4o-mini, batch titles — קריאה אחת לניתוח.
-- Vision fallback: gpt-4o, PNG 0.5×, `detail: low` — רק כש-text AI לא מזהה.
-- Scan Frame: titles סטטיים בלבד (ללא N קריאות AI).
-
----
-
-## רישיון
-
-לא הוגדר עדיין — הוסיפו LICENSE לפי הצורך.
+- Key stored at: `figma.clientStorage` → `openai-api-key`.
+- Text classification: gpt-4o-mini; batched titles — one call per analysis.
+- Vision fallback: gpt-4o, PNG at 0.5× scale, `detail: low` — only when text AI returns unknown.
+- Scan Frame: static titles only (no N API calls per component).
 
 ---
 
-## קישורים
+## License
 
-- [מאגר GitHub](https://github.com/1haim/a11y-Shift)
-- [WCAG 2.2](https://www.w3.org/WAI/WCAG22/quickref/)
+Not specified yet — add a LICENSE file as needed.
+
+---
+
+## Links
+
+- [GitHub repository](https://github.com/1haim/a11y-Shift)
+- [WCAG 2.2 Quick Reference](https://www.w3.org/WAI/WCAG22/quickref/)
 - [ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/)
 - [Figma Plugin API](https://www.figma.com/plugin-docs/)
