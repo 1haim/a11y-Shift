@@ -796,13 +796,79 @@ function toPascalCase(str) {
     .slice(0, 40) || "Component";
 }
 
-// Build semantic layer name: ComponentType_SemanticName (PascalCase, NO ARIA in name).
-// ARIA data lives only in pluginData — not in the layer name.
-function buildLayerName(spec, identifier) {
-  const type = toPascalCase(spec.role);
-  const name = toPascalCase(identifier);
-  if (name === type) return type; // avoid "Button_Button"
-  return type + "_" + name;
+// Default visible headings when autofix creates label text (by matrix type key).
+var DEFAULT_HEADING_BY_TYPE = {
+  button:      "Action button",
+  textField:   "Input field",
+  checkbox:    "Checkbox option",
+  "radio-group": "Choose one option",
+  "star-rating": "Rate this item",
+  select:      "Select an option",
+  modal:       "Dialog",
+  tabs:        "Navigation tabs",
+  slider:      "Adjust value",
+  toggle:      "Toggle setting",
+  accordion:   "Expandable section",
+};
+
+function getDefaultHeadingText(roleOrTypeKey) {
+  const key = normalizeMatrixTypeKey(roleOrTypeKey || "");
+  if (key && DEFAULT_HEADING_BY_TYPE[key]) return DEFAULT_HEADING_BY_TYPE[key];
+  return "Select an option";
+}
+
+function pascalTypePart(typeKey) {
+  const map = {
+    button: "Button",
+    textField: "TextField",
+    checkbox: "Checkbox",
+    "radio-group": "RadioGroup",
+    "star-rating": "StarRating",
+    select: "Select",
+    modal: "Modal",
+    tabs: "Tabs",
+    slider: "Slider",
+    toggle: "Toggle",
+    accordion: "Accordion",
+  };
+  return map[typeKey] || toPascalCase(typeKey || "Component");
+}
+
+// Primary + secondary types → "RadioGroup-StarRating" (hyphen, no duplicates, max 2 parts).
+function generateSemanticName(node, types) {
+  const seen = {};
+  const parts = [];
+  const list = types || [];
+  for (let i = 0; i < list.length && parts.length < 2; i++) {
+    const tk = normalizeMatrixTypeKey(list[i]);
+    if (!tk || seen[tk]) continue;
+    seen[tk] = true;
+    parts.push(pascalTypePart(tk));
+  }
+  if (parts.length === 0) return toPascalCase((node && node.name) || "Component");
+  if (parts.length === 1) return parts[0];
+  return parts[0] + "-" + parts[1];
+}
+
+function resolveSemanticLayerName(spec, identifier, competitorRole) {
+  const primary = normalizeMatrixTypeKey(spec.role);
+  const types = [];
+  if (primary) types.push(primary);
+  if (spec.isStarRating && primary !== "star-rating") types.push("star-rating");
+  if (competitorRole) {
+    const comp = normalizeMatrixTypeKey(competitorRole);
+    if (comp && comp !== primary) types.push(comp);
+  }
+  if (types.length >= 2) return generateSemanticName(null, types);
+  const typePart = pascalTypePart(primary || spec.role);
+  const namePart = toPascalCase(identifier);
+  if (!namePart || namePart === typePart) return typePart;
+  return typePart + "-" + namePart;
+}
+
+// Build semantic layer name (PascalCase, NO ARIA in name). ARIA lives in pluginData only.
+function buildLayerName(spec, identifier, competitorRole) {
+  return resolveSemanticLayerName(spec, identifier, competitorRole);
 }
 
 function deriveIdentifier(spec, ctx) {
@@ -1182,7 +1248,7 @@ function generateSuggestions(node, spec, ctx, issues) {
 
   // ── 1. Rename root: ComponentType_SemanticName (PascalCase, no ARIA in the name).
   // ARIA attributes live only in pluginData — not polluting the layer name.
-  const newName = buildLayerName(spec, identifier);
+  const newName = buildLayerName(spec, identifier, ctx.competitorRole || null);
   suggestions.push({
     type: "rename", nodeId: "__ROOT__", value: newName, label: "Rename layer (semantic PascalCase)",
   });
@@ -2537,6 +2603,7 @@ function normalizeMatrixTypeKey(roleOrHint) {
 
 const COMPONENT_SPEC_MATRIX = {
   button: [
+    "IS_FIGMA_COMPONENT",
     "HAS_ACCESSIBLE_NAME",
     "TOUCH_TARGET_44",
     "CONTRAST_TEXT",
@@ -2545,6 +2612,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_CORE",
   ],
   textField: [
+    "IS_FIGMA_COMPONENT",
     "HAS_LABEL",
     "PLACEHOLDER_NOT_ONLY_LABEL",
     "ERROR_TEXT_NOT_COLOR_ONLY",
@@ -2554,6 +2622,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_INPUT",
   ],
   checkbox: [
+    "IS_FIGMA_COMPONENT",
     "HAS_LABEL",
     "TOUCH_TARGET_24_WITH_SPACING",
     "ARIA_CHECKED_ANNOTATED",
@@ -2563,6 +2632,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_CHECKBOX",
   ],
   "radio-group": [
+    "IS_FIGMA_COMPONENT",
     "GROUP_HAS_LABEL",
     "EACH_RADIO_HAS_LABEL",
     "ARIA_CHECKED_ANNOTATED",
@@ -2572,6 +2642,7 @@ const COMPONENT_SPEC_MATRIX = {
     "TOUCH_TARGET_24_WITH_SPACING",
   ],
   select: [
+    "IS_FIGMA_COMPONENT",
     "HAS_LABEL",
     "ROLE_COMBOBOX_OR_LISTBOX",
     "EXPANSION_STATE_ANNOTATED",
@@ -2581,6 +2652,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_SELECT",
   ],
   modal: [
+    "IS_FIGMA_COMPONENT",
     "ROLE_DIALOG_ANNOTATED",
     "ARIA_MODAL_TRUE",
     "HAS_HEADING",
@@ -2590,6 +2662,7 @@ const COMPONENT_SPEC_MATRIX = {
     "TOUCH_TARGET_44",
   ],
   tabs: [
+    "IS_FIGMA_COMPONENT",
     "ROLE_TABLIST_ON_CONTAINER",
     "ROLE_TAB_ON_ITEMS",
     "ARIA_SELECTED_ANNOTATED",
@@ -2599,6 +2672,7 @@ const COMPONENT_SPEC_MATRIX = {
     "TOUCH_TARGET_44",
   ],
   slider: [
+    "IS_FIGMA_COMPONENT",
     "ROLE_SLIDER_ANNOTATED",
     "ARIA_VALUE_NOW_MIN_MAX",
     "HAS_LABEL",
@@ -2608,6 +2682,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_SLIDER",
   ],
   "star-rating": [
+    "IS_FIGMA_COMPONENT",
     "GROUP_HAS_LABEL",
     "ROLE_GROUP_OR_IMG",
     "CURRENT_VALUE_COMMUNICATED",
@@ -2616,6 +2691,7 @@ const COMPONENT_SPEC_MATRIX = {
     "TOUCH_TARGET_24_WITH_SPACING",
   ],
   toggle: [
+    "IS_FIGMA_COMPONENT",
     "ROLE_SWITCH_ANNOTATED",
     "ARIA_CHECKED_ANNOTATED",
     "HAS_LABEL",
@@ -2625,6 +2701,7 @@ const COMPONENT_SPEC_MATRIX = {
     "STATE_COVERAGE_TOGGLE",
   ],
   accordion: [
+    "IS_FIGMA_COMPONENT",
     "HAS_HEADING",
     "ACCORDION_HEADERS_ARE_BUTTONS",
     "ARIA_EXPANDED_ANNOTATED",
@@ -2678,36 +2755,144 @@ async function getAnnotationDestination() {
   return "ask";
 }
 
-async function createCanvasA11yTag(node, key, value) {
+function collectA11yTagLines(node) {
+  const lines = [];
+  const seen = {};
+  for (const pluginKey in SHARED_A11Y_KEY_MAP) {
+    if (!SHARED_A11Y_KEY_MAP.hasOwnProperty(pluginKey)) continue;
+    const sharedKey = SHARED_A11Y_KEY_MAP[pluginKey];
+    const val = getSharedA11y(node, pluginKey);
+    if (!val || seen[sharedKey]) continue;
+    seen[sharedKey] = true;
+    lines.push(sharedKey + ": " + String(val).slice(0, 80));
+  }
+  return lines;
+}
+
+function findA11yTagFrame(node) {
+  if (!node || !node.getPluginData) return null;
+  const storedId = node.getPluginData("a11y-tag-frame-id");
+  if (storedId) {
+    const stored = figma.getNodeById(storedId);
+    if (stored && stored.type === "FRAME" && !stored.removed) return stored;
+  }
+  const frameName = "_a11y_tag_" + node.id.replace(/:/g, "_");
+  const parent = node.parent;
+  if (parent && "children" in parent) {
+    for (let i = 0; i < parent.children.length; i++) {
+      const ch = parent.children[i];
+      if (ch.type === "FRAME" && ch.name === frameName) return ch;
+    }
+  }
+  return null;
+}
+
+async function getOrCreateA11yTagFrame(node) {
   if (!node || !isNodeVisible(node)) return null;
-  const fontName = await loadInter("Regular");
-  const tag = figma.createText();
-  if (fontName) tag.fontName = fontName;
-  const label = key + "=" + String(value).slice(0, 48);
-  tag.characters = label;
-  tag.fontSize = 10;
-  tag.fills = [{ type: "SOLID", color: { r: 0.35, g: 0.55, b: 0.95 } }];
-  tag.name = "a11y-tag / " + key;
-  tag.setPluginData("a11y.generated", "true");
-  tag.setPluginData("a11y.canvasTag", "true");
+  let frame = findA11yTagFrame(node);
+  if (frame) return frame;
+
+  frame = figma.createFrame();
+  frame.name = "_a11y_tag_" + node.id.replace(/:/g, "_");
+  frame.layoutMode = "VERTICAL";
+  frame.itemSpacing = 2;
+  frame.paddingTop = 6;
+  frame.paddingBottom = 6;
+  frame.paddingLeft = 8;
+  frame.paddingRight = 8;
+  frame.cornerRadius = 4;
+  frame.fills = [{ type: "SOLID", color: { r: 0.118, g: 0.118, b: 0.118 } }];
+  frame.locked = true;
+  frame.setPluginData("a11y.generated", "true");
+  frame.setPluginData("a11y.canvasTagFrame", "true");
+
   const box = node.absoluteBoundingBox;
   if (box) {
-    tag.x = box.x + box.width + 6;
-    tag.y = box.y;
+    frame.x = box.x + box.width + 12;
+    frame.y = box.y;
   } else if ("x" in node) {
-    tag.x = node.x + (node.width || 0) + 6;
-    tag.y = node.y;
+    frame.x = node.x + (node.width || 0) + 12;
+    frame.y = node.y;
   }
+
   const parent = node.parent;
-  if (parent && "appendChild" in parent) parent.appendChild(tag);
-  else figma.currentPage.appendChild(tag);
-  return tag;
+  if (parent && "appendChild" in parent) parent.appendChild(frame);
+  else figma.currentPage.appendChild(frame);
+
+  node.setPluginData("a11y-tag-frame-id", frame.id);
+  return frame;
+}
+
+async function refreshCanvasA11yTagFrame(node) {
+  const frame = await getOrCreateA11yTagFrame(node);
+  if (!frame) return null;
+  const lines = collectA11yTagLines(node);
+  const textContent = lines.length ? lines.join("\n") : "a11y: (no properties yet)";
+
+  let textNode = null;
+  for (let i = 0; i < frame.children.length; i++) {
+    if (frame.children[i].type === "TEXT") { textNode = frame.children[i]; break; }
+  }
+
+  const fontName = await loadInter("Regular");
+  if (!textNode) {
+    textNode = figma.createText();
+    textNode.name = "a11y-tag / properties";
+    textNode.setPluginData("a11y.generated", "true");
+    textNode.setPluginData("a11y.canvasTag", "true");
+    frame.appendChild(textNode);
+  }
+  if (fontName) textNode.fontName = fontName;
+  textNode.fontSize = 11;
+  textNode.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }];
+  textNode.characters = textContent;
+  return frame;
 }
 
 async function writeA11yAnnotation(node, key, value, destination) {
   setSharedA11y(node, key, value);
   if (destination === "both") {
-    await createCanvasA11yTag(node, key, value);
+    await refreshCanvasA11yTagFrame(node);
+  }
+}
+
+function refreshDevModeAnnotations(node) {
+  if (!node) return;
+  try {
+    if (typeof node.annotations !== "undefined") {
+      node.annotations = [];
+    }
+  } catch (_e) {}
+  const lines = collectA11yTagLines(node);
+  if (!lines.length) return;
+  try {
+    if (typeof node.annotations !== "undefined") {
+      node.annotations = [{ label: lines.join("\n") }];
+    }
+  } catch (_e2) {}
+}
+
+function collectA11yHeadingSiblings(node) {
+  const parent = node && node.parent;
+  if (!parent || !("children" in parent)) return [];
+  return parent.children.filter(function(n) {
+    return n.type === "TEXT" &&
+      n.name && n.name.indexOf("_a11y_heading") >= 0 &&
+      Math.abs(n.y - node.y) < 40;
+  });
+}
+
+async function copyA11yHeadingsToClone(originalNode, clone) {
+  const headings = collectA11yHeadingSiblings(originalNode);
+  const dx = clone.x - originalNode.x;
+  const dy = clone.y - originalNode.y;
+  for (let i = 0; i < headings.length; i++) {
+    const h = headings[i];
+    const dup = h.clone();
+    dup.x = h.x + dx;
+    dup.y = h.y + dy;
+    if (clone.parent && "appendChild" in clone.parent) clone.parent.appendChild(dup);
+    else if (originalNode.parent && "appendChild" in originalNode.parent) originalNode.parent.appendChild(dup);
   }
 }
 
@@ -2741,11 +2926,21 @@ function readDesignerPending(node) {
   } catch (_e) { return null; }
 }
 
+function readWaitingForAi(node) {
+  if (!node || !node.getPluginData) return null;
+  try {
+    const raw = node.getPluginData("a11y-waiting-ai");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_e) { return null; }
+}
+
 function countDesignerPendingIssues(issues) {
   if (!issues) return 0;
   let n = 0;
   for (let i = 0; i < issues.length; i++) {
-    if (issues[i].designerPending && !issues[i].fixed) n++;
+    if (issues[i].fixed) continue;
+    if (issues[i].designerPending || issues[i].waitingForAi) n++;
   }
   return n;
 }
@@ -2775,10 +2970,9 @@ function componentNameMatchesType(componentName, typeKey) {
 
 function appendNonComponentIssue(issues, node, spec, typeKey) {
   if (!node || !typeKey || !spec) return;
-  if (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "COMPONENT_SET") return;
-  if (node.type !== "FRAME" && node.type !== "GROUP" && node.type !== "VECTOR") return;
+  if (node.type === "INSTANCE" || node.type === "COMPONENT") return;
   const label = spec.role || typeKey;
-  issues.push(makeIssue("MED", "NON_COMPONENT_ELEMENT", "4.1.2",
+  issues.push(makeIssue("HIGH", "NON_COMPONENT_ELEMENT", "4.1.2",
     "This element looks like a " + label + " but is not a Figma component. " +
     "Screen readers and developers rely on component structure.",
     node.id));
@@ -3163,6 +3357,11 @@ function checkNonTextContrast(node, ctx) {
 }
 
 const SPEC_CHECKERS = {
+  IS_FIGMA_COMPONENT: function(node, ctx, typeKey, spec) {
+    const issues = [];
+    appendNonComponentIssue(issues, node, spec || { role: typeKey }, typeKey);
+    return issues;
+  },
   HAS_ACCESSIBLE_NAME: function(node, ctx) {
     if (hasAccessibleName(node, ctx)) return [];
     const iconIssues = matrixIssuesFromAudit(auditIconOnlyLabel, node, { role: "button", requiredStates: [] }, ctx);
@@ -3348,7 +3547,6 @@ function auditNode(node, spec, ctx) {
   const typeKey = normalizeMatrixTypeKey(spec.role);
   if (typeKey && COMPONENT_SPEC_MATRIX[typeKey]) {
     const result = runMatrixChecks(node, ctx, typeKey, spec);
-    appendNonComponentIssue(result.issues, node, spec, typeKey);
     enrichIssueFixMeta(result.issues, node);
     return result;
   }
@@ -3581,6 +3779,7 @@ async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) 
 
     reviewIndicatorId = indicator.id;
     targetNode = clone;
+    await copyA11yHeadingsToClone(rootNode, clone);
   }
 
   // ── Annotate mode: only write data keys, never rename or change visuals
@@ -3706,7 +3905,8 @@ async function placeLabelAbove(node, labelText, layerName) {
   label.y = node.y - label.height - 8;
   if (node.parent && "appendChild" in node.parent) node.parent.appendChild(label);
   else figma.currentPage.appendChild(label);
-  label.name = layerName;
+  const baseName = layerName || "label";
+  label.name = baseName.indexOf("_a11y_heading") >= 0 ? baseName : baseName + " / _a11y_heading";
   label.setPluginData("a11y.generated", "true");
   label.setPluginData("a11y.labelFor", node.id);
   return label;
@@ -3808,7 +4008,8 @@ function buildClipboardPrompt(issueCode, node, rootNode) {
 
 async function fixNoGroupLabel(p) {
   const options = collectOptionTexts(p.rootNode).join(", ").slice(0, 800);
-  let labelText = "Select an option"; // safe generic fallback
+  const roleHint = p.detectedRole || (p.rootNode && p.rootNode.getPluginData && p.rootNode.getPluginData("a11y.v1.componentType")) || "radio-group";
+  let labelText = getDefaultHeadingText(roleHint);
   let source    = "generic";
   if (p.strategy === "ai" && p.apiKey) {
     try {
@@ -4409,9 +4610,10 @@ function findInputLabelNode(root) {
 function findStarChildren(root) {
   if (!root || !("children" in root)) return [];
   return root.children.filter(function(c) {
+    if (!isNodeVisible(c)) return false;
     const n = c.name.toLowerCase();
     return n.includes("star") || n.includes("rating") || n.includes("vector") ||
-           n.includes("icon") || c.type === "VECTOR";
+           n.includes("icon") || c.type === "VECTOR" || c.type === "INSTANCE";
   });
 }
 
@@ -4484,15 +4686,28 @@ async function fixChevronIndicator(p) {
 
 async function fixStarAriaLabels(p) {
   const root = p.rootNode || p.node;
+  if (!root) return { ok: false, code: p.issueCode, message: "No target node." };
   const stars = findStarChildren(root);
   if (!stars.length) return { ok: false, code: p.issueCode, message: "No star layers found." };
+
+  let currentRating = stars.length;
   for (let i = 0; i < stars.length; i++) {
-    const label = (i + 1) + " star" + (i === 0 ? "" : "s");
-    setSharedA11y(stars[i], "aria-label", label);
-    setSharedA11y(stars[i], "aria-role", "radio");
+    const checked = getSharedA11y(stars[i], "ariaChecked");
+    if (checked === "true") currentRating = i + 1;
   }
+
+  for (let i = 0; i < stars.length; i++) {
+    const star = stars[i];
+    const label = (i + 1) + " star" + (i === 0 ? "" : "s");
+    setSharedA11y(star, "aria-label", label);
+    setSharedA11y(star, "aria-role", "radio");
+    setSharedA11y(star, "aria-checked", i < currentRating ? "true" : "false");
+  }
+  setSharedA11y(root, "aria-role", "radiogroup");
+  setSharedA11y(root, "aria-label", "Star rating");
+
   figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
-  return { ok: true, code: p.issueCode, source: "annotation", message: "Applied fix. Cmd+Z to undo." };
+  return { ok: true, code: p.issueCode, source: "annotation", message: "Applied aria-label to each star. Cmd+Z to undo." };
 }
 
 async function fixRequiredIndicator(p) {
@@ -4782,6 +4997,14 @@ function enrichIssueFixMeta(issues, rootNode) {
     const meta = ISSUE_FIX_META[code] || {};
     const targetNode = getIssueTargetNode(issues[qi], rootNode);
     const pending = readDesignerPending(targetNode);
+    const waitingAi = readWaitingForAi(rootNode);
+    if (waitingAi && waitingAi.issueCode === code) {
+      issues[qi].waitingForAi = true;
+      issues[qi].waitingSince = waitingAi.markedAt;
+      issues[qi].waitingPrompt = waitingAi.prompt || "";
+      issues[qi].autoFixable = false;
+      if (isFocusStateIssue(issues[qi])) issues[qi].fixKind = "focus_state";
+    }
     if (pending && pending.issueCode === code) {
       issues[qi].designerPending = true;
       issues[qi].pendingSince = pending.markedAt;
@@ -4789,10 +5012,10 @@ function enrichIssueFixMeta(issues, rootNode) {
       issues[qi].autoFixable = false;
       if (isFocusStateIssue(issues[qi])) issues[qi].fixKind = "focus_state";
     }
-    if (isFocusStateIssue(issues[qi]) && !issues[qi].designerPending) {
+    if (isFocusStateIssue(issues[qi]) && !issues[qi].designerPending && !issues[qi].waitingForAi) {
       issues[qi].fixKind = "focus_state";
       issues[qi].autoFixable = false;
-    } else if (!issues[qi].designerPending) {
+    } else if (!issues[qi].designerPending && !issues[qi].waitingForAi) {
       issues[qi].autoFixable = AUTO_FIX_HANDLERS.hasOwnProperty(code) && meta.fixKind !== "message_only";
       issues[qi].fixKind = meta.fixKind || (issues[qi].autoFixable ? "visual" : null);
     }
@@ -5320,6 +5543,178 @@ async function enrichIssuesWithTitlesAndExplanations(issues, rootNode, ctx, apiK
   }
 }
 
+async function applyAllIssueFixes(rootNode, issues, opts) {
+  opts = opts || {};
+  const dest = opts.annotationDestination || await getAnnotationDestination();
+  const effectiveDest = dest === "ask" ? "devmode" : dest;
+  const fixable = [];
+  for (let i = 0; i < (issues || []).length; i++) {
+    const iss = issues[i];
+    if (!AUTO_FIX_HANDLERS[iss.code]) continue;
+    if (iss.fixKind === "focus_state" || iss.fixKind === "message_only") continue;
+    if (iss.designerPending || iss.waitingForAi) continue;
+    if (iss.acknowledged || iss.fixed) continue;
+    if (iss.severity === "MANUAL") continue;
+    fixable.push(iss);
+  }
+
+  const total = fixable.length;
+  let fixed = 0;
+  let failed = 0;
+  if (total === 0) return { fixed: 0, failed: 0, total: 0 };
+
+  const apiKey = await figma.clientStorage.getAsync("openai-api-key");
+  const progressLabels = {
+    CONTRAST_TEXT_FAIL: "Analyzing contrast\u2026",
+    CONTRAST_FAIL:      "Analyzing contrast\u2026",
+    LOW_CONTRAST:       "Adjusting color to meet 4.5:1\u2026",
+    NON_TEXT_CONTRAST_FAIL: "Adjusting component contrast\u2026",
+  };
+
+  for (let i = 0; i < fixable.length; i++) {
+    const iss = fixable[i];
+    const label = progressLabels[iss.code] ||
+      ("Fixing: " + (iss.displayTitle || iss.message || iss.code).slice(0, 50));
+    figma.ui.postMessage({
+      type: "FIX_PROGRESS", step: i + 1, total: total, label: label,
+      status: "running", issueCode: iss.code,
+    });
+    await new Promise(function(r) { setTimeout(r, 300); });
+    const targetNode = getIssueTargetNode(iss, rootNode) || rootNode;
+    try {
+      const result = await AUTO_FIX_HANDLERS[iss.code]({
+        node:                  targetNode,
+        rootNode:              rootNode,
+        strategy:              "generic",
+        apiKey:                apiKey,
+        issueCode:             iss.code,
+        annotationDestination: effectiveDest,
+        detectedRole:          opts.detectedRole,
+      });
+      if (result && result.ok) {
+        fixed++;
+        figma.ui.postMessage({
+          type: "FIX_PROGRESS", step: i + 1, total: total,
+          label: result.message || "Fixed", status: "ok", issueCode: iss.code,
+        });
+      } else {
+        failed++;
+        figma.ui.postMessage({
+          type: "FIX_PROGRESS", step: i + 1, total: total,
+          label: (result && result.message) || "Could not fix", status: "fail", issueCode: iss.code,
+        });
+      }
+    } catch (e) {
+      failed++;
+      figma.ui.postMessage({
+        type: "FIX_PROGRESS", step: i + 1, total: total,
+        label: String(e).slice(0, 80), status: "fail", issueCode: iss.code,
+      });
+    }
+  }
+  return { fixed: fixed, failed: failed, total: total };
+}
+
+async function analyzeNodeAndPost(rootNode, options) {
+  options = options || {};
+  const previousIssues = options.previousIssues || [];
+
+  const ctx = gatherContext(rootNode);
+  let detection = detectComponent(ctx, rootNode);
+  ctx.competitorRole = detection.competitorRole || null;
+
+  if (detection.needsVisionTiebreak) {
+    const tieKey = await figma.clientStorage.getAsync("openai-api-key");
+    if (tieKey) {
+      figma.ui.postMessage({ type: "AI_LOADING", phase: "vision" });
+      try {
+        const visionResult = await classifyWithVision(rootNode, tieKey);
+        const visionSpec   = findSpecByRoleHint(visionResult.role);
+        if (visionSpec) {
+          detection = Object.assign({}, detection, {
+            role:               visionSpec.role,
+            spec:               visionSpec,
+            reasoning:          "Vision tiebreak vs " + (detection.competitorRole || "?") + ": " +
+                                (visionResult.reasoning || visionSpec.role),
+            detectionPath:      "vision-tiebreak",
+            confidence:         visionResult.confidence || "MED",
+            needsVisionTiebreak: false,
+          });
+        }
+      } catch (_tieErr) { /* keep spec-engine winner */ }
+    }
+  }
+
+  const auditResult  = detection.spec ? auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
+  const issues       = auditResult.issues;
+  const auditLog     = auditResult.auditLog;
+
+  if (issues.length > 0) {
+    const apiKeyForTitles = await figma.clientStorage.getAsync("openai-api-key");
+    ctx.componentType = (detection.role || (detection.spec && detection.spec.role) || ctx.nodeType);
+    await enrichIssuesWithTitlesAndExplanations(issues, rootNode, ctx, apiKeyForTitles);
+    enrichIssueFixMeta(issues, rootNode);
+  }
+
+  refreshDevModeAnnotations(rootNode);
+
+  const waitingState = readWaitingForAi(rootNode);
+  if (waitingState) {
+    const stillOpen = issues.some(function(iss) {
+      return iss.code === waitingState.issueCode;
+    });
+    if (!stillOpen && rootNode.setPluginData) {
+      rootNode.setPluginData("a11y-waiting-ai", "");
+    }
+  }
+
+  const suggestions = detection.spec
+    ? generateSuggestions(rootNode, detection.spec, ctx, issues)
+    : (detection.suggestions || []);
+
+  const resolvedIssues = [];
+  if (previousIssues.length) {
+    const remainingKeys = {};
+    for (let i = 0; i < issues.length; i++) {
+      remainingKeys[issues[i].code + ":" + (issues[i].nodeId || "")] = true;
+    }
+    for (let j = 0; j < previousIssues.length; j++) {
+      const pi = previousIssues[j];
+      const key = pi.code + ":" + (pi.nodeId || "");
+      if (!remainingKeys[key] && !pi.acknowledged) resolvedIssues.push(pi);
+    }
+  }
+
+  const pendingDesignerCount = countDesignerPendingIssues(issues);
+
+  const resultPayload = {
+    role:           detection.role,
+    confidence:     detection.confidence,
+    reasoning:      detection.reasoning,
+    suggestions:    suggestions,
+    askQuestions:   detection.askQuestions,
+    issues:         issues,
+    auditLog:       auditLog,
+    signalDetails:  detection.signalDetails || [],
+    signalScore:    detection.signalScore || 0,
+    detectionPath:  detection.detectionPath || "rule-engine",
+    rankedScores:   detection.rankedScores || [],
+    competitorRole: detection.competitorRole || null,
+    resolvedIssues: resolvedIssues,
+  };
+
+  figma.ui.postMessage({
+    type:                 "ANALYSIS_RESULTS",
+    nodeId:               rootNode.id,
+    nodeName:             rootNode.name,
+    nodeType:             rootNode.type,
+    result:               resultPayload,
+    usedSpec:             !!detection.spec,
+    pendingDesignerCount: pendingDesignerCount,
+    afterFix:             !!options.afterFix,
+  });
+}
+
 async function autoFixIssue(params) {
   // params: { issueCode, nodeId, rootNodeId, strategy, annotationDestination, detectedRole, linkAction }
   const node     = figma.getNodeById(params.nodeId)     || figma.getNodeById(params.rootNodeId);
@@ -5340,11 +5735,19 @@ async function autoFixIssue(params) {
     } else {
       prompt = buildClipboardPrompt(params.issueCode, node, rootNode);
     }
+    if (rootNode && rootNode.setPluginData) {
+      rootNode.setPluginData("a11y-waiting-ai", JSON.stringify({
+        issueCode: params.issueCode,
+        markedAt:  Date.now(),
+        prompt:    prompt,
+      }));
+    }
     return {
       ok:                 true,
       code:               params.issueCode,
       source:             "prompt",
       promptForClipboard: prompt,
+      waitingForAi:       true,
       message:            "Prompt copied — paste into Figma AI assistant",
     };
   }
@@ -5784,7 +6187,16 @@ figma.ui.onmessage = async (msg) => {
 
   if (msg.type === "APPLY_FIXES") {
     try {
-      const result = await applyFixes(msg.suggestions, msg.rootNodeId, "inplace");
+      const rootNode = figma.getNodeById(msg.rootNodeId);
+      const issues = msg.issues || [];
+      if (rootNode) figma.commitUndo();
+      figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: issues.length });
+      const batchResult = rootNode
+        ? await applyAllIssueFixes(rootNode, issues, { annotationDestination: msg.annotationDestination, detectedRole: msg.detectedRole })
+        : { fixed: 0, failed: 0, total: 0 };
+      const result = await applyFixes(msg.suggestions, msg.rootNodeId, "inplace", msg.annotationDestination);
+      if (rootNode) await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: issues });
+      figma.ui.postMessage({ type: "FIX_COMPLETE", fixed: batchResult.fixed, failed: batchResult.failed, total: batchResult.total });
       figma.ui.postMessage(Object.assign({ type: "APPLY_RESULT", mode: "inplace", modeNote: "Cmd+Z undoes all changes" }, result));
     } catch (e) {
       figma.ui.postMessage({ type: "APPLY_RESULT", applied: 0, skipped: 0, details: [String(e)] });
@@ -5798,20 +6210,49 @@ figma.ui.onmessage = async (msg) => {
   // mode "annotate" → pluginData / sharedPluginData only, no renames
   if (msg.type === "APPLY_WITH_MODE") {
     try {
-      if (msg.mode === "inplace") {
-        // Start a fresh undo group so all mutations below can be undone in one Cmd+Z
+      const rootNode = figma.getNodeById(msg.rootNodeId);
+      const issues = msg.issues || [];
+      if (msg.mode === "inplace" && rootNode) {
         figma.commitUndo();
       }
+      figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: issues.length });
+      const batchResult = rootNode
+        ? await applyAllIssueFixes(rootNode, issues, {
+            annotationDestination: msg.annotationDestination,
+            detectedRole:          msg.detectedRole,
+          })
+        : { fixed: 0, failed: 0, total: 0 };
       const result = await applyFixes(msg.suggestions, msg.rootNodeId, msg.mode, msg.annotationDestination);
+      if (rootNode) await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: issues });
 
       const modeNote =
         msg.mode === "inplace"  ? "Cmd+Z undoes all changes" :
         msg.mode === "copy"     ? "Fixed copy placed 120px right. Original is untouched." :
                                   "Annotations written. Open Dev Mode to inspect.";
 
+      figma.ui.postMessage({ type: "FIX_COMPLETE", fixed: batchResult.fixed, failed: batchResult.failed, total: batchResult.total });
       figma.ui.postMessage(Object.assign({ type: "APPLY_RESULT", mode: msg.mode, modeNote: modeNote }, result));
     } catch (e) {
       figma.ui.postMessage({ type: "APPLY_RESULT", applied: 0, skipped: 0, details: [String(e)] });
+    }
+    return;
+  }
+
+  if (msg.type === "RESCAN_SELECTION") {
+    const rootNode = figma.getNodeById(msg.rootNodeId);
+    if (!rootNode) {
+      figma.ui.postMessage({ type: "ERROR", message: "Selection changed. Please re-select the layer." });
+      return;
+    }
+    const waiting = readWaitingForAi(rootNode);
+    await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: msg.previousIssues || [] });
+    if (waiting) {
+      const stillOpen = (figma.getNodeById(msg.rootNodeId) && readWaitingForAi(rootNode));
+      figma.ui.postMessage({
+        type: "RESCAN_AI_STATUS",
+        issueCode: waiting.issueCode,
+        verified: !stillOpen,
+      });
     }
     return;
   }
@@ -5822,6 +6263,11 @@ figma.ui.onmessage = async (msg) => {
   // Self-healing: try to fix an individual issue inline.
   // msg: { issueCode, nodeId, rootNodeId, strategy: "ai" | "generic" | "prompt", issueIdx }
   if (msg.type === "AUTO_FIX_ISSUE") {
+    const rootNode = figma.getNodeById(msg.rootNodeId);
+    const previousIssues = msg.previousIssues || [];
+    if (msg.strategy !== "prompt" && rootNode) {
+      figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: 1 });
+    }
     const result = await autoFixIssue({
       issueCode:             msg.issueCode,
       nodeId:                msg.nodeId,
@@ -5833,7 +6279,12 @@ figma.ui.onmessage = async (msg) => {
       skipCandidateIds:      msg.skipCandidateIds,
       message:               msg.message,
     });
-    // Echo issueIdx so the UI knows which row to mark fixed
+    if (rootNode && result.ok && msg.strategy !== "prompt" && !result.needsComponentLinkChoice) {
+      await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: previousIssues });
+      figma.ui.postMessage({ type: "FIX_COMPLETE", fixed: 1, failed: 0, total: 1 });
+    } else if (rootNode && (result.waitingForAi || msg.strategy === "prompt")) {
+      await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: previousIssues });
+    }
     figma.ui.postMessage(Object.assign(
       { type: "AUTO_FIX_RESULT", issueCode: msg.issueCode, issueIdx: msg.issueIdx, strategy: msg.strategy },
       result
@@ -6085,6 +6536,7 @@ figma.ui.onmessage = async (msg) => {
 
     const ctx          = gatherContext(rootNode);
     let detection      = detectComponent(ctx, rootNode);
+    ctx.competitorRole = detection.competitorRole || null;
 
     // Competition tiebreak: when top two types are within 3 points, Vision picks the winner
     if (detection.needsVisionTiebreak) {

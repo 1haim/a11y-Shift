@@ -609,6 +609,47 @@
   }
   .annotation-dest-block.open { display: block; }
 
+  .fix-progress-wrap {
+    margin: 0 14px 10px; padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border2); display: none;
+  }
+  .fix-progress-wrap.open { display: block; }
+  .fix-progress-track {
+    height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 6px;
+  }
+  .fix-progress-bar {
+    height: 100%; background: linear-gradient(90deg, #3b82f6, #a78bfa);
+    width: 0%; transition: width 300ms ease;
+  }
+  .fix-progress-label { font-size: 10px; color: var(--text-dim); }
+  .fix-toast {
+    position: fixed; bottom: 12px; left: 12px; right: 12px; z-index: 9999;
+    padding: 10px 14px; border-radius: var(--radius-sm); font-size: 11px;
+    background: #0f2a1a; border: 1px solid #1a7f4b; color: #6ee7a0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4); display: none; cursor: pointer;
+  }
+  .fix-toast.open { display: block; }
+  .issue-waiting-ai {
+    background: #0d3b66 !important; border: 1px solid #2563eb !important;
+    border-radius: var(--radius-sm); padding: 10px !important;
+  }
+  .issue-waiting-ai .issue-sev { background: #1e3a5f; color: #93c5fd; }
+  .issue-waiting-ai-title { font-size: 12px; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
+  .issue-waiting-ai-desc { font-size: 10px; color: #bfdbfe; line-height: 1.45; margin-bottom: 8px; }
+  .issue-resolved-strike .issue-msg { text-decoration: line-through; opacity: 0.55; }
+  .issue-fix-status { font-size: 10px; margin-top: 4px; color: var(--text-dim); }
+  .issue-fix-status.ok { color: #6ee7a0; }
+  .issue-fix-status.fail { color: #f87171; }
+  .issue-fix-status.run { color: #a78bfa; }
+  .all-resolved-banner {
+    padding: 20px 16px; text-align: center; animation: resolvedPop 0.4s ease;
+  }
+  .all-resolved-banner .icon { font-size: 28px; margin-bottom: 6px; }
+  @keyframes resolvedPop {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
   /* ── Component preview panel ────────────────────────────────────── */
   .preview-panel {
     border-bottom: 1px solid var(--border);
@@ -1453,12 +1494,23 @@ function runAutoFix(issueIdx, strategy, extra) {
     issueIdx:   issueIdx,
     detectedRole: currentState.result.role,
     message:    issue.message,
+    previousIssues: (currentState.result.issues || []).slice(),
   }, extra) }, '*');
   pendingAutoFixIdx = issueIdx;
 }
 
 // ── Inline auto-fix control on each issue row ─────────────────────────────
 function renderAutoFixControl(issue, idx) {
+  if (issue.waitingForAi) {
+    return `
+    <div class="issue-actions issue-message-only">
+      <div class="issue-waiting-ai-desc">Prompt copied · Paste it in Figma AI chat, apply the fix, then re-scan here.</div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+        <button class="btn-focus-ai btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
+        <button class="btn-focus-pending btn-copy-prompt-again" data-issue-idx="${idx}" data-strategy="prompt">Copy prompt again</button>
+      </div>
+    </div>`;
+  }
   if (issue.designerPending) {
     const age = formatPendingAge(issue.pendingSince);
     return `
@@ -1573,6 +1625,47 @@ function dispatchAutoFix(issueIdx, strategy, extra) {
 
 let pendingAutoFixIdx = null;
 let pendingLinkSkipIds = [];
+let lastFixProgress = { step: 0, total: 0 };
+
+function showFixProgress(label, step, total) {
+  const wrap = $('fix-progress-wrap');
+  const bar = $('fix-progress-bar');
+  const lbl = $('fix-progress-label');
+  if (!wrap || !bar) return;
+  wrap.classList.add('open');
+  const pct = total > 0 ? Math.round((step / total) * 100) : 0;
+  bar.style.width = pct + '%';
+  if (lbl) lbl.textContent = label || 'Applying fixes…';
+}
+
+function hideFixProgress() {
+  const wrap = $('fix-progress-wrap');
+  if (wrap) wrap.classList.remove('open');
+}
+
+function showFixToast(text) {
+  const toast = $('fix-toast');
+  if (!toast) return;
+  toast.textContent = text;
+  toast.classList.add('open');
+  const hide = () => { toast.classList.remove('open'); toast.removeEventListener('click', hide); };
+  toast.addEventListener('click', hide);
+  setTimeout(hide, 4000);
+}
+
+function setIssueFixStatus(issueCode, text, status) {
+  if (!issueCode) return;
+  document.querySelectorAll('.issue-item[data-issue-code="' + issueCode + '"]').forEach(row => {
+    let el = row.querySelector('.issue-fix-status');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'issue-fix-status';
+      row.appendChild(el);
+    }
+    el.textContent = text;
+    el.className = 'issue-fix-status ' + (status || 'run');
+  });
+}
 
 // ── Persistent state plumbing ──────────────────────────────────────────────
 // Persist the current analysis snapshot to node pluginData + clientStorage index.
@@ -1915,27 +2008,13 @@ function handleAutoFixResult(msg) {
 
   pendingAutoFixIdx = null;
 
-  // Strategy === "prompt": copy to clipboard, don't touch the row severity
   if (msg.strategy === 'prompt' && msg.promptForClipboard) {
     copyToClipboard(msg.promptForClipboard);
-    const issue = (currentState && currentState.result && currentState.result.issues && idx != null)
-      ? currentState.result.issues[idx] : null;
-    const isFocus = issue && (issue.fixKind === 'focus_state' || issue.designerPending);
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '✓ Prompt copied';
-      const restore = isFocus ? 'Build with AI' : '✨ Auto-fix <span class="caret">▾</span>';
-      setTimeout(() => { btn.innerHTML = restore; }, 2500);
-    }
-    if (row) {
-      let hint = row.querySelector('.ai-prompt-hint');
-      if (!hint) {
-        hint = document.createElement('div');
-        hint.className = 'issue-pending-note ai-prompt-hint';
-        const host = row.querySelector('.issue-actions') || row;
-        host.appendChild(hint);
-      }
-      hint.textContent = 'Paste this prompt into Figma AI chat';
+    if (currentState && idx != null && currentState.result.issues[idx]) {
+      currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx], {
+        waitingForAi: true, waitingPrompt: msg.promptForClipboard,
+      });
+      renderResult(currentState);
     }
     return;
   }
@@ -2033,23 +2112,47 @@ function renderResult(data) {
         </div>`).join('')}
     </div>`;
 
+  const waitingCount = issues.filter(i => i.waitingForAi && !i.fixed).length;
+  const pendingOnlyCount = issues.filter(i => i.designerPending && !i.fixed && !i.waitingForAi).length;
   const pendingCount = data.pendingDesignerCount != null
     ? data.pendingDesignerCount
-    : issues.filter(i => i.designerPending && !i.fixed).length;
+    : waitingCount + pendingOnlyCount;
+  const pendingParts = [];
+  if (waitingCount > 0) pendingParts.push('⏳ ' + waitingCount + ' waiting for Figma AI');
+  if (pendingOnlyCount > 0) pendingParts.push('✏️ ' + pendingOnlyCount + ' pending designer');
   const pendingBanner = pendingCount > 0
-    ? `<div class="pending-banner" id="pending-banner">${pendingCount} pending designer action${pendingCount !== 1 ? 's' : ''}</div>`
+    ? `<div class="pending-banner" id="pending-banner">${pendingParts.join(' · ') || (pendingCount + ' pending designer action' + (pendingCount !== 1 ? 's' : ''))}</div>`
     : '';
 
-  const issuesHtml = issues.length === 0 ? '' : `
+  const resolvedIssues = r.resolvedIssues || [];
+  const resolvedKeys = {};
+  resolvedIssues.forEach(ri => { resolvedKeys[ri.code + ':' + (ri.nodeId || '')] = true; });
+
+  const issuesHtml = issues.length === 0 ? `
+    <div class="issues-section" id="issues-section">
+      <div class="all-resolved-banner">
+        <div class="icon">✓</div>
+        <div style="font-weight:600;color:var(--chip-high-text)">All issues resolved</div>
+      </div>
+    </div>` : `
     <div class="issues-section" id="issues-section">
       ${pendingBanner}
       <div class="issues-header">
         <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} issue${issues.length !== 1 ? 's' : ''} found</span>
       </div>
-      ${issues.map((i, idx) => `
-        <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.designerPending ? 'Pending' : (i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️') + ' ' + i.severity}</span>
+      ${resolvedIssues.map((i, ridx) => `
+        <div class="issue-item issue-${i.severity} issue-resolved-strike" data-resolved-idx="${ridx}">
+          <span class="issue-sev">✓ Fixed</span>
           <div class="issue-body">
+            <div class="issue-title">${escapeHtml(i.displayTitle || i.message)}</div>
+            <div class="issue-msg">${escapeHtml(i.message)}</div>
+          </div>
+        </div>`).join('')}
+      ${issues.map((i, idx) => `
+        <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}${i.waitingForAi ? ' issue-waiting-ai' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
+          <span class="issue-sev">${i.waitingForAi ? '⏳ Waiting' : (i.designerPending ? '✏️ Pending' : (i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️') + ' ' + i.severity)}</span>
+          <div class="issue-body">
+            ${i.waitingForAi ? '<div class="issue-waiting-ai-title">🤖 Waiting for Figma AI fix</div>' : ''}
             <div class="issue-title-row">
               <div class="issue-msg">${escapeHtml(i.displayTitle || i.message)}</div>
               ${i.explanation ? `<button class="btn-explain" data-explain-idx="${idx}" aria-label="Why this matters">?</button>` : ''}
@@ -2151,7 +2254,7 @@ function renderResult(data) {
       </div>
       ${passedHtml}
       ${issuesHtml}
-      ${sugHtml ? `<div class="suggestions-section"><div class="section-label">Suggested fixes</div>${sugHtml}</div>` : ''}
+      ${(sugHtml && issues.length > 0) ? `<div class="suggestions-section" id="suggestions-section"><div class="section-label">Suggested fixes</div>${sugHtml}</div>` : ''}
       ${howDecidedHtml}
       ${devCodeHtml}
       <div class="meta-row">${metaBadge}</div>
@@ -2166,7 +2269,12 @@ function renderResult(data) {
           : 'Apply Fixes…'}
       </button>
     </div>
-    <div id="apply-feedback"></div>`;
+    <div id="apply-feedback"></div>
+<div class="fix-progress-wrap" id="fix-progress-wrap">
+  <div class="fix-progress-track"><div class="fix-progress-bar" id="fix-progress-bar"></div></div>
+  <span class="fix-progress-label" id="fix-progress-label">Applying fixes…</span>
+</div>
+<div class="fix-toast" id="fix-toast" role="status"></div>`;
 
   $('btn-scan').disabled = false;
 
@@ -2188,6 +2296,23 @@ function renderResult(data) {
     });
   });
   document.querySelectorAll('#content .btn-focus-ai').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), 'prompt');
+    });
+  });
+  document.querySelectorAll('#content .btn-rescan-ai').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!currentState) return;
+      parent.postMessage({ pluginMessage: {
+        type: 'RESCAN_SELECTION',
+        rootNodeId: currentState.nodeId,
+        previousIssues: (currentState.result.issues || []).slice(),
+      } }, '*');
+    });
+  });
+  document.querySelectorAll('#content .btn-copy-prompt-again').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), 'prompt');
@@ -2301,6 +2426,12 @@ function renderResult(data) {
   // "Apply Fixes…" → show "Fix in place vs copy" modal
   $('btn-apply').addEventListener('click', () => {
     if (!currentState) return;
+    const applyBtn = $('btn-apply');
+    if (applyBtn) {
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying fixes…';
+    }
+    showFixProgress('Preparing fixes…', 0, 1);
     showApplyModal();
   });
 
@@ -2402,6 +2533,13 @@ function showApplyModal() {
 
   overlay.querySelector('#modal-cancel-btn').addEventListener('click', () => {
     document.body.removeChild(overlay);
+    hideFixProgress();
+    const applyBtn = $('btn-apply');
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.textContent = 'Apply Fixes…';
+      refreshSummaryBanner();
+    }
   });
 
   overlay.querySelector('#modal-apply-btn').addEventListener('click', () => {
@@ -2417,7 +2555,9 @@ function showApplyModal() {
       type:                  'APPLY_WITH_MODE',
       mode:                  selectedMode,
       suggestions:           currentState.result.suggestions,
+      issues:                (currentState.result.issues || []).slice(),
       rootNodeId:            currentState.nodeId,
+      detectedRole:          currentState.result.role,
       annotationDestination: annDest,
     } }, '*');
   });
@@ -2638,11 +2778,24 @@ function handleScanProgress() {
 }
 
 function handleAnalysisResults(msg) {
+  hideFixProgress();
+  const b = $('btn-apply');
+  if (b) {
+    const issues = (msg.result && msg.result.issues) || [];
+    const sugs = (msg.result && msg.result.suggestions) || [];
+    const blockers = issues.filter(i => i.severity === 'HIGH' && !i.fixed && !i.acknowledged).length;
+    b.disabled = blockers > 0 || sugs.length === 0 || issues.length === 0;
+    b.textContent = blockers > 0
+      ? ('⚠ Fix ' + blockers + ' blocker' + (blockers !== 1 ? 's' : '') + ' first')
+      : (issues.length === 0 ? 'All issues resolved' : 'Apply Fixes…');
+  }
   renderResult(msg);
   persistLastScan(msg);
-  setTimeout(() => {
-    parent.postMessage({ pluginMessage: { type: 'SCROLL_TO_NODE', nodeId: msg.nodeId } }, '*');
-  }, 300);
+  if (!msg.afterFix) {
+    setTimeout(() => {
+      parent.postMessage({ pluginMessage: { type: 'SCROLL_TO_NODE', nodeId: msg.nodeId } }, '*');
+    }, 300);
+  }
 }
 
 function handleComponentIndex(msg) {
@@ -2664,7 +2817,40 @@ function handleFrameworkCode(msg) {
   });
 }
 
+function handleFixProgressStart(msg) {
+  showFixProgress('Starting fixes…', 0, msg.total || 1);
+}
+
+function handleFixProgress(msg) {
+  showFixProgress(msg.label || 'Fixing…', msg.step || 0, msg.total || 1);
+  if (msg.issueCode) {
+    const icon = msg.status === 'ok' ? '✓' : (msg.status === 'fail' ? '✗' : '⟳');
+    setIssueFixStatus(msg.issueCode, icon + ' ' + (msg.label || ''), msg.status || 'run');
+  }
+}
+
+function handleFixComplete(msg) {
+  hideFixProgress();
+  const fixed = msg.fixed || 0;
+  const total = msg.total || 0;
+  const failed = msg.failed || 0;
+  const needs = total - fixed;
+  if (total > 0) {
+    showFixToast('Fixed ' + fixed + ' of ' + total + ' issue' + (total !== 1 ? 's' : '') +
+      (needs > 0 ? (' · ' + (failed || needs) + ' need' + ((failed || needs) !== 1 ? '' : 's') + ' your attention') : ''));
+  }
+}
+
+function handleRescanAiStatus(msg) {
+  if (msg.verified) {
+    showFixToast('✓ Figma AI fix verified');
+  } else if (currentState) {
+    showFixToast('Still not fixed — apply the Figma AI suggestion and re-scan');
+  }
+}
+
 function handleApplyResult(msg) {
+  hideFixProgress();
   const ok         = msg.applied > 0;
   const detailHtml = (msg.details || []).map(function(d) { return '<div class="apply-detail">' + d + '</div>'; }).join('');
   const undoNote   = msg.mode === 'inplace' && ok
@@ -2685,8 +2871,7 @@ function handleApplyResult(msg) {
       + detailHtml
       + '</div>';
   }
-  const b = $('btn-apply');
-  if (b) { b.disabled = false; b.textContent = 'Apply Fixes\u2026'; }
+  refreshSummaryBanner();
 }
 
 function handleAskAnswerSaved(msg) {
@@ -2725,6 +2910,10 @@ window.onmessage = function(event) {
     NODE_DATA:              handleNodeData,
     FRAMEWORK_CODE:         handleFrameworkCode,
     APPLY_RESULT:           handleApplyResult,
+    FIX_PROGRESS_START:     handleFixProgressStart,
+    FIX_PROGRESS:           handleFixProgress,
+    FIX_COMPLETE:           handleFixComplete,
+    RESCAN_AI_STATUS:       handleRescanAiStatus,
     ASK_ANSWER_SAVED:       handleAskAnswerSaved,
     ERROR:                  handleError,
     DEBUG_FIX_COVERAGE_RESULT: handleDebugFixCoverageResult,
