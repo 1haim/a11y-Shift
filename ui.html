@@ -17,30 +17,30 @@
 </script>
 <style>
   :root {
-    --bg: #0a0a0a;
-    --surface: #141414;
-    --surface2: #1e1e1e;
-    --border: #2a2a2a;
-    --border2: #333;
-    --text: #f0f0f0;
-    --text-muted: #666;
-    --text-dim: #999;
-    --accent-blue: #4da3ff;
-    --accent-green: #3ecf8e;
-    --accent-amber: #f59e0b;
-    --accent-red: #ef4444;
-    --chip-high: #0d2e1a;
-    --chip-high-text: #3ecf8e;
-    --chip-med: #2e1f00;
-    --chip-med-text: #f59e0b;
-    --chip-low: #2a0a0a;
-    --chip-low-text: #ef4444;
-    --radius: 10px;
-    --radius-sm: 6px;
+    --bg:            #FFFFFF;
+    --surface:       #F7FAFD;
+    --surface2:      #EBF1F9;
+    --border:        #D6E8F5;
+    --border2:       #BDD4EA;
+    --text:          #031239;
+    --text-muted:    #4D6F96;
+    --text-dim:      #6B8DAF;
+    --accent-blue:   #136EF8;
+    --accent-green:  #0EA472;
+    --accent-amber:  #D97706;
+    --accent-red:    #DC2626;
+    --chip-high:     #E6F9F0;
+    --chip-high-text:#0B7A52;
+    --chip-med:      #FEF5E4;
+    --chip-med-text: #B45309;
+    --chip-low:      #FDE8E8;
+    --chip-low-text: #B91C1C;
+    --radius:        8px;
+    --radius-sm:     5px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg);
     color: var(--text);
     font-size: 13px;
@@ -56,11 +56,11 @@
   }
   .logo { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; }
   .logo-icon {
-    width: 24px; height: 24px;
-    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
-    border-radius: 6px;
+    width: 28px; height: 28px;
+    background: #136EF8;
+    border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
+    font-size: 14px; color: #fff;
   }
   .logo-name { font-size: 14px; font-weight: 600; letter-spacing: -0.3px; }
   .logo-sub  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
@@ -856,6 +856,141 @@
     transition: opacity 0.15s; margin-bottom: 12px;
   }
   .btn-inspect:hover { opacity: 0.88; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     accessiBe (xseb) brand overrides — light theme
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* Header accent strip */
+  .header { background: #EBF1F9; border-bottom-color: #BDD4EA; }
+
+  /* Dev badge */
+  .dev-badge { background: #EBF1F9; color: #136EF8; border-color: #B3D4F8; }
+
+  /* Primary action buttons */
+  .btn-scan, .btn-inspect { background: #136EF8; }
+  .btn-scan:hover:not(:disabled), .btn-inspect:hover { background: #0E5ADB; opacity: 1; }
+  .btn-mini.primary, .btn-apply.primary { background: #136EF8; }
+  .btn-mini.primary:hover, .btn-apply.primary:hover { background: #0E5ADB; opacity: 1; }
+
+  /* Issue item light backgrounds */
+  .issue-HIGH   { background: #FDE8E8; border-color: #FBBCBC; }
+  .issue-MED    { background: #FEF5E5; border-color: #FDD9A1; }
+  .issue-LOW    { background: #EEF5FF; border-color: #BFDBFE; }
+  .issue-MANUAL { background: #F0EEFF; border-color: #D1C4FE; }
+  .issue-HIGH   .issue-sev { background: #FECACA; color: #7F1D1D; }
+  .issue-MED    .issue-sev { background: #FDE68A; color: #78350F; }
+  .issue-LOW    .issue-sev { background: #BFDBFE; color: #1E3A8A; }
+  .issue-MANUAL .issue-sev { background: #DDD6FE; color: #4C1D95; }
+
+  /* Dev code section */
+  .devcode-toggle         { color: #136EF8; }
+  .devcode-toggle:hover   { background: #EBF1F9; }
+  .code-block             { background: #F1F6FC; border-color: #D6E8F5; color: #031239; }
+  .code-block .code-comment { color: #6B8DAF; }
+  .code-block .code-attr    { color: #136EF8; }
+
+  /* Explain panel */
+  .explain-panel  { background: #FFFFFF; border-left-color: #D6E8F5; }
+  .explain-header { background: #FFFFFF; }
+  .explain-title  { color: #136EF8; }
+  .explain-link   { color: #136EF8; }
+  .explain-link:hover { color: #0E5ADB; }
+
+  /* Autofix buttons */
+  .btn-autofix-direct, .btn-autofix { background: #EBF1F9; border-color: #BDD4EA; color: #136EF8; }
+  .btn-autofix-direct:hover, .btn-autofix:hover { background: #D6E8F5; color: #0E5ADB; }
+
+  /* Autofix menu */
+  .autofix-menu { background: #FFFFFF; border-color: #BDD4EA; box-shadow: 0 6px 18px rgba(3,18,57,0.12); }
+  .autofix-opt:hover { background: #EBF1F9; color: #031239; }
+
+  /* Acknowledge */
+  .btn-acknowledge { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
+  .btn-acknowledge:hover { background: #BDECD8; }
+  .ack-badge { color: #0B7A52; }
+  .issue-fixed { border-color: #A7DFC8 !important; background: #E6F9F0 !important; }
+  .issue-fixed .issue-msg::before { color: #0B7A52; }
+
+  /* Focus AI / pending */
+  .btn-focus-ai      { background: #EBF1F9; border-color: #BDD4EA; color: #136EF8; }
+  .btn-focus-pending { background: #FEF5E4; border-color: #FDD9A1; color: #B45309; }
+
+  /* AI consent */
+  .ai-consent-overlay { background: rgba(3,18,57,0.45); }
+  .ai-consent-dialog  { background: #FFFFFF; border-color: #D6E8F5; box-shadow: 0 8px 32px rgba(3,18,57,0.15); }
+
+  /* Fix modal */
+  .modal-overlay { background: rgba(3,18,57,0.4); }
+  .modal-box     { background: #FFFFFF; border-color: #D6E8F5; }
+  .modal-option  { background: #F7FAFD; border-color: #D6E8F5; }
+  .modal-option:hover { border-color: #BDD4EA; }
+  .modal-option.selected { border-color: #136EF8; background: #EBF1F9; }
+  .modal-option.selected .modal-radio { border-color: #136EF8; background: #136EF8; }
+
+  /* Framework tabs */
+  .fw-tab.active { background: #EBF1F9; color: #136EF8; border-color: #136EF8; }
+
+  /* Decided / audit-log toggles */
+  .decided-toggle:hover, .audit-log-toggle:hover { background: #EBF1F9; }
+  .decided-sig   { background: #EBF1F9; color: #136EF8; }
+  .decided-score { color: #136EF8; }
+
+  /* Audit status */
+  .audit-status.PASS   { background: #D1FAE5; color: #064E3B; }
+  .audit-status.WARN   { background: #FEF3C7; color: #78350F; }
+  .audit-status.BLOCK  { background: #FEE2E2; color: #7F1D1D; }
+  .audit-status.MANUAL { background: #EDE9FE; color: #4C1D95; }
+  .audit-status.ERROR  { background: #FEF3C7; color: #78350F; }
+
+  /* Scan badge */
+  .scan-badge.h { background: #FEE2E2; color: #DC2626; }
+  .scan-badge.m { background: #FEF3C7; color: #D97706; }
+  .scan-badge.l { background: #DBEAFE; color: #2563EB; }
+
+  /* Pending banner */
+  .pending-banner           { background: #FEF5E4; border-color: #FDD9A1; color: #B45309; }
+  .issue-pending .issue-sev { background: #FDE68A; color: #78350F; }
+
+  /* Fix progress & toast */
+  .fix-progress-bar { background: linear-gradient(90deg, #136EF8, #0B4FD4); }
+  .fix-toast { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
+
+  /* Issue waiting AI */
+  .issue-waiting-ai            { background: #EBF1F9 !important; border-color: #BDD4EA !important; }
+  .issue-waiting-ai .issue-sev { background: #BFDBFE; color: #1E3A8A; }
+  .issue-waiting-ai-title      { color: #136EF8; }
+  .issue-waiting-ai-desc       { color: #4D6F96; }
+
+  /* Fix status */
+  .issue-fix-status.ok   { color: #0B7A52; }
+  .issue-fix-status.fail { color: #DC2626; }
+  .issue-fix-status.run  { color: #136EF8; }
+
+  /* Ask section */
+  .ask-dot   { background: #D97706; }
+  .ask-title { color: #D97706; }
+  .btn-ask-opt.selected { background: #EBF1F9; border-color: #136EF8; color: #136EF8; }
+
+  /* Role value & meta badges */
+  .role-value { color: #136EF8; }
+  .badge-ai   { background: #EBF1F9; color: #136EF8; }
+  .badge-rule { background: #E6F9F0; color: #0B7A52; }
+
+  /* Blocked apply */
+  .btn-apply.blocked { background: #FDE8E8 !important; border-color: #DC2626 !important; color: #DC2626 !important; }
+
+  /* Dashboard & inspector */
+  .dashboard-row:hover { background: #EBF1F9; }
+  .attr-key { color: #136EF8; }
+  .attr-row { border-bottom-color: #F0F4F8; }
+
+  /* Settings radio */
+  .settings-radio.selected { border-color: #136EF8; background: #EBF1F9; }
+
+  /* Preview & scan */
+  .btn-preview-bg.active { background: #EBF1F9; color: #031239; border-color: #136EF8; }
+  .scan-role { color: #136EF8; }
 </style>
 </head>
 <body>
