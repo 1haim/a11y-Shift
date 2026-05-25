@@ -163,35 +163,36 @@
 
   /* ── Issues ──────────────────────────────────────────────────────── */
   .issues-section { padding: 10px 14px; border-top: 1px solid var(--border); }
-  .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .issues-count   { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
+  .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text); }
   .issues-count.has-high { color: var(--accent-red); }
   .issue-item {
-    display: flex; align-items: flex-start; gap: 8px;
-    padding: 7px 10px; border-radius: var(--radius-sm);
-    border: 1px solid transparent; margin-bottom: 5px;
-    font-size: 12px; line-height: 1.5;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 12px 14px; border-radius: var(--radius);
+    border: 1px solid transparent; margin-bottom: 8px;
+    font-size: 13px; line-height: 1.5;
   }
   .issue-item:last-child { margin-bottom: 0; }
-  .issue-HIGH   { background: #200a0a; border-color: #5e1a1a; }
-  .issue-MED    { background: #1e1400; border-color: #5e3d00; }
-  .issue-LOW    { background: #0a1220; border-color: #1a3050; }
-  .issue-MANUAL { background: #101020; border-color: #2a2a5e; }
-  .issue-sev  {
-    flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
-    text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-top: 1px;
+  .issue-HIGH   { background: #FDE8E8; border-color: #FBBCBC; }
+  .issue-MED    { background: #FEF5E5; border-color: #FDD9A1; }
+  .issue-LOW    { background: #EEF5FF; border-color: #BFDBFE; }
+  .issue-MANUAL { background: #F0EEFF; border-color: #D1C4FE; }
+  .issue-sev {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 20px; width: fit-content;
+    font-size: 12px; font-weight: 600; letter-spacing: 0;
   }
-  .issue-HIGH   .issue-sev { background: #5e1a1a; color: #ef4444; }
-  .issue-MED    .issue-sev { background: #5e3d00; color: #f59e0b; }
-  .issue-LOW    .issue-sev { background: #1a3050; color: #4da3ff; }
-  .issue-MANUAL .issue-sev { background: #2a2a5e; color: #a78bfa; }
-  .issue-body { flex: 1; min-width: 0; }
-  .issue-msg  { color: var(--text); }
-  .issue-wcag { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .issue-HIGH   .issue-sev { background: #FECACA; color: #7F1D1D; }
+  .issue-MED    .issue-sev { background: #FDE68A; color: #78350F; }
+  .issue-LOW    .issue-sev { background: #BFDBFE; color: #1E3A8A; }
+  .issue-MANUAL .issue-sev { background: #DDD6FE; color: #4C1D95; }
+  .issue-body { min-width: 0; width: 100%; }
+  .issue-msg  { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
+  .issue-wcag { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
   /* ── Suggestions ─────────────────────────────────────────────────── */
   .suggestions-section { padding: 10px 14px; }
-  .section-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+  .section-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: none; letter-spacing: 0; margin-bottom: 8px; }
   .suggestion-item {
     display: flex; align-items: center; gap: 8px;
     padding: 7px 10px; background: var(--surface2);
@@ -509,26 +510,26 @@
   .explain-overlay.open { display: block; }
 
   /* ── Inline auto-fix dropdown on issue rows ─────────────────────── */
-  .issue-actions { position: relative; flex-shrink: 0; margin-left: 6px; }
+  .issue-actions { position: relative; margin-top: 2px; }
   .btn-autofix-direct {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
-    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
-    display: inline-flex; align-items: center; gap: 4px;
-    transition: all 0.12s;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.12s;
   }
-  .btn-autofix-direct:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix-direct:hover { background: #EBF1F9; }
   .btn-autofix-direct:disabled { opacity: 0.4; cursor: wait; }
   .btn-autofix {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
-    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
-    display: inline-flex; align-items: center; gap: 4px;
-    transition: all 0.12s;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.12s;
   }
-  .btn-autofix:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix:hover { background: #EBF1F9; }
   .btn-autofix:disabled { opacity: 0.4; cursor: wait; }
-  .btn-autofix .caret { font-size: 8px; opacity: 0.7; }
+  .btn-autofix .caret { font-size: 10px; opacity: 0.7; }
   .autofix-menu {
     position: absolute; right: 0; top: 26px; z-index: 30;
     background: #14141e; border: 1px solid #3a2a7e;
@@ -558,13 +559,13 @@
     display: inline-block;
   }
   .btn-acknowledge {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #2a4a2a;
-    background: #0d2e1a; color: var(--accent-green); letter-spacing: 0.3px;
-    white-space: nowrap;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid #A7DFC8;
+    background: #FFFFFF; color: #0B7A52; letter-spacing: 0;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-acknowledge:hover { background: #1a5e38; }
-  .ack-badge { font-size: 10px; color: var(--accent-green); font-weight: 700; }
+  .btn-acknowledge:hover { background: #E6F9F0; }
+  .ack-badge { font-size: 12px; color: var(--accent-green); font-weight: 600; }
   .issue-acknowledged { opacity: 0.55; }
   .issue-acknowledged .issue-msg { text-decoration: line-through; }
   .designer-fix-msg {
@@ -883,15 +884,11 @@
   .btn-mini.primary, .btn-apply.primary { background: #136EF8; }
   .btn-mini.primary:hover, .btn-apply.primary:hover { background: #0E5ADB; opacity: 1; }
 
-  /* Issue item light backgrounds */
+  /* Issue item backgrounds — already set in base, kept for specificity */
   .issue-HIGH   { background: #FDE8E8; border-color: #FBBCBC; }
   .issue-MED    { background: #FEF5E5; border-color: #FDD9A1; }
   .issue-LOW    { background: #EEF5FF; border-color: #BFDBFE; }
   .issue-MANUAL { background: #F0EEFF; border-color: #D1C4FE; }
-  .issue-HIGH   .issue-sev { background: #FECACA; color: #7F1D1D; }
-  .issue-MED    .issue-sev { background: #FDE68A; color: #78350F; }
-  .issue-LOW    .issue-sev { background: #BFDBFE; color: #1E3A8A; }
-  .issue-MANUAL .issue-sev { background: #DDD6FE; color: #4C1D95; }
 
   /* Dev code section */
   .devcode-toggle         { color: #136EF8; }
@@ -907,17 +904,15 @@
   .explain-link   { color: #136EF8; }
   .explain-link:hover { color: #0E5ADB; }
 
-  /* Autofix buttons */
-  .btn-autofix-direct, .btn-autofix { background: #EBF1F9; border-color: #BDD4EA; color: #136EF8; }
-  .btn-autofix-direct:hover, .btn-autofix:hover { background: #D6E8F5; color: #0E5ADB; }
+  /* Autofix buttons — outlined blue (base already set, hover override) */
+  .btn-autofix-direct:hover, .btn-autofix:hover { background: #EBF1F9; }
 
   /* Autofix menu */
   .autofix-menu { background: #FFFFFF; border-color: #BDD4EA; box-shadow: 0 6px 18px rgba(3,18,57,0.12); }
   .autofix-opt:hover { background: #EBF1F9; color: #031239; }
 
   /* Acknowledge */
-  .btn-acknowledge { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
-  .btn-acknowledge:hover { background: #BDECD8; }
+  .btn-acknowledge:hover { background: #E6F9F0; }
   .ack-badge { color: #0B7A52; }
   .issue-fixed { border-color: #A7DFC8 !important; background: #E6F9F0 !important; }
   .issue-fixed .issue-msg::before { color: #0B7A52; }
@@ -1023,7 +1018,7 @@
   .result-header { border-bottom-color: #D6E8F5; }
 
   /* Section label */
-  .section-label { color: #4D6F96; letter-spacing: 0.8px; }
+  .section-label { color: #4D6F96; }
   .role-label    { color: #4D6F96; }
 
   /* Spinner */
@@ -1812,7 +1807,7 @@ function renderAutoFixControl(issue, idx) {
     return `
     <div class="issue-actions">
       <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
-        ✨ Auto-fix
+        ✦ Auto Fix
       </button>
     </div>`;
   }
@@ -1820,7 +1815,7 @@ function renderAutoFixControl(issue, idx) {
   return `
     <div class="issue-actions">
       <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">
-        ✨ Auto-fix <span class="caret">▾</span>
+        ✦ Auto Fix <span class="caret">▾</span>
       </button>
       <div class="autofix-menu" data-menu-idx="${idx}">
         ${isAiContent ? `
@@ -2395,7 +2390,7 @@ function renderResult(data) {
     <div class="issues-section" id="issues-section">
       ${pendingBanner}
       <div class="issues-header">
-        <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} issue${issues.length !== 1 ? 's' : ''} found</span>
+        <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} Issue${issues.length !== 1 ? 's' : ''} Found</span>
       </div>
       ${resolvedIssues.map((i, ridx) => `
         <div class="issue-item issue-${i.severity} issue-resolved-strike" data-resolved-idx="${ridx}">
@@ -2407,7 +2402,7 @@ function renderResult(data) {
         </div>`).join('')}
       ${issues.map((i, idx) => `
         <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}${i.waitingForAi ? ' issue-waiting-ai' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.waitingForAi ? '⏳ Waiting' : (i.designerPending ? '✏️ Pending' : (i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️') + ' ' + i.severity)}</span>
+          <span class="issue-sev">${i.waitingForAi ? '⏳ Waiting' : (i.designerPending ? '✏️ Pending' : (i.severity === 'HIGH' ? '✕ High' : i.severity === 'MED' ? '△ Medium' : i.severity === 'LOW' ? '△ Low' : '○ Manual'))}</span>
           <div class="issue-body">
             ${i.waitingForAi ? '<div class="issue-waiting-ai-title">🤖 Waiting for Figma AI fix</div>' : ''}
             <div class="issue-title-row">
