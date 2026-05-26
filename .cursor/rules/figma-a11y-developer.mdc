@@ -34,7 +34,7 @@ you reason from known constraints.
 | node.name = "..." | main | Plugin API |
 | fetch("https://api.openai.com") | main | networkAccess |
 | figma.clientStorage | main | Plugin API only |
-| figma.getNodeById() | main | Plugin API only |
+| figma.getNodeByIdAsync() | main | Plugin API only — **never** sync getNodeById |
 | document.getElementById() | UI | DOM only |
 | React / Vue rendering | UI | DOM only |
 | localStorage / sessionStorage | UI | DOM only (not persisted across plugin sessions) |
@@ -66,6 +66,28 @@ await figma.loadFontAsync({ family: "Inter", style: "Regular" })
 
 // ✗ wrong — silent failure, no error thrown
 figma.clientStorage.getAsync("api-key").then(...)  // fire-and-forget bug
+
+**CRITICAL — published plugins: `figma.getNodeById` throws at runtime**
+
+Use async lookup only. In `dist/code.js` use the shared helper:
+
+```js
+async function getNodeById(id) {
+  if (!id) return null;
+  return await figma.getNodeByIdAsync(id);
+}
+```
+
+```js
+// ✗ CRASHES in production — sync API removed/broken for published plugins
+const node = figma.getNodeById(id)
+
+// ✓ correct — caller must be async and await
+const node = await getNodeById(id)
+```
+
+Before merge/publish: `grep 'figma\.getNodeById\(' dist/code.js` must return **zero** hits.
+Any function that calls `getNodeById` must be `async`; every caller must `await` it (propagate up to `figma.ui.onmessage`).
 
 
 Node traversal — performance first
@@ -347,9 +369,9 @@ Cache AI results in pluginData — don't re-call for same node if unchanged
 Never hardcode node IDs
 
 // ✗ will break on any other file
-figma.getNodeById("1833:121")
+await getNodeById("1833:121")  // still wrong — hardcoded ID
 
-// ✓ always resolve dynamically
+// ✓ always resolve dynamically from selection
 const root = getSemanticRoot(figma.currentPage.selection[0])
 
 
@@ -362,7 +384,7 @@ const resolved = resolveSuggestions(suggestions, rootNode)
 
 Guard every node access
 
-const node = figma.getNodeById(id)
+const node = await getNodeById(id)
 if (!node) { /* handle gracefully, don't throw */ return }
 if (!("name" in node)) { /* not a SceneNode */ return }
 
@@ -468,7 +490,7 @@ must first attempt a self-repair before asking the designer.
 
 ### AI text generation rules:
 - Input cap: 800 chars (option labels + component name + context)
-- Output cap: 60 chars (UI labels are short)
+- Output cap: 100 chars (UI labels are short)
 - Model: gpt-4o-mini only (cost)
 - Prompt template:
   "You write short ARIA labels for UI components.
@@ -487,3 +509,15 @@ must first attempt a self-repair before asking the designer.
 - Icon button with no text context (AI cannot guess intent)
 - Destructive action confirmation (role=alertdialog decision)
 
+## Plan Maintenance Protocol
+
+After completing any task:
+1. Open `AGENT_PLAN.md`
+2. Find the relevant section (or create one under "Completed Work")
+3. Add a bullet with: **what was done**, **why it was done that way**, and **any gotchas discovered**
+4. Move the item from "Pending Work" to "Completed Work" if it was listed there
+5. If a new architectural decision was made, add it to the relevant section under "What NOT to Change"
+
+Format for completed items:
+- ✅ [feature/fix name] — [one-line description of what was done and why]
+  - Gotcha: [anything a future developer must know]

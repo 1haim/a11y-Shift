@@ -1,5 +1,11 @@
 "use strict";
 
+// Published plugins must use getNodeByIdAsync — sync getNodeById throws at runtime.
+async function getNodeById(id) {
+  if (!id) return null;
+  return await figma.getNodeByIdAsync(id);
+}
+
 // ─── Visibility (skip hidden layers + hidden ancestors) ───────────────────────
 
 function isNodeVisible(node) {
@@ -2772,11 +2778,11 @@ function collectA11yTagLines(node) {
   return lines;
 }
 
-function findA11yTagFrame(node) {
+async function findA11yTagFrame(node) {
   if (!node || !node.getPluginData) return null;
   const storedId = node.getPluginData("a11y-tag-frame-id");
   if (storedId) {
-    const stored = figma.getNodeById(storedId);
+    const stored = await getNodeById(storedId);
     if (stored && stored.type === "FRAME" && !stored.removed) return stored;
   }
   const frameName = "_a11y_tag_" + node.id.replace(/:/g, "_");
@@ -2792,7 +2798,7 @@ function findA11yTagFrame(node) {
 
 async function getOrCreateA11yTagFrame(node) {
   if (!node || !isNodeVisible(node)) return null;
-  let frame = findA11yTagFrame(node);
+  let frame = await findA11yTagFrame(node);
   if (frame) return frame;
 
   frame = figma.createFrame();
@@ -2912,9 +2918,9 @@ function isFocusStateIssue(issue) {
   return false;
 }
 
-function getIssueTargetNode(issue, rootNode) {
+async function getIssueTargetNode(issue, rootNode) {
   if (issue && issue.nodeId) {
-    const n = figma.getNodeById(issue.nodeId);
+    const n = await getNodeById(issue.nodeId);
     if (n) return n;
   }
   return rootNode || null;
@@ -3238,7 +3244,7 @@ async function auditCandidateIssueCount(candidate, typeKey) {
     COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
   if (!spec) return 999;
   const ctx = gatherContext(candidate);
-  const result = auditNode(candidate, spec, ctx);
+  const result = await auditNode(candidate, spec, ctx);
   return result.issues ? result.issues.length : 0;
 }
 
@@ -3641,7 +3647,7 @@ const SPEC_CHECKERS = {
   PANEL_HAS_REGION_ROLE: function(node, ctx) { return checkerPanelHasRegionRole(node, ctx); },
 };
 
-function runMatrixChecks(node, ctx, typeKey, spec) {
+async function runMatrixChecks(node, ctx, typeKey, spec) {
   const checks = COMPONENT_SPEC_MATRIX[typeKey];
   const issues = [];
   const auditLog = [];
@@ -3673,7 +3679,7 @@ function runMatrixChecks(node, ctx, typeKey, spec) {
     }
   }
 
-  enrichIssueFixMeta(issues, node);
+  await enrichIssueFixMeta(issues, node);
   return { issues: issues, auditLog: auditLog };
 }
 
@@ -3702,11 +3708,11 @@ const AUDIT_FUNCTIONS = {
 // Returns { issues: Issue[], auditLog: AuditEntry[] }
 // auditLog entries: { name, status: "PASS"|"WARN"|"BLOCK"|"ERROR", count, wcagRefs? }
 
-function auditNode(node, spec, ctx) {
+async function auditNode(node, spec, ctx) {
   const typeKey = normalizeMatrixTypeKey(spec.role);
   if (typeKey && COMPONENT_SPEC_MATRIX[typeKey]) {
-    const result = runMatrixChecks(node, ctx, typeKey, spec);
-    enrichIssueFixMeta(result.issues, node);
+    const result = await runMatrixChecks(node, ctx, typeKey, spec);
+    await enrichIssueFixMeta(result.issues, node);
     return result;
   }
 
@@ -3737,20 +3743,20 @@ function auditNode(node, spec, ctx) {
       auditLog.push({ name: auditName, status: "ERROR", count: 0, error: String(e) });
     }
   }
-  enrichIssueFixMeta(issues, node);
+  await enrichIssueFixMeta(issues, node);
   return { issues: issues, auditLog: auditLog };
 }
 
 // ─── Resolve semantic nodeIds → real Figma IDs ────────────────────────────────
 
-function resolveSuggestions(suggestions, rootNode) {
+async function resolveSuggestions(suggestions, rootNode) {
   const resolved = [];
 
   for (const sug of suggestions) {
     const id = sug.nodeId;
 
     if (/^\d+:\d+$/.test(id)) {
-      const node = figma.getNodeById(id);
+      const node = await getNodeById(id);
       if (node) resolved.push(Object.assign({}, sug, { resolvedIds: [id] }));
       continue;
     }
@@ -3887,7 +3893,7 @@ function createDocFrame(rootNode, issues, ariaSchemaStr, componentType) {
 
 async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) {
   mode = mode || "inplace";
-  const rootNode = figma.getNodeById(rootNodeId);
+  const rootNode = await getNodeById(rootNodeId);
   if (!rootNode) {
     return { applied: 0, skipped: (suggestions || []).length, details: ["Root node not found — did the selection change?"] };
   }
@@ -3946,7 +3952,7 @@ async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) 
     ? (suggestions || []).filter(function(s) { return s.type === "setPluginData"; })
     : (suggestions || []);
 
-  const resolved = resolveSuggestions(filteredSugs, targetNode);
+  const resolved = await resolveSuggestions(filteredSugs, targetNode);
   let applied = 0, skipped = 0;
   const details = [];
 
@@ -3954,7 +3960,7 @@ async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) 
     const sug = resolved[si];
     for (let ni = 0; ni < sug.resolvedIds.length; ni++) {
       const nodeId = sug.resolvedIds[ni];
-      const node   = figma.getNodeById(nodeId);
+      const node   = await getNodeById(nodeId);
       if (!node) { skipped++; details.push("\u26A0 skipped: " + nodeId + " not found"); continue; }
 
       try {
@@ -4485,7 +4491,7 @@ async function fixLinkToComponent(p) {
   }
 
   if (p.linkCandidateId) {
-    const pick = figma.getNodeById(p.linkCandidateId);
+    const pick = await getNodeById(p.linkCandidateId);
     if (pick && pick.type === "COMPONENT") {
       const instance = await linkNodeToComponentInstance(originalNode, pick);
       figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
@@ -5243,7 +5249,7 @@ var ISSUE_FIX_META = {
   STAR_MISSING_ARIA_LABEL:   { fixKind: "annotation" },
 };
 
-function enrichIssueFixMeta(issues, rootNode) {
+async function enrichIssueFixMeta(issues, rootNode) {
   if (!issues || !issues.length) return;
   let ackMap = {};
   if (rootNode && rootNode.getPluginData) {
@@ -5252,7 +5258,7 @@ function enrichIssueFixMeta(issues, rootNode) {
   for (let qi = 0; qi < issues.length; qi++) {
     const code = issues[qi].code;
     const meta = ISSUE_FIX_META[code] || {};
-    const targetNode = getIssueTargetNode(issues[qi], rootNode);
+    const targetNode = await getIssueTargetNode(issues[qi], rootNode);
     const pending = readDesignerPending(targetNode);
     const waitingAi = readWaitingForAi(rootNode);
     if (waitingAi && waitingAi.issueCode === code) {
@@ -5845,7 +5851,7 @@ async function applyAllIssueFixes(rootNode, issues, opts) {
       status: "running", issueCode: iss.code,
     });
     await new Promise(function(r) { setTimeout(r, 300); });
-    const targetNode = getIssueTargetNode(iss, rootNode) || rootNode;
+    const targetNode = (await getIssueTargetNode(iss, rootNode)) || rootNode;
     try {
       const result = await AUTO_FIX_HANDLERS[iss.code]({
         node:                  targetNode,
@@ -5910,7 +5916,7 @@ async function analyzeNodeAndPost(rootNode, options) {
     }
   }
 
-  const auditResult  = detection.spec ? auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
+  const auditResult  = detection.spec ? await auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
   const issues       = auditResult.issues;
   const auditLog     = auditResult.auditLog;
 
@@ -5918,7 +5924,7 @@ async function analyzeNodeAndPost(rootNode, options) {
     const apiKeyForTitles = await figma.clientStorage.getAsync("openai-api-key");
     ctx.componentType = (detection.role || (detection.spec && detection.spec.role) || ctx.nodeType);
     await enrichIssuesWithTitlesAndExplanations(issues, rootNode, ctx, apiKeyForTitles);
-    enrichIssueFixMeta(issues, rootNode);
+    await enrichIssueFixMeta(issues, rootNode);
   }
 
   refreshDevModeAnnotations(rootNode);
@@ -5982,8 +5988,8 @@ async function analyzeNodeAndPost(rootNode, options) {
 
 async function autoFixIssue(params) {
   // params: { issueCode, nodeId, rootNodeId, strategy, annotationDestination, detectedRole, linkAction }
-  const node     = figma.getNodeById(params.nodeId)     || figma.getNodeById(params.rootNodeId);
-  const rootNode = figma.getNodeById(params.rootNodeId) || node;
+  const node     = await getNodeById(params.nodeId)     || await getNodeById(params.rootNodeId);
+  const rootNode = await getNodeById(params.rootNodeId) || node;
   if (!rootNode) {
     return { ok: false, code: params.issueCode, message: "Selection changed. Please re-run analysis." };
   }
@@ -6134,10 +6140,10 @@ function findSpecByRoleHint(roleHint) {
 }
 
 // Re-run full spec matrix for a resolved component type (text or vision hint).
-function runSpecsForType(roleHint, rootNode, ctx) {
+async function runSpecsForType(roleHint, rootNode, ctx) {
   const spec = findSpecByRoleHint(roleHint);
   if (!spec) return { spec: null, issues: [], auditLog: [] };
-  const audited = auditNode(rootNode, spec, ctx);
+  const audited = await auditNode(rootNode, spec, ctx);
   return { spec: spec, issues: audited.issues, auditLog: audited.auditLog };
 }
 
@@ -6289,7 +6295,7 @@ function readStoredScan(node) {
 }
 
 async function saveLastScan(rootNodeId, payload) {
-  const node = figma.getNodeById(rootNodeId);
+  const node = await getNodeById(rootNodeId);
   if (!node) return;
 
   const issues   = Array.isArray(payload.issues) ? packIssuesForStorage(payload.issues) : [];
@@ -6333,7 +6339,7 @@ async function removeFromIndex(nodeId) {
     delete index[nodeId];
     await persistComponentIndex(index);
   }
-  const node = figma.getNodeById(nodeId);
+  const node = await getNodeById(nodeId);
   if (node && node.setPluginData) {
     try { node.setPluginData(LAST_SCAN_KEY, ""); } catch (_e) {}
   }
@@ -6356,8 +6362,8 @@ figma.on("selectionchange", function() {
   });
 });
 
-function scrollToNode(nodeId) {
-  const node = figma.getNodeById(nodeId);
+async function scrollToNode(nodeId) {
+  const node = await getNodeById(nodeId);
   if (!node) return false;
   try { figma.viewport.scrollAndZoomIntoView([node]); return true; }
   catch (_e) { return false; }
@@ -6384,16 +6390,14 @@ figma.ui.onmessage = async (msg) => {
   // ── Persistent state & navigation ──
   if (msg.type === "SCROLL_TO_NODE" || msg.type === "SCROLL_TO_COMPONENT") {
     const targetId = msg.nodeId || msg.rootNodeId;
-    const ok = scrollToNode(targetId);
+    const ok = await scrollToNode(targetId);
     figma.ui.postMessage({ type: "SCROLL_TO_NODE_RESULT", ok: ok, nodeId: targetId });
     return;
   }
 
   if (msg.type === "EXPORT_PREVIEW") {
     const targetId = msg.nodeId || msg.rootNodeId;
-    const node = (typeof figma.getNodeByIdAsync === "function")
-      ? await figma.getNodeByIdAsync(targetId)
-      : figma.getNodeById(targetId);
+    const node = await getNodeById(targetId);
     if (!node) {
       figma.ui.postMessage({ type: "UPDATE_PREVIEW", ok: false, nodeId: targetId });
       return;
@@ -6423,7 +6427,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === "GET_STORED_STATE") {
-    const node     = figma.getNodeById(msg.nodeId);
+    const node     = await getNodeById(msg.nodeId);
     const snapshot = node ? readStoredScan(node) : null;
     figma.ui.postMessage({
       type:     "STORED_STATE",
@@ -6440,7 +6444,7 @@ figma.ui.onmessage = async (msg) => {
     const ids  = Object.keys(index);
     for (let i = 0; i < ids.length; i++) {
       const id   = ids[i];
-      const node = figma.getNodeById(id);
+      const node = await getNodeById(id);
       if (node) live[id] = index[id];
     }
     // Persist the cleaned-up index only if something was pruned
@@ -6459,13 +6463,13 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === "OPEN_STORED_COMPONENT") {
     // Triggered by the dashboard [→] button: select the node, scroll viewport,
     // and reply with the snapshot so the UI can render it in the analyze view.
-    const node = figma.getNodeById(msg.nodeId);
+    const node = await getNodeById(msg.nodeId);
     if (!node) {
       figma.ui.postMessage({ type: "STORED_STATE", nodeId: msg.nodeId, snapshot: null, missing: true });
       return;
     }
     try { figma.currentPage.selection = [node]; } catch (_e) {}
-    scrollToNode(msg.nodeId);
+    await scrollToNode(msg.nodeId);
     const snapshot = readStoredScan(node);
     figma.ui.postMessage({
       type:     "STORED_STATE",
@@ -6480,7 +6484,7 @@ figma.ui.onmessage = async (msg) => {
 
   if (msg.type === "APPLY_FIXES") {
     try {
-      const rootNode = figma.getNodeById(msg.rootNodeId);
+      const rootNode = await getNodeById(msg.rootNodeId);
       const issues = msg.issues || [];
       if (rootNode) figma.commitUndo();
       figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: issues.length });
@@ -6507,7 +6511,7 @@ figma.ui.onmessage = async (msg) => {
   // mode "annotate" → pluginData / sharedPluginData only, no renames
   if (msg.type === "APPLY_WITH_MODE") {
     try {
-      const rootNode = figma.getNodeById(msg.rootNodeId);
+      const rootNode = await getNodeById(msg.rootNodeId);
       const issues = msg.issues || [];
       if (msg.mode === "inplace" && rootNode) {
         figma.commitUndo();
@@ -6537,7 +6541,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === "RESCAN_SELECTION") {
-    const rootNode = figma.getNodeById(msg.rootNodeId);
+    const rootNode = await getNodeById(msg.rootNodeId);
     if (!rootNode) {
       figma.ui.postMessage({ type: "ERROR", message: "Selection changed. Please re-select the layer." });
       return;
@@ -6545,7 +6549,7 @@ figma.ui.onmessage = async (msg) => {
     const waiting = readWaitingForAi(rootNode);
     await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: msg.previousIssues || [] });
     if (waiting) {
-      const stillOpen = (figma.getNodeById(msg.rootNodeId) && readWaitingForAi(rootNode));
+      const stillOpen = !!(await getNodeById(msg.rootNodeId)) && readWaitingForAi(rootNode);
       figma.ui.postMessage({
         type: "RESCAN_AI_STATUS",
         issueCode: waiting.issueCode,
@@ -6561,7 +6565,7 @@ figma.ui.onmessage = async (msg) => {
   // Self-healing: try to fix an individual issue inline.
   // msg: { issueCode, nodeId, rootNodeId, strategy: "ai" | "generic" | "prompt", issueIdx }
   if (msg.type === "AUTO_FIX_ISSUE") {
-    const rootNode = figma.getNodeById(msg.rootNodeId);
+    const rootNode = await getNodeById(msg.rootNodeId);
     const previousIssues = msg.previousIssues || [];
     if (msg.strategy !== "prompt" && rootNode) {
       figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: 1 });
@@ -6592,7 +6596,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === "ACKNOWLEDGE_ISSUE") {
-    const rootNode = figma.getNodeById(msg.rootNodeId);
+    const rootNode = await getNodeById(msg.rootNodeId);
     if (!rootNode) {
       figma.ui.postMessage({ type: "ACKNOWLEDGE_RESULT", ok: false, issueIdx: msg.issueIdx, message: "Selection changed." });
       return;
@@ -6663,7 +6667,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === "MARK_PENDING_DESIGNER") {
-    const target = figma.getNodeById(msg.nodeId) || figma.getNodeById(msg.rootNodeId);
+    const target = await getNodeById(msg.nodeId) || await getNodeById(msg.rootNodeId);
     if (!target) {
       figma.ui.postMessage({ type: "PENDING_RESULT", ok: false, issueIdx: msg.issueIdx, message: "Selection changed." });
       return;
@@ -6747,7 +6751,7 @@ figma.ui.onmessage = async (msg) => {
     for (let i = 0; i < candidates.length; i++) {
       const { node, spec, ctx } = candidates[i];
       const detection   = detectComponent(ctx, node);
-      const auditResult = detection.spec ? auditNode(node, detection.spec, ctx) : { issues: [], auditLog: [] };
+      const auditResult = detection.spec ? await auditNode(node, detection.spec, ctx) : { issues: [], auditLog: [] };
       const issues      = auditResult.issues;
 
       // Two-layer messaging for batch scan (static titles + explanations; no per-row AI titles)
@@ -6804,7 +6808,7 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === "ASK_ANSWER") {
-    const rootNode = figma.getNodeById(msg.rootNodeId);
+    const rootNode = await getNodeById(msg.rootNodeId);
     if (!rootNode) {
       figma.ui.postMessage({ type: "ERROR", message: "Selection changed. Please re-run analysis." });
       return;
@@ -6860,7 +6864,7 @@ figma.ui.onmessage = async (msg) => {
       }
     }
 
-    const auditResult  = detection.spec ? auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
+    const auditResult  = detection.spec ? await auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
     const issues       = auditResult.issues;
     const auditLog     = auditResult.auditLog;
     const pendingDesignerCount = countDesignerPendingIssues(issues);
@@ -6941,7 +6945,7 @@ figma.ui.onmessage = async (msg) => {
       let specFromText      = findSpecByRoleHint(aiResult.role);
 
       if (specFromText && !roleUnknown) {
-        const audited = runSpecsForType(aiResult.role, rootNode, ctx);
+        const audited = await runSpecsForType(aiResult.role, rootNode, ctx);
         finalIssues   = audited.issues;
         finalAuditLog = audited.auditLog;
         activeSpec    = audited.spec;
@@ -6954,7 +6958,7 @@ figma.ui.onmessage = async (msg) => {
         const specFromVision = findSpecByRoleHint(visionResult.role);
 
         if (specFromVision && !visionUnknown) {
-          const audited = runSpecsForType(visionResult.role, rootNode, ctx);
+          const audited = await runSpecsForType(visionResult.role, rootNode, ctx);
           finalIssues   = audited.issues;
           finalAuditLog = audited.auditLog;
           activeSpec    = audited.spec;
@@ -6969,7 +6973,7 @@ figma.ui.onmessage = async (msg) => {
       if (finalIssues.length > 0) {
         ctx.componentType = (activeSpec && activeSpec.role) || aiResult.role || ctx.nodeType;
         await enrichIssuesWithTitlesAndExplanations(finalIssues, rootNode, ctx, apiKey);
-        enrichIssueFixMeta(finalIssues, rootNode);
+        await enrichIssueFixMeta(finalIssues, rootNode);
       }
       const pendingAfterAi = countDesignerPendingIssues(finalIssues);
 
