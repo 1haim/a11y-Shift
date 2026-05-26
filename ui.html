@@ -147,6 +147,57 @@
   .empty-state .icon { display: flex; align-items: center; justify-content: center; opacity: 0.55; }
   .empty-state p { font-size: 14px; font-weight: 500; line-height: 1.4; color: #031239; }
 
+  /* ── PIN / Login screen ─────────────────────────────────────────── */
+  #pin-screen {
+    position: fixed; inset: 0; z-index: 9998;
+    background: #FFFFFF;
+    display: flex; flex-direction: column; gap: 24px;
+    padding: 24px; box-sizing: border-box;
+  }
+  #pin-screen.gone { display: none; }
+
+  .pin-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .pin-header-left { display: flex; align-items: center; gap: 12px; }
+  .pin-app-name { font-size: 16px; font-weight: 500; color: #0A2540; line-height: 1.25; }
+  .pin-close-btn {
+    width: 24px; height: 24px; background: none; border: none;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+    opacity: 0.7; transition: opacity 0.15s;
+  }
+  .pin-close-btn:hover { opacity: 1; }
+
+  .pin-body {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 32px;
+  }
+  .pin-brand { display: flex; align-items: center; gap: 10px; }
+  .pin-brand-icon { height: 28px; width: auto; }
+  .pin-brand-name {
+    font-size: 24px; font-weight: 500; color: #0A2540;
+    letter-spacing: -0.3px;
+  }
+  .pin-description {
+    font-size: 14px; font-weight: 400; color: #3A4B61;
+    text-align: center; line-height: 1.6; max-width: 300px;
+  }
+  .pin-entry { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .pin-label { font-size: 15px; font-weight: 400; color: #3A4B61; text-align: center; }
+  .pin-inputs { display: flex; gap: 12px; }
+  .pin-digit {
+    width: 56px; height: 64px; box-sizing: border-box;
+    border: 1.5px solid #CBD2E1; border-radius: 8px;
+    background: #FFFFFF; font-size: 28px; font-weight: 500;
+    color: #0A2540; text-align: center; outline: none;
+    font-family: "CircularXX", sans-serif;
+    transition: border-color 0.15s; caret-color: transparent;
+  }
+  .pin-digit:focus { border-color: #136EF8; box-shadow: 0 0 0 3px rgba(19,110,248,0.12); }
+  .pin-digit.filled { border-color: #136EF8; }
+  .pin-error { font-size: 13px; color: #d8161f; text-align: center; min-height: 18px; }
+
   /* ── Splash screen ──────────────────────────────────────────────── */
   #splash {
     position: fixed; inset: 0; z-index: 9999;
@@ -1148,6 +1199,38 @@
 </style>
 </head>
 <body>
+
+<!-- ── PIN / Login screen ─────────────────────────────────────────── -->
+<div id="pin-screen">
+  <div class="pin-header">
+    <div class="pin-header-left">
+      <img src="Logo.svg" class="pin-brand-icon" style="height:22px" alt="A11y Shift logo">
+      <span class="pin-app-name">A11y Shift</span>
+    </div>
+    <button class="pin-close-btn" id="pin-close-btn" aria-label="Close plugin">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 6L6 18M6 6L18 18" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="pin-body">
+    <div class="pin-brand">
+      <img src="Logo.svg" class="pin-brand-icon" alt="accessiBe logo">
+      <span class="pin-brand-name">accessiBe</span>
+    </div>
+    <p class="pin-description">accessiBe's plugin is an AI-powered web accessibility solution that uses advanced automation to help websites achieve ADA and WCAG 2.1 compliance.</p>
+    <div class="pin-entry">
+      <p class="pin-label">Please enter your PIN</p>
+      <div class="pin-inputs" id="pin-inputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
+      </div>
+      <div class="pin-error" id="pin-error"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Splash / loading screen ────────────────────────────────────── -->
 <div id="splash">
@@ -3312,9 +3395,68 @@ function hideSplash() {
   const delay   = Math.max(0, _splashMin - elapsed);
   setTimeout(() => {
     s.classList.add('hidden');
-    setTimeout(() => s.classList.add('gone'), 380);
+    setTimeout(() => {
+      s.classList.add('gone');
+      // Show PIN screen after splash
+      const firstDigit = document.querySelector('.pin-digit');
+      if (firstDigit) setTimeout(() => firstDigit.focus(), 80);
+    }, 380);
   }, delay);
 }
+
+// ── PIN screen logic ───────────────────────────────────────────────
+// TODO: replace _PIN with a real secret when publishing
+const _PIN = ''; // empty = any 4 digits accepted for now
+
+function hidePinScreen() {
+  const ps = document.getElementById('pin-screen');
+  if (ps) ps.classList.add('gone');
+}
+
+(function initPinScreen() {
+  const digits = Array.from(document.querySelectorAll('.pin-digit'));
+  const errorEl = document.getElementById('pin-error');
+
+  digits.forEach((input, idx) => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !input.value && idx > 0) {
+        digits[idx - 1].value = '';
+        digits[idx - 1].classList.remove('filled');
+        digits[idx - 1].focus();
+      }
+    });
+    input.addEventListener('input', () => {
+      // allow only single digit
+      input.value = input.value.replace(/\D/g, '').slice(-1);
+      if (errorEl) errorEl.textContent = '';
+      if (input.value) {
+        input.classList.add('filled');
+        if (idx < digits.length - 1) digits[idx + 1].focus();
+      } else {
+        input.classList.remove('filled');
+      }
+      // check if all 4 filled
+      const entered = digits.map(d => d.value).join('');
+      if (entered.length === 4) {
+        if (!_PIN || entered === _PIN) {
+          // correct — enter the plugin
+          setTimeout(hidePinScreen, 250);
+        } else {
+          // wrong PIN
+          if (errorEl) errorEl.textContent = 'Incorrect PIN. Try again.';
+          digits.forEach(d => { d.value = ''; d.classList.remove('filled'); });
+          setTimeout(() => digits[0].focus(), 80);
+        }
+      }
+    });
+    // prevent non-numeric paste
+    input.addEventListener('paste', e => e.preventDefault());
+  });
+
+  document.getElementById('pin-close-btn').addEventListener('click', () => {
+    parent.postMessage({ pluginMessage: { type: 'CANCEL' } }, '*');
+  });
+})();
 
 function handleInit(msg) {
   hideSplash();
