@@ -2050,6 +2050,9 @@ function auditStateCoverage(node, spec) {
   for (let i = 0; i < spec.requiredStates.length; i++) {
     const required = spec.requiredStates[i];
     if (stateIsPresent(required, found)) continue;
+    if (required === "focus" && componentHasFocusVariants(node)) continue;
+    if ((required === "checked" || required === "unchecked") && componentHasCheckedOrStateVariants(node)) continue;
+    if ((required === "open" || required === "closed" || required === "expanded") && componentHasExpandedVariants(node)) continue;
 
     const isCritical = required === "focus" || required === "default";
     const severity   = isCritical ? "HIGH" : "MED";
@@ -2959,13 +2962,97 @@ var TYPE_NAME_KEYWORDS = {
   accordion:  ["accordion", "faq"],
 };
 
+var TYPE_NAME_ALIASES = {
+  button:     ["button", "btn", "cta", "action"],
+  textField:  ["input", "textfield", "text-field", "field", "entry", "textbox"],
+  checkbox:   ["checkbox", "check", "tick"],
+  "radio-group": ["radio", "radiogroup", "option", "choice", "color", "item", "chip"],
+  select:     ["select", "dropdown", "combobox", "combo", "picker", "menu"],
+  modal:      ["modal", "dialog", "popup", "overlay"],
+  tabs:       ["tab", "tabs", "navigation"],
+  slider:     ["slider", "range", "scrubber"],
+  "star-rating": ["star", "rating", "rate"],
+  toggle:     ["toggle", "switch", "onoff"],
+  accordion:  ["accordion", "faq", "expand", "collapse"],
+};
+
 function componentNameMatchesType(componentName, typeKey) {
-  const kws = TYPE_NAME_KEYWORDS[typeKey] || [typeKey];
+  const kws = TYPE_NAME_ALIASES[typeKey] || TYPE_NAME_KEYWORDS[typeKey] || [typeKey];
   const nl = (componentName || "").toLowerCase();
   for (let i = 0; i < kws.length; i++) {
     if (nl.indexOf(kws[i]) >= 0) return true;
   }
   return false;
+}
+
+function componentSetForNode(node) {
+  if (!node) return null;
+  if (node.type === "COMPONENT_SET") return node;
+  if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") return node.parent;
+  if (node.type === "INSTANCE" && node.mainComponent) {
+    const master = node.mainComponent;
+    if (master.parent && master.parent.type === "COMPONENT_SET") return master.parent;
+  }
+  return null;
+}
+
+function componentHasVariantStateAxes(node, axisKeywords) {
+  const set = componentSetForNode(node);
+  if (!set) return false;
+
+  try {
+    const defs = set.componentPropertyDefinitions || {};
+    const keys = Object.keys(defs);
+    for (let ki = 0; ki < keys.length; ki++) {
+      const keyLower = keys[ki].toLowerCase();
+      let axisMatch = false;
+      for (let ai = 0; ai < axisKeywords.length; ai++) {
+        if (keyLower.indexOf(axisKeywords[ai]) >= 0) { axisMatch = true; break; }
+      }
+      if (!axisMatch) continue;
+      const def = defs[keys[ki]];
+      if (def && def.type === "VARIANT" && def.variantOptions && def.variantOptions.length > 0) return true;
+    }
+  } catch (_e) {}
+
+  if ("children" in set) {
+    for (let ci = 0; ci < set.children.length; ci++) {
+      const child = set.children[ci];
+      if (child.type !== "COMPONENT") continue;
+      const nl = child.name.toLowerCase();
+      for (let vi = 0; vi < axisKeywords.length; vi++) {
+        if (nl.indexOf(axisKeywords[vi]) >= 0) return true;
+      }
+      if (child.variantProperties) {
+        const vKeys = Object.keys(child.variantProperties);
+        for (let vk = 0; vk < vKeys.length; vk++) {
+          const val = String(child.variantProperties[vKeys[vk]] || "").toLowerCase();
+          for (let vi = 0; vi < axisKeywords.length; vi++) {
+            if (val.indexOf(axisKeywords[vi]) >= 0) return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function componentHasCheckedOrStateVariants(node) {
+  const sm = findStateVariants(node);
+  if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"] || sm["selected"] || sm["active"]) return true;
+  return componentHasVariantStateAxes(node, ["check", "select", "state", "on", "off", "active", "selected"]);
+}
+
+function componentHasFocusVariants(node) {
+  const sm = findStateVariants(node);
+  if (sm["focus"] || sm["focused"]) return true;
+  return componentHasVariantStateAxes(node, ["focus", "focused", "keyboard"]);
+}
+
+function componentHasExpandedVariants(node) {
+  const sm = findStateVariants(node);
+  if (sm["expanded"] || sm["collapsed"] || sm["open"] || sm["closed"]) return true;
+  return componentHasVariantStateAxes(node, ["expand", "open", "collapsed"]);
 }
 
 function appendNonComponentIssue(issues, node, spec, typeKey) {
@@ -3068,18 +3155,82 @@ async function linkNodeToComponentInstance(originalNode, componentNode) {
   return instance;
 }
 
-async function findAccessibleComponentCandidates(typeKey) {
-  const candidates = [];
+function countNodeChildren(node) {
+  if (!node || !("children" in node)) return 0;
+  return node.children.length;
+}
+
+async function findAccessibleComponentCandidates(typeKey, referenceNode) {
+  const seen = {};
+  const results = [];
+
+  function addCandidate(comp, source, isPossibleMatch) {
+    if (!comp || comp.type !== "COMPONENT" || seen[comp.id]) return;
+    seen[comp.id] = true;
+    results.push({
+      component:       comp,
+      source:          source,
+      isPossibleMatch: !!isPossibleMatch,
+    });
+  }
+
+  // Step A — instances on current page → mainComponent
+  const page = figma.currentPage;
+  if ("findAll" in page) {
+    const instances = page.findAll(function(n) { return n.type === "INSTANCE"; });
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i];
+      const master = inst.mainComponent;
+      if (!master) continue;
+      if (componentNameMatchesType(master.name, typeKey)) {
+        addCandidate(master, "instance", false);
+      }
+    }
+  }
+
+  // Step B — name search (with aliases) across file
   const pages = figma.root.children;
   for (let p = 0; p < pages.length; p++) {
-    const page = pages[p];
-    if (!("findAll" in page)) continue;
-    const found = page.findAll(function(n) {
+    const pg = pages[p];
+    if (!("findAll" in pg)) continue;
+    const found = pg.findAll(function(n) {
       return n.type === "COMPONENT" && componentNameMatchesType(n.name, typeKey);
     });
-    for (let i = 0; i < found.length; i++) candidates.push(found[i]);
+    for (let i = 0; i < found.length; i++) addCandidate(found[i], "name", false);
   }
-  return candidates;
+
+  // Step C — structural similarity on COMPONENT_SET (child count ±2)
+  if (referenceNode && results.length === 0) {
+    const refCount = countNodeChildren(referenceNode);
+    for (let p = 0; p < pages.length; p++) {
+      const pg = pages[p];
+      if (!("findAll" in pg)) continue;
+      const sets = pg.findAll(function(n) { return n.type === "COMPONENT_SET"; });
+      for (let si = 0; si < sets.length; si++) {
+        const set = sets[si];
+        const childCount = countNodeChildren(set);
+        if (Math.abs(childCount - refCount) <= 2) {
+          const defaultChild = set.children && set.children[0];
+          if (defaultChild && defaultChild.type === "COMPONENT") {
+            addCandidate(defaultChild, "structure", true);
+          }
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+async function exportNodeThumbnailBase64(node) {
+  if (!node || !("exportAsync" in node)) return null;
+  try {
+    const bytes = await node.exportAsync({
+      format: "PNG",
+      constraint: { type: "SCALE", value: 0.25 },
+    });
+    return figma.base64Encode(bytes);
+  } catch (_e) { return null; }
 }
 
 async function auditCandidateIssueCount(candidate, typeKey) {
@@ -3372,7 +3523,10 @@ const SPEC_CHECKERS = {
   TOUCH_TARGET_24_WITH_SPACING: function(node, ctx) { return matrixIssuesFromAudit(auditTouchTarget, node, { role: "group", requiredStates: [] }, ctx); },
   CONTRAST_TEXT: function(node, ctx) { return matrixIssuesFromAudit(auditTextContrast, node, { role: "button", requiredStates: [] }, ctx); },
   CONTRAST_NON_TEXT: function(node, ctx) { return checkNonTextContrast(node, ctx); },
-  FOCUS_RING_VISIBLE: function(node, ctx) { return matrixIssuesFromAudit(auditFocusRing, node, { role: "button", requiredStates: ["focus"] }, ctx); },
+  FOCUS_RING_VISIBLE: function(node, ctx) {
+    if (componentHasFocusVariants(node)) return [];
+    return matrixIssuesFromAudit(auditFocusRing, node, { role: "button", requiredStates: ["focus"] }, ctx);
+  },
   ROLE_BUTTON_ANNOTATED: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "button", "ROLE_BUTTON_MISSING"); },
   HAS_LABEL: function(node, ctx) { return matrixIssuesFromAudit(auditHasInputLabel, node, { role: "textField", requiredStates: [] }, ctx); },
   PLACEHOLDER_NOT_ONLY_LABEL: function(node, ctx) { return checkerPlaceholderNotOnlyLabel(node, ctx); },
@@ -3398,6 +3552,7 @@ const SPEC_CHECKERS = {
     return matrixIssuesFromAudit(auditStateCoverage, node, { role: "switch", requiredStates: ["unchecked", "checked", "focus", "disabled"] }, ctx);
   },
   ARIA_CHECKED_ANNOTATED: function(node, ctx) {
+    if (componentHasCheckedOrStateVariants(node)) return [];
     const sm = findStateVariants(node);
     if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"]) return [];
     if (getSharedA11y(node, "ariaChecked")) return [];
@@ -3413,7 +3568,10 @@ const SPEC_CHECKERS = {
   ROLE_RADIOGROUP_ON_CONTAINER: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "radiogroup", "ROLE_RADIOGROUP_MISSING"); },
   ROLE_RADIO_ON_ITEMS: function(node, ctx) { return matrixIssuesFromAudit(auditEachRadioHasLabel, node, { role: "radio-group", requiredStates: [] }, ctx); },
   ROLE_COMBOBOX_OR_LISTBOX: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "combobox", "ROLE_COMBOBOX_MISSING"); },
-  EXPANSION_STATE_ANNOTATED: function(node, ctx, typeKey) { return checkerAriaExpandedAnnotated(node, ctx, typeKey || "select"); },
+  EXPANSION_STATE_ANNOTATED: function(node, ctx, typeKey) {
+    if (componentHasExpandedVariants(node)) return [];
+    return checkerAriaExpandedAnnotated(node, ctx, typeKey || "select");
+  },
   CHEVRON_OR_EXPAND_INDICATOR: function(node, ctx, typeKey) {
     if (typeKey === "accordion") {
       if (ctx.accordionCoLocatedRows >= 2) return [];
@@ -3442,6 +3600,7 @@ const SPEC_CHECKERS = {
   ROLE_TABLIST_ON_CONTAINER: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "tablist", "ROLE_TABLIST_MISSING"); },
   ROLE_TAB_ON_ITEMS: function(node, ctx) { return checkerTabsStructure(node, ctx); },
   ARIA_SELECTED_ANNOTATED: function(node, ctx) {
+    if (componentHasVariantStateAxes(node, ["select", "selected", "active", "tab", "state"])) return [];
     const sm = findStateVariants(node);
     if (sm["selected"] || sm["active"] || sm["default"]) return [];
     if ("children" in node) {
@@ -3893,23 +4052,91 @@ async function loadInter(style) {
   }
 }
 
-async function placeLabelAbove(node, labelText, layerName) {
-  const fontName = await loadInter("Medium");
-  const label    = figma.createText();
+function inferLabelStyleFromContext(ctx, referenceNode) {
+  const style = { fontSize: 14, color: { r: 0.12, g: 0.12, b: 0.12 }, fontName: null };
+  if (referenceNode && referenceNode.parent && "children" in referenceNode.parent) {
+    const siblings = referenceNode.parent.children;
+    for (let si = 0; si < siblings.length; si++) {
+      const sib = siblings[si];
+      if (sib === referenceNode || sib.type !== "TEXT") continue;
+      if ("fontSize" in sib && typeof sib.fontSize === "number") style.fontSize = sib.fontSize;
+      if (sib.fills && sib.fills[0] && sib.fills[0].type === "SOLID") style.color = sib.fills[0].color;
+      if (sib.fontName && sib.fontName !== figma.mixed) style.fontName = sib.fontName;
+      return style;
+    }
+  }
+  return style;
+}
+
+async function createFloatingA11yLabel(node, labelText, layerName) {
+  await loadInter("Medium");
+  const label = figma.createText();
+  try { label.fontName = { family: "Inter", style: "Medium" }; } catch (_e) {}
+  label.characters = labelText;
+  label.fontSize = 14;
+  label.fills = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.12 } }];
+  label.name = (layerName || "label") + " / _a11y_heading";
+  label.setPluginData("a11y.generated", "true");
+  if (node) {
+    label.x = node.x;
+    label.y = node.y - 22;
+    label.setPluginData("a11y.labelFor", node.id);
+  }
+  if (node && node.parent && "insertChild" in node.parent) {
+    const idx = node.parent.children.indexOf(node);
+    node.parent.insertChild(idx >= 0 ? idx : 0, label);
+  } else {
+    figma.currentPage.appendChild(label);
+  }
+  return { label: label };
+}
+
+async function wrapNodeWithA11yLabel(node, labelText, layerName, ctx) {
+  if (!node || !("parent" in node) || !node.parent) {
+    return createFloatingA11yLabel(node, labelText, layerName);
+  }
+  const parent = node.parent;
+  const idx = parent && "children" in parent ? parent.children.indexOf(node) : -1;
+  const absX = node.x;
+  const absY = node.y;
+
+  const wrapper = figma.createFrame();
+  wrapper.name = "_a11y_labeled_" + (node.name || "component");
+  wrapper.layoutMode = "VERTICAL";
+  wrapper.itemSpacing = 4;
+  wrapper.primaryAxisSizingMode = "AUTO";
+  wrapper.counterAxisSizingMode = "AUTO";
+  wrapper.fills = [];
+  wrapper.clipsContent = false;
+  wrapper.x = absX;
+  wrapper.y = absY;
+
+  const style = inferLabelStyleFromContext(ctx, node);
+  const fontName = style.fontName || await loadInter("Medium");
+  const label = figma.createText();
   if (fontName) label.fontName = fontName;
   label.characters = labelText;
-  label.fontSize   = 14;
-  label.fills      = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.12 } }];
-  label.x = node.x;
-  // y must be set AFTER characters so label.height is computed
-  label.y = node.y - label.height - 8;
-  if (node.parent && "appendChild" in node.parent) node.parent.appendChild(label);
-  else figma.currentPage.appendChild(label);
+  label.fontSize = style.fontSize;
+  label.fills = [{ type: "SOLID", color: style.color }];
   const baseName = layerName || "label";
   label.name = baseName.indexOf("_a11y_heading") >= 0 ? baseName : baseName + " / _a11y_heading";
   label.setPluginData("a11y.generated", "true");
   label.setPluginData("a11y.labelFor", node.id);
-  return label;
+
+  if (parent && idx >= 0 && "insertChild" in parent) {
+    parent.insertChild(idx, wrapper);
+  } else {
+    figma.currentPage.appendChild(wrapper);
+  }
+  wrapper.appendChild(label);
+  wrapper.appendChild(node);
+  return { wrapper: wrapper, label: label };
+}
+
+async function placeLabelAbove(node, labelText, layerName) {
+  const ctx = gatherContext(node);
+  const wrapped = await wrapNodeWithA11yLabel(node, labelText, layerName, ctx);
+  return wrapped.label || wrapped;
 }
 
 // Re-run a single audit by name and check whether the given issue code is gone.
@@ -4022,10 +4249,12 @@ async function fixNoGroupLabel(p) {
       if (ai && ai.length > 0 && ai.length <= 60) { labelText = ai; source = "ai"; }
     } catch (_e) { /* fall through to generic */ }
   }
-  const label = await placeLabelAbove(p.rootNode, labelText, "label / group-label");
+  const ctx = gatherContext(p.rootNode);
+  const wrapped = await wrapNodeWithA11yLabel(p.rootNode, labelText, "label / group-label", ctx);
+  const label = wrapped.label;
 
-  const ctx      = gatherContext(p.rootNode);
-  const resolved = reauditIsResolved(p.rootNode, ctx, { role: "group", requiredStates: [] }, "hasGroupLabel", "NO_GROUP_LABEL");
+  const ctx2     = ctx;
+  const resolved = reauditIsResolved(p.rootNode, ctx2, { role: "group", requiredStates: [] }, "hasGroupLabel", "NO_GROUP_LABEL");
 
   return {
     ok:            resolved,
@@ -4034,7 +4263,7 @@ async function fixNoGroupLabel(p) {
     labelText:     labelText,
     createdNodeId: label.id,
     message:       resolved
-      ? "Added label \u201C" + labelText + "\u201D above component"
+      ? "Added label \u201C" + labelText + "\u201D in auto-layout wrapper"
       : "Label created but audit still flags it \u2014 verify alignment",
   };
 }
@@ -4060,9 +4289,11 @@ async function fixNoInputLabel(p) {
     labelText = baseName.charAt(0).toUpperCase() + baseName.slice(1);
   }
 
-  const label = await placeLabelAbove(p.rootNode, labelText, "label / input-label");
-  const ctx      = gatherContext(p.rootNode);
-  const resolved = reauditIsResolved(p.rootNode, ctx, { role: "textField", requiredStates: [] }, "hasInputLabel", "NO_INPUT_LABEL");
+  const ctx = gatherContext(p.rootNode);
+  const wrapped = await wrapNodeWithA11yLabel(p.rootNode, labelText, "label / input-label", ctx);
+  const label = wrapped.label;
+  const ctx2      = ctx;
+  const resolved = reauditIsResolved(p.rootNode, ctx2, { role: "textField", requiredStates: [] }, "hasInputLabel", "NO_INPUT_LABEL");
 
   return {
     ok:            resolved,
@@ -4218,21 +4449,17 @@ async function fixDialogNoHeading(p) {
     } catch (_e) {}
   }
 
+  const ctx = gatherContext(p.rootNode);
+  const wrapped = await wrapNodeWithA11yLabel(p.rootNode, headingText, "heading / dialog-title", ctx);
+  const heading = wrapped.label;
   await loadInter("Bold");
-  const heading = figma.createText();
   try { heading.fontName = { family: "Inter", style: "Bold" }; } catch (_e) {}
-  heading.characters = headingText;
-  heading.fontSize   = 18;
-  heading.fills      = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.12 } }];
-  heading.x = p.rootNode.x + 20;
-  heading.y = p.rootNode.y + 16;
-  heading.name = "heading / dialog-title";
-  heading.setPluginData("a11y.generated", "true");
+  heading.fontSize = 18;
+  heading.fills = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.12 } }];
+  heading.name = "heading / dialog-title / _a11y_heading";
   heading.setPluginData("a11y.v1.ariaLevel", "2");
-  if (p.rootNode.parent && "appendChild" in p.rootNode.parent) p.rootNode.parent.appendChild(heading);
-  else figma.currentPage.appendChild(heading);
   return { ok: true, code: "DIALOG_NO_HEADING", source: source, labelText: headingText, createdNodeId: heading.id,
-           message: "Added heading \u201C" + headingText + "\u201D" };
+           message: "Added heading \u201C" + headingText + "\u201D in labeled wrapper" };
 }
 
 async function fixLinkToComponent(p) {
@@ -4257,23 +4484,49 @@ async function fixLinkToComponent(p) {
     };
   }
 
-  const candidates = await findAccessibleComponentCandidates(typeKey);
+  if (p.linkCandidateId) {
+    const pick = figma.getNodeById(p.linkCandidateId);
+    if (pick && pick.type === "COMPONENT") {
+      const instance = await linkNodeToComponentInstance(originalNode, pick);
+      figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+      return {
+        ok: true,
+        code: "NON_COMPONENT_ELEMENT",
+        source: "generic",
+        message: "Linked to " + pick.name + ". Original layer hidden (not deleted). Cmd+Z to undo.",
+        createdNodeId: instance.id,
+      };
+    }
+  }
+
+  const candidateEntries = await findAccessibleComponentCandidates(typeKey, originalNode);
   const skipSet = {};
   const skipList = p.skipCandidateIds || [];
   for (let si = 0; si < skipList.length; si++) skipSet[skipList[si]] = true;
 
   let chosen = null;
   let blocker = null;
+  const candidateSummaries = [];
 
-  for (let i = 0; i < candidates.length; i++) {
-    const c = candidates[i];
+  for (let i = 0; i < candidateEntries.length; i++) {
+    const entry = candidateEntries[i];
+    const c = entry.component;
     if (skipSet[c.id]) continue;
     const count = await auditCandidateIssueCount(c, typeKey);
-    if (count < 2) {
+    const thumb = await exportNodeThumbnailBase64(c);
+    candidateSummaries.push({
+      id:              c.id,
+      name:            c.name,
+      source:          entry.source,
+      isPossibleMatch: entry.isPossibleMatch,
+      issueCount:      count,
+      thumbnailBase64: thumb,
+    });
+    if (count < 2 && !chosen) {
       chosen = c;
-      break;
+      continue;
     }
-    if (!blocker) blocker = { comp: c, count: count };
+    if (!blocker) blocker = { comp: c, count: count, isPossibleMatch: entry.isPossibleMatch };
   }
 
   if (chosen) {
@@ -4288,15 +4541,19 @@ async function fixLinkToComponent(p) {
     };
   }
 
-  if (blocker && p.linkAction !== "force") {
+  if (candidateSummaries.length > 0 && p.linkAction !== "force") {
     return {
       ok: false,
       code: "NON_COMPONENT_ELEMENT",
       needsComponentLinkChoice: true,
-      candidateId: blocker.comp.id,
-      candidateName: blocker.comp.name,
-      candidateIssueCount: blocker.count,
-      message: "Found " + blocker.comp.name + " but it has " + blocker.count + " accessibility issues.",
+      candidates:        candidateSummaries,
+      candidateId:       blocker ? blocker.comp.id : candidateSummaries[0].id,
+      candidateName:     blocker ? blocker.comp.name : candidateSummaries[0].name,
+      candidateIssueCount: blocker ? blocker.count : candidateSummaries[0].issueCount,
+      isPossibleMatch:   blocker ? blocker.isPossibleMatch : candidateSummaries[0].isPossibleMatch,
+      message: blocker
+        ? "Found " + blocker.comp.name + " but it has " + blocker.count + " accessibility issues."
+        : "Select a component to link.",
     };
   }
 
@@ -5558,6 +5815,14 @@ async function applyAllIssueFixes(rootNode, issues, opts) {
     fixable.push(iss);
   }
 
+  if (opts.fixOrder === "blockers-first") {
+    const high = fixable.filter(function(iss) { return iss.severity === "HIGH"; });
+    const rest = fixable.filter(function(iss) { return iss.severity !== "HIGH"; });
+    fixable.length = 0;
+    for (let hi = 0; hi < high.length; hi++) fixable.push(high[hi]);
+    for (let ri = 0; ri < rest.length; ri++) fixable.push(rest[ri]);
+  }
+
   const total = fixable.length;
   let fixed = 0;
   let failed = 0;
@@ -5774,6 +6039,7 @@ async function autoFixIssue(params) {
       detectedRole:          params.detectedRole,
       role:                  params.detectedRole,
       linkAction:            params.linkAction,
+      linkCandidateId:     params.linkCandidateId,
       skipCandidateIds:      params.skipCandidateIds,
     });
   } catch (e) {
@@ -6116,9 +6382,36 @@ figma.ui.onmessage = async (msg) => {
   }
 
   // ── Persistent state & navigation ──
-  if (msg.type === "SCROLL_TO_NODE") {
-    const ok = scrollToNode(msg.nodeId);
-    figma.ui.postMessage({ type: "SCROLL_TO_NODE_RESULT", ok: ok, nodeId: msg.nodeId });
+  if (msg.type === "SCROLL_TO_NODE" || msg.type === "SCROLL_TO_COMPONENT") {
+    const targetId = msg.nodeId || msg.rootNodeId;
+    const ok = scrollToNode(targetId);
+    figma.ui.postMessage({ type: "SCROLL_TO_NODE_RESULT", ok: ok, nodeId: targetId });
+    return;
+  }
+
+  if (msg.type === "EXPORT_PREVIEW") {
+    const targetId = msg.nodeId || msg.rootNodeId;
+    const node = (typeof figma.getNodeByIdAsync === "function")
+      ? await figma.getNodeByIdAsync(targetId)
+      : figma.getNodeById(targetId);
+    if (!node) {
+      figma.ui.postMessage({ type: "UPDATE_PREVIEW", ok: false, nodeId: targetId });
+      return;
+    }
+    try {
+      const bytes = await node.exportAsync({
+        format: "PNG",
+        constraint: { type: "SCALE", value: 0.5 },
+      });
+      figma.ui.postMessage({
+        type:      "UPDATE_PREVIEW",
+        ok:        true,
+        nodeId:    node.id,
+        imageData: figma.base64Encode(bytes),
+      });
+    } catch (_e) {
+      figma.ui.postMessage({ type: "UPDATE_PREVIEW", ok: false, nodeId: targetId });
+    }
     return;
   }
 
@@ -6192,7 +6485,11 @@ figma.ui.onmessage = async (msg) => {
       if (rootNode) figma.commitUndo();
       figma.ui.postMessage({ type: "FIX_PROGRESS_START", total: issues.length });
       const batchResult = rootNode
-        ? await applyAllIssueFixes(rootNode, issues, { annotationDestination: msg.annotationDestination, detectedRole: msg.detectedRole })
+        ? await applyAllIssueFixes(rootNode, issues, {
+            annotationDestination: msg.annotationDestination,
+            detectedRole:          msg.detectedRole,
+            fixOrder:              msg.fixOrder,
+          })
         : { fixed: 0, failed: 0, total: 0 };
       const result = await applyFixes(msg.suggestions, msg.rootNodeId, "inplace", msg.annotationDestination);
       if (rootNode) await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: issues });
@@ -6220,6 +6517,7 @@ figma.ui.onmessage = async (msg) => {
         ? await applyAllIssueFixes(rootNode, issues, {
             annotationDestination: msg.annotationDestination,
             detectedRole:          msg.detectedRole,
+            fixOrder:              msg.fixOrder,
           })
         : { fixed: 0, failed: 0, total: 0 };
       const result = await applyFixes(msg.suggestions, msg.rootNodeId, msg.mode, msg.annotationDestination);
@@ -6276,6 +6574,7 @@ figma.ui.onmessage = async (msg) => {
       annotationDestination: msg.annotationDestination,
       detectedRole:          msg.detectedRole,
       linkAction:            msg.linkAction,
+      linkCandidateId:       msg.linkCandidateId,
       skipCandidateIds:      msg.skipCandidateIds,
       message:               msg.message,
     });

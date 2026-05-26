@@ -666,7 +666,29 @@
     letter-spacing: 0.3px;
   }
   .preview-collapse-icon { font-size: 9px; transition: transform 0.2s; }
-  .preview-bg-btns { display: flex; gap: 4px; }
+  .preview-bg-btns { display: flex; gap: 4px; align-items: center; }
+  .preview-inner img.fading { opacity: 0.35; }
+  .apply-row-blockers { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .apply-row-blockers .btn-apply { width: 100%; }
+  .apply-warning { font-size: 10px; color: var(--accent-amber); margin-top: 2px; }
+  .figma-ai-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; font-size: 10px; font-weight: 600;
+    border-radius: 12px; cursor: pointer;
+    border: 1px solid #3a2a7e; background: #1e1a4e; color: #a78bfa;
+    margin-top: 6px;
+  }
+  .figma-ai-btn:hover { opacity: 0.9; }
+  .figma-ai-hint { font-size: 10px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+  .candidate-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: 200px; overflow-y: auto; }
+  .candidate-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .candidate-row:hover { border-color: var(--accent-blue); }
+  .candidate-thumb { width: 40px; height: 28px; object-fit: contain; background: #2a2a2a; border-radius: 3px; flex-shrink: 0; }
+  .candidate-meta { font-size: 10px; color: var(--text-dim); }
+  .issue-item { cursor: pointer; }
   .btn-preview-bg {
     padding: 3px 9px; font-size: 10px; font-weight: 600; cursor: pointer;
     border: 1px solid var(--border2); border-radius: 12px;
@@ -690,6 +712,7 @@
     max-width: 100%; max-height: 100%;
     object-fit: contain;
     display: block;
+    transition: opacity 150ms ease;
   }
   .preview-placeholder {
     color: var(--text-muted); font-size: 11px;
@@ -916,6 +939,7 @@
         <span>Preview</span>
       </div>
       <div class="preview-bg-btns">
+        <button class="btn-preview-bg" id="btn-scroll-to-component" title="Scroll to component" disabled>⊙</button>
         <button class="btn-preview-bg active" id="btn-bg-light" title="Light background">☀ Light</button>
         <button class="btn-preview-bg"        id="btn-bg-dark"  title="Dark background">☾ Dark</button>
       </div>
@@ -1204,6 +1228,14 @@ function savePreviewState() {
   $('btn-bg-dark').addEventListener('click',  () => {
     previewState.bgLight = false; applyPreviewBg(); savePreviewState();
   });
+  $('btn-scroll-to-component').addEventListener('click', () => {
+    if (!currentState || !currentState.nodeId) return;
+    parent.postMessage({ pluginMessage: {
+      type: 'SCROLL_TO_COMPONENT',
+      rootNodeId: currentState.nodeId,
+      nodeId: currentState.nodeId,
+    } }, '*');
+  });
 })();
 
 function showPreviewImage(bytes) {
@@ -1215,6 +1247,60 @@ function showPreviewImage(bytes) {
   img.onload = () => URL.revokeObjectURL(url);
   $('preview-inner').innerHTML = '';
   $('preview-inner').appendChild(img);
+  updateScrollToComponentButton();
+}
+
+function showPreviewBase64(imageData) {
+  const inner = $('preview-inner');
+  if (!inner || !imageData) return;
+  let img = inner.querySelector('img');
+  if (!img) {
+    inner.innerHTML = '';
+    img = document.createElement('img');
+    img.alt = 'Component preview';
+    inner.appendChild(img);
+  }
+  img.classList.add('fading');
+  setTimeout(() => {
+    img.src = 'data:image/png;base64,' + imageData;
+    img.classList.remove('fading');
+  }, 150);
+}
+
+function updateScrollToComponentButton() {
+  const btn = $('btn-scroll-to-component');
+  if (!btn) return;
+  const enabled = !!(currentState && currentState.nodeId);
+  btn.disabled = !enabled;
+  btn.style.opacity = enabled ? '1' : '0.4';
+}
+
+function copyFigmaAiPrompt(prompt, btnEl) {
+  if (!prompt) return;
+  copyToClipboard(prompt);
+  if (btnEl) {
+    const original = btnEl.innerHTML;
+    btnEl.textContent = '✓ Copied!';
+    setTimeout(() => { btnEl.innerHTML = original; }, 2000);
+  }
+  showFixToast('Prompt copied · Open Figma AI (Ctrl+Alt+I / ⌘⌥I) and paste');
+}
+
+function getIssuePrompt(issue, idx) {
+  if (!issue) return '';
+  if (issue.waitingPrompt) return issue.waitingPrompt;
+  if (currentState && currentState.result && currentState.result.issues && idx != null) {
+    return currentState.result.issues[idx].waitingPrompt || '';
+  }
+  return '';
+}
+
+function renderFigmaAiButton(issueIdx) {
+  return `
+    <button class="figma-ai-btn" data-issue-idx="${issueIdx != null ? issueIdx : ''}">
+      <span aria-hidden="true">✦</span> Copy Figma AI prompt
+    </button>
+    <div class="figma-ai-hint">Open Figma AI (Ctrl+Alt+I / ⌘⌥I) and paste after copying</div>`;
 }
 
 // ── Analyze tab ────────────────────────────────────────────────────────────
@@ -1504,10 +1590,10 @@ function renderAutoFixControl(issue, idx) {
   if (issue.waitingForAi) {
     return `
     <div class="issue-actions issue-message-only">
-      <div class="issue-waiting-ai-desc">Prompt copied · Paste it in Figma AI chat, apply the fix, then re-scan here.</div>
+      <div class="issue-waiting-ai-desc">Paste the prompt in Figma AI chat, apply the fix, then re-scan here.</div>
+      ${renderFigmaAiButton(idx)}
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
         <button class="btn-focus-ai btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
-        <button class="btn-focus-pending btn-copy-prompt-again" data-issue-idx="${idx}" data-strategy="prompt">Copy prompt again</button>
       </div>
     </div>`;
   }
@@ -1530,6 +1616,7 @@ function renderAutoFixControl(issue, idx) {
       ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
       <div style="display:flex;flex-direction:column;gap:4px">
         <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+        ${renderFigmaAiButton(idx)}
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
     </div>`;
@@ -1882,23 +1969,23 @@ function refreshSummaryBanner() {
       banner.style.display = 'none';
     } else {
       banner.style.display = '';
-      banner.textContent = `Fix ${blockers} blocker${blockers > 1 ? 's' : ''} first`;
+      banner.textContent = `${blockers} blocker${blockers > 1 ? 's' : ''} — use Fix blockers & continue or Fix all anyway`;
     }
   }
 
-  // Apply Fixes button — text + disabled + .blocked class
+  // Apply Fixes button — never fully lock out when blockers exist
   const applyBtn = document.getElementById('btn-apply');
+  const applyBlockersBtn = document.getElementById('btn-apply-blockers');
+  const noSuggestions = !((currentState.result.suggestions || []).length);
   if (applyBtn) {
-    const stillHasBlockers = blockers > 0;
-    const noSuggestions    = !((currentState.result.suggestions || []).length);
-    applyBtn.disabled = stillHasBlockers || noSuggestions;
-    applyBtn.classList.toggle('blocked', stillHasBlockers);
-    applyBtn.textContent = stillHasBlockers
-      ? `⚠ Fix ${blockers} blocker${blockers > 1 ? 's' : ''} first`
-      : 'Apply Fixes…';
-    applyBtn.title = stillHasBlockers
-      ? `Resolve ${blockers} HIGH issue${blockers > 1 ? 's' : ''} before applying`
-      : '';
+    applyBtn.disabled = noSuggestions;
+    applyBtn.classList.remove('blocked');
+    applyBtn.textContent = blockers > 0 ? 'Fix all anyway' : 'Apply Fixes…';
+    applyBtn.title = blockers > 0 ? 'Applies all fixes without fixing blockers first' : '';
+  }
+  if (applyBlockersBtn) {
+    applyBlockersBtn.style.display = blockers > 0 ? '' : 'none';
+    applyBlockersBtn.disabled = noSuggestions;
   }
 
   // Audit summary count line
@@ -1942,13 +2029,27 @@ function handlePendingResult(msg) {
 function showComponentLinkModal(msg) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  const candidates = msg.candidates || [];
+  const candidatesHtml = candidates.length ? `
+    <div class="candidate-list">
+      ${candidates.map(c => `
+        <div class="candidate-row" data-candidate-id="${c.id}">
+          ${c.thumbnailBase64 ? `<img class="candidate-thumb" src="data:image/png;base64,${c.thumbnailBase64}" alt="" />` : '<div class="candidate-thumb"></div>'}
+          <div>
+            <div style="font-size:12px;font-weight:600">${escapeHtml(c.name)}</div>
+            <div class="candidate-meta">${c.isPossibleMatch ? 'Possible match' : c.source} · ${c.issueCount} issue(s)</div>
+          </div>
+        </div>`).join('')}
+    </div>` : '';
   overlay.innerHTML = `
     <div class="modal-box">
-      <div class="modal-title">Component has accessibility issues</div>
-      <p style="font-size:11px;color:var(--text-dim);line-height:1.5;margin:0 0 12px">
-        Found <strong>${escapeHtml(msg.candidateName || 'component')}</strong> but it has
-        ${msg.candidateIssueCount || 0} accessibility issue(s). What would you like to do?
+      <div class="modal-title">${msg.isPossibleMatch ? 'Possible component match' : 'Component has accessibility issues'}</div>
+      <p style="font-size:11px;color:var(--text-dim);line-height:1.5;margin:0 0 8px">
+        ${msg.isPossibleMatch
+          ? 'Found components with similar structure. Pick one to link.'
+          : `Found <strong>${escapeHtml(msg.candidateName || 'component')}</strong> with ${msg.candidateIssueCount || 0} issue(s).`}
       </p>
+      ${candidatesHtml}
       <div class="modal-footer" style="flex-direction:column;align-items:stretch">
         <button class="modal-btn primary" id="link-force">Fix and link</button>
         <button class="modal-btn" id="link-search">Search for another component</button>
@@ -1975,6 +2076,14 @@ function showComponentLinkModal(msg) {
     document.body.removeChild(overlay);
     pendingAutoFixIdx = null;
     pendingLinkSkipIds = [];
+  });
+  overlay.querySelectorAll('.candidate-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.dataset.candidateId;
+      if (!id) return;
+      document.body.removeChild(overlay);
+      dispatchAutoFix(pendingAutoFixIdx, 'generic', { linkAction: 'force', linkCandidateId: id });
+    });
   });
 }
 
@@ -2012,8 +2121,11 @@ function handleAutoFixResult(msg) {
     copyToClipboard(msg.promptForClipboard);
     if (currentState && idx != null && currentState.result.issues[idx]) {
       currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx], {
-        waitingForAi: true, waitingPrompt: msg.promptForClipboard,
+        waitingForAi: true,
+        waitingPrompt: msg.promptForClipboard,
+        fixKind: 'focus_state',
       });
+      copyFigmaAiPrompt(msg.promptForClipboard);
       renderResult(currentState);
     }
     return;
@@ -2262,12 +2374,17 @@ function renderResult(data) {
     ${askHtml}
     <div class="apply-row">
       <button class="btn-apply" id="btn-back">← Back</button>
-      <button class="btn-apply primary ${hasHigh ? 'blocked' : ''}" id="btn-apply"
-        ${(r.suggestions || []).length === 0 || hasHigh ? 'disabled' : ''}>
-        ${hasHigh
-          ? '⚠ Fix ' + highCount + ' blocker' + (highCount !== 1 ? 's' : '') + ' first'
-          : 'Apply Fixes…'}
-      </button>
+      <div class="apply-row-blockers">
+        <button class="btn-apply primary" id="btn-apply-blockers" style="display:${hasHigh ? '' : 'none'}"
+          ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
+          Fix blockers &amp; continue
+        </button>
+        <button class="btn-apply ${hasHigh ? '' : 'primary'}" id="btn-apply"
+          ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
+          ${hasHigh ? 'Fix all anyway' : 'Apply Fixes…'}
+        </button>
+        ${hasHigh ? '<div class="apply-warning">Fix all anyway runs every fix without prioritizing blockers.</div>' : ''}
+      </div>
     </div>
     <div id="apply-feedback"></div>
 <div class="fix-progress-wrap" id="fix-progress-wrap">
@@ -2424,15 +2541,57 @@ function renderResult(data) {
   });
 
   // "Apply Fixes…" → show "Fix in place vs copy" modal
+  function startApplyFlow(fixOrder) {
+    if (!currentState) return;
+    showFixProgress(fixOrder === 'blockers-first' ? 'Fixing blockers first…' : 'Preparing fixes…', 0, 1);
+    if (fixOrder === 'blockers-first') {
+      runBatchApply('inplace', 'blockers-first');
+      return;
+    }
+    showApplyModal(fixOrder);
+  }
+
   $('btn-apply').addEventListener('click', () => {
     if (!currentState) return;
     const applyBtn = $('btn-apply');
-    if (applyBtn) {
-      applyBtn.disabled = true;
-      applyBtn.textContent = 'Applying fixes…';
-    }
-    showFixProgress('Preparing fixes…', 0, 1);
-    showApplyModal();
+    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying fixes…'; }
+    startApplyFlow('all');
+  });
+  const applyBlockersBtn = $('btn-apply-blockers');
+  if (applyBlockersBtn) {
+    applyBlockersBtn.addEventListener('click', () => {
+      if (!currentState) return;
+      applyBlockersBtn.disabled = true;
+      applyBlockersBtn.textContent = 'Applying fixes…';
+      startApplyFlow('blockers-first');
+    });
+  }
+
+  document.querySelectorAll('#content .figma-ai-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.issueIdx, 10);
+      const issue = (currentState.result.issues || [])[idx];
+      if (issue && issue.waitingPrompt) {
+        copyFigmaAiPrompt(issue.waitingPrompt, btn);
+      } else {
+        dispatchAutoFix(idx, 'prompt');
+      }
+    });
+  });
+
+  document.querySelectorAll('#content .issue-item[data-issue-idx]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('button, .btn-explain, .autofix-menu, .autofix-opt, .figma-ai-btn')) return;
+      const idx = parseInt(row.dataset.issueIdx, 10);
+      const issue = (currentState.result.issues || [])[idx];
+      if (!issue) return;
+      parent.postMessage({ pluginMessage: {
+        type: 'EXPORT_PREVIEW',
+        nodeId: issue.nodeId || currentState.nodeId,
+        rootNodeId: currentState.nodeId,
+      } }, '*');
+    });
   });
 
   document.querySelectorAll('.btn-ask-opt').forEach(btn => {
@@ -2449,8 +2608,25 @@ function renderResult(data) {
   });
 }
 
+function runBatchApply(mode, fixOrder, annDest) {
+  const applyBtn = $('btn-apply');
+  const blockersBtn = $('btn-apply-blockers');
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
+  if (blockersBtn) { blockersBtn.disabled = true; blockersBtn.textContent = 'Applying…'; }
+  parent.postMessage({ pluginMessage: {
+    type:                  'APPLY_WITH_MODE',
+    mode:                  mode || 'inplace',
+    suggestions:           currentState.result.suggestions,
+    issues:                (currentState.result.issues || []).slice(),
+    rootNodeId:            currentState.nodeId,
+    detectedRole:          currentState.result.role,
+    annotationDestination: annDest || (settings.annotationDestination === 'ask' ? (getAnnotationDestSession() || 'devmode') : settings.annotationDestination),
+    fixOrder:              fixOrder || 'all',
+  } }, '*');
+}
+
 // ── Fix action dialog (three-option) ──────────────────────────────────────
-function showApplyModal() {
+function showApplyModal(pendingFixOrder) {
   const hasPluginDataSugs = (currentState.result.suggestions || []).some(s => s.type === 'setPluginData');
   const showAnnDest = (settings.annotationDestination === 'ask') && hasPluginDataSugs && !getAnnotationDestSession();
 
@@ -2549,17 +2725,7 @@ function showApplyModal() {
         ? (getAnnotationDestSession() || 'devmode')
         : (settings.annotationDestination || 'devmode'));
     document.body.removeChild(overlay);
-    const applyBtn = $('btn-apply');
-    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
-    parent.postMessage({ pluginMessage: {
-      type:                  'APPLY_WITH_MODE',
-      mode:                  selectedMode,
-      suggestions:           currentState.result.suggestions,
-      issues:                (currentState.result.issues || []).slice(),
-      rootNodeId:            currentState.nodeId,
-      detectedRole:          currentState.result.role,
-      annotationDestination: annDest,
-    } }, '*');
+    runBatchApply(selectedMode, pendingFixOrder || 'all', annDest);
   });
 }
 
@@ -2777,19 +2943,28 @@ function handleScanProgress() {
   // progress notification is shown via figma.notify on the main thread
 }
 
+function handleUpdatePreview(msg) {
+  if (msg.ok && msg.imageData) showPreviewBase64(msg.imageData);
+}
+
 function handleAnalysisResults(msg) {
   hideFixProgress();
   const b = $('btn-apply');
+  const bb = $('btn-apply-blockers');
+  const issues = (msg.result && msg.result.issues) || [];
+  const sugs = (msg.result && msg.result.suggestions) || [];
+  const blockers = issues.filter(i => i.severity === 'HIGH' && !i.fixed && !i.acknowledged).length;
   if (b) {
-    const issues = (msg.result && msg.result.issues) || [];
-    const sugs = (msg.result && msg.result.suggestions) || [];
-    const blockers = issues.filter(i => i.severity === 'HIGH' && !i.fixed && !i.acknowledged).length;
-    b.disabled = blockers > 0 || sugs.length === 0 || issues.length === 0;
-    b.textContent = blockers > 0
-      ? ('⚠ Fix ' + blockers + ' blocker' + (blockers !== 1 ? 's' : '') + ' first')
-      : (issues.length === 0 ? 'All issues resolved' : 'Apply Fixes…');
+    b.disabled = sugs.length === 0;
+    b.textContent = blockers > 0 ? 'Fix all anyway' : (issues.length === 0 ? 'All issues resolved' : 'Apply Fixes…');
+  }
+  if (bb) {
+    bb.style.display = blockers > 0 ? '' : 'none';
+    bb.disabled = sugs.length === 0;
+    bb.textContent = 'Fix blockers & continue';
   }
   renderResult(msg);
+  updateScrollToComponentButton();
   persistLastScan(msg);
   if (!msg.afterFix) {
     setTimeout(() => {
@@ -2898,6 +3073,7 @@ window.onmessage = function(event) {
     ACKNOWLEDGE_RESULT:     handleAcknowledgeResult,
     REFRESH_SUMMARY_BANNER: function() { refreshSummaryBanner(); },
     PREVIEW_IMAGE:          handlePreviewImage,
+    UPDATE_PREVIEW:         handleUpdatePreview,
     PREVIEW_STATE_LOADED:   handlePreviewStateLoaded,
     AI_LOADING:             handleAiLoading,
     SCAN_PROGRESS:          handleScanProgress,
