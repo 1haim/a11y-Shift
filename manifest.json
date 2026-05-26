@@ -2,6 +2,7 @@
   "name": "A11y Shift",
   "id": "1641240485798800801",
   "api": "1.0.0",
+  "documentAccess": "dynamic-page",
   "main": "dist/code.js",
   "ui": "ui.html",
   "editorType": ["figma", "dev"],
