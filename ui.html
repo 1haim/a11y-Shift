@@ -754,8 +754,8 @@
   }
   .settings-radio.selected { border-color: var(--accent-blue); background: #0a1220; }
   .settings-radio input { margin-top: 2px; flex-shrink: 0; }
-  .settings-radio-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
-  .settings-radio-desc { font-size: 10px; color: var(--text-dim); line-height: 1.45; }
+  .settings-radio-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .settings-radio-desc { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
   .annotation-dest-block {
     margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
     display: none;
@@ -985,7 +985,7 @@
   /* ── Settings panel ──────────────────────────────────────────────── */
   .settings-tab { padding: 16px; display: none; }
   .settings-tab.active { display: block; }
-  .field-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .field-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
   .field-row   { display: flex; gap: 8px; margin-bottom: 14px; }
   .field-input {
     flex: 1; background: var(--surface2); border: 1px solid var(--border2);
@@ -1007,7 +1007,7 @@
     font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
   }
   .btn-save:hover { opacity: 0.85; }
-  .field-hint  { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px; }
+  .field-hint  { font-size: 15px; font-weight: 400; color: var(--text-dim); line-height: 1.5; margin-bottom: 14px; }
   .key-status  { font-size: 11px; color: var(--chip-high-text); margin-bottom: 6px; }
   .divider     { border: none; border-top: 1px solid var(--border); margin: 4px 0 16px; }
   .slider-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -1219,7 +1219,16 @@
   .attr-key { color: #136EF8; }
   .attr-row { border-bottom-color: #F0F4F8; }
 
+  /* Settings typography */
+  .field-label          { color: #136EF8; }
+  .field-hint           { color: #3A4B61; }
+  .settings-radio-title { color: #0A2540; }
+  .settings-radio-desc  { color: #3A4B61; }
+  .slider-label         { font-size: 14px; color: #3A4B61; }
+  .slider-val           { font-size: 14px; font-weight: 600; color: #136EF8; }
+
   /* Settings radio */
+  .settings-radio { border-color: #CBD2E1; background: #FFFFFF; }
   .settings-radio.selected { border-color: #136EF8; background: #EBF1F9; }
 
   /* Preview & scan */
@@ -1572,9 +1581,9 @@
 
   <div class="field-label">Min detection score to skip AI</div>
   <div class="slider-row">
-    <span style="font-size:11px;color:var(--text-muted)">Low</span>
+    <span class="slider-label">Low</span>
     <input type="range" id="threshold-slider" min="2" max="5" step="1" value="3" />
-    <span style="font-size:11px;color:var(--text-muted)">High</span>
+    <span class="slider-label">High</span>
     <span class="slider-val" id="threshold-val">3</span>
   </div>
   <p class="field-hint" style="margin-top:-6px">Score ≥ this value → rule engine result used directly (no AI call).</p>
