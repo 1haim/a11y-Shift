@@ -5,6 +5,7 @@
   "main": "dist/code.js",
   "ui": "ui.html",
   "editorType": ["figma", "dev"],
+  "icon": "icon.png",
   "networkAccess": {
     "allowedDomains": ["https://api.openai.com"]
   }
