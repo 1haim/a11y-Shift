@@ -147,18 +147,18 @@
     gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border);
   }
   .node-info { flex: 1; min-width: 0; }
-  .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .node-type { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+  .node-name { font-size: 14px; font-weight: 600; color: #0A2540; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-type { font-size: 13px; color: #64748B; letter-spacing: 0; text-transform: none; }
   .confidence-chip {
-    flex-shrink: 0; padding: 2px 8px; border-radius: 20px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    flex-shrink: 0; padding: 3px 10px; border-radius: 20px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
   }
-  .chip-HIGH { background: var(--chip-high); color: var(--chip-high-text); }
-  .chip-MED  { background: var(--chip-med);  color: var(--chip-med-text);  }
-  .chip-LOW  { background: var(--chip-low);  color: var(--chip-low-text);  }
+  .chip-HIGH { background: #E6F4E7; color: #06720F; }
+  .chip-MED  { background: #FFF3CD; color: #92400E; }
+  .chip-LOW  { background: #E8F0FE; color: #1D4ED8; }
   .result-role { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  .role-label  { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-  .role-value  { font-size: 15px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.3px; }
+  .role-label  { font-size: 14px; font-weight: 600; color: #0A2540; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
+  .role-value  { font-size: 14px; font-weight: 400; color: #0A2540; letter-spacing: 0; }
   .result-reasoning { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 
   /* ── Issues ──────────────────────────────────────────────────────── */
@@ -1016,7 +1016,7 @@
   .btn-ask-opt.selected { background: #EBF1F9; border-color: #136EF8; color: #136EF8; }
 
   /* Role value & meta badges */
-  .role-value { color: #136EF8; }
+  .role-value { color: #0A2540; font-size: 14px; font-weight: 400; }
   .badge-ai   { background: #EBF1F9; color: #136EF8; }
   .badge-rule { background: #E6F9F0; color: #0B7A52; }
 
@@ -1057,7 +1057,7 @@
 
   /* Section label */
   .section-label { color: #0A2540; font-size: 16px; font-weight: 500; }
-  .role-label    { color: #4D6F96; }
+  .role-label    { color: #0A2540; font-size: 14px; font-weight: 600; }
 
   /* Spinner */
   .spinner { border-color: #D6E8F5; border-top-color: #136EF8; }
@@ -1480,7 +1480,9 @@ const previewState = { collapsed: false, bgLight: true };
 
 function applyPreviewCollapsed() {
   $('preview-body').classList.toggle('collapsed', previewState.collapsed);
-  $('preview-collapse-icon').textContent = previewState.collapsed ? '▼' : '▲';
+  const chevronUp   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10L8 6L12 10" stroke="#136EF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const chevronDown = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6L8 10L12 6" stroke="#136EF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  $('preview-collapse-icon').innerHTML = previewState.collapsed ? chevronDown : chevronUp;
 }
 function applyPreviewBg() {
   $('preview-inner').style.background = previewState.bgLight ? BG_LIGHT : BG_DARK;
@@ -2556,13 +2558,13 @@ function renderResult(data) {
       <div class="result-header">
         <div class="node-info">
           <div class="node-name">${data.nodeName}</div>
-          <div class="node-type">${data.nodeType}</div>
+          <div class="node-type">${data.nodeType ? data.nodeType[0] + data.nodeType.slice(1).toLowerCase() : ''}</div>
         </div>
-        <span class="confidence-chip chip-${conf}">${conf}</span>
+        <span class="confidence-chip chip-${conf}">${conf[0] + conf.slice(1).toLowerCase()}</span>
       </div>
       <div class="result-role">
-        <div class="role-label">Identified role</div>
-        <div class="role-value">${r.role}</div>
+        <div class="role-label">Identified Role</div>
+        <div class="role-value">${r.role ? r.role[0].toUpperCase() + r.role.slice(1) : ''}</div>
       </div>
       ${passedHtml}
       ${issuesHtml}
