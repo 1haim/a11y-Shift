@@ -147,6 +147,33 @@
   .empty-state .icon { display: flex; align-items: center; justify-content: center; opacity: 0.55; }
   .empty-state p { font-size: 14px; font-weight: 500; line-height: 1.4; color: #031239; }
 
+  /* ── Splash screen ──────────────────────────────────────────────── */
+  #splash {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.35s ease;
+  }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+  #splash.gone   { display: none; }
+  .splash-logo {
+    animation: splashPulse 1.6s ease-in-out infinite;
+    transform-origin: center;
+  }
+  .splash-label {
+    margin-top: 16px; font-size: 14px; font-weight: 500;
+    color: #3A4B61; letter-spacing: 0.02em;
+    animation: splashFadeLabel 1.6s ease-in-out infinite;
+  }
+  @keyframes splashPulse {
+    0%, 100% { transform: scale(1);    opacity: 1;    }
+    50%       { transform: scale(1.08); opacity: 0.75; }
+  }
+  @keyframes splashFadeLabel {
+    0%, 100% { opacity: 1;   }
+    50%       { opacity: 0.4; }
+  }
+
   /* ── Loading ─────────────────────────────────────────────────────── */
   .loading {
     display: flex; flex-direction: column; align-items: center;
@@ -1093,6 +1120,47 @@
 </style>
 </head>
 <body>
+
+<!-- ── Splash / loading screen ────────────────────────────────────── -->
+<div id="splash">
+  <div style="display:flex;flex-direction:column;align-items:center">
+  <div class="splash-logo">
+    <svg width="80" height="81" viewBox="0 0 60 61" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g filter="url(#sp_f0)">
+        <rect x="10" y="6" width="40" height="41" rx="8" fill="white"/>
+        <path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#sp_p0)"/>
+        <path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9404 37.7867 32.896 37.7919L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#sp_p1)" fill-opacity="0.8"/>
+        <path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#sp_p2)"/>
+      </g>
+      <defs>
+        <filter id="sp_f0" x="0" y="0" width="60" height="61" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+          <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+          <feOffset dy="4"/><feGaussianBlur stdDeviation="5"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.031 0 0 0 0 0.075 0 0 0 0 0.31 0 0 0 0.12 0"/>
+          <feBlend mode="normal" in2="BackgroundImageFix" result="shadow"/>
+          <feBlend mode="normal" in="SourceGraphic" in2="shadow" result="shape"/>
+        </filter>
+        <linearGradient id="sp_p0" x1="48.4" y1="-17" x2="28.7" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0.59" stop-color="#2C6EE4"/>
+          <stop offset="1" stop-color="#091D72"/>
+        </linearGradient>
+        <linearGradient id="sp_p1" x1="29.4" y1="15.5" x2="40.9" y2="25.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0.08" stop-color="#66B0F6"/>
+          <stop offset="0.96" stop-color="#091D72" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="sp_p2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1 24) rotate(58.7) scale(23.4 41.4)">
+          <stop offset="0.004" stop-color="#A4EAFF"/>
+          <stop offset="0.445" stop-color="#0092FF"/>
+          <stop offset="0.84" stop-color="#0346AD"/>
+        </radialGradient>
+      </defs>
+    </svg>
+  </div>
+  <div class="splash-label">Loading...</div>
+  </div>
+</div>
+
 <div class="ai-consent-overlay" id="ai-consent-overlay">
   <div class="ai-consent-dialog">
     <h3>Allow AI-generated text?</h3>
@@ -3055,7 +3123,22 @@ function renderNodeData(msg) {
 
 // ── Individual message handlers (all defined before the dispatch map) ────────
 
+const _splashStart = Date.now();
+const _splashMin   = 1800; // minimum ms to show splash
+
+function hideSplash() {
+  const s = document.getElementById('splash');
+  if (!s || s.classList.contains('gone')) return;
+  const elapsed = Date.now() - _splashStart;
+  const delay   = Math.max(0, _splashMin - elapsed);
+  setTimeout(() => {
+    s.classList.add('hidden');
+    setTimeout(() => s.classList.add('gone'), 380);
+  }, delay);
+}
+
 function handleInit(msg) {
+  hideSplash();
   isDevMode = msg.editorType === 'dev';
   if (isDevMode) {
     $('dev-badge').classList.add('visible');
