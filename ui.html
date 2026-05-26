@@ -884,6 +884,52 @@
   }
   .preview-placeholder .ph-icon { opacity: 0.5; display: flex; }
 
+  /* ── Sticky component header ────────────────────────────────────── */
+  .sticky-node-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #FFFFFF;
+    box-shadow: 0px 4px 5px rgba(8,19,79,0.08), 0px 1px 1.5px rgba(8,19,79,0.04);
+    display: none;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    width: 100%;
+  }
+  .sticky-node-header.visible { display: flex; }
+  .sticky-node-thumbnail {
+    width: 120px; height: 80px; min-width: 120px;
+    background: #F8FAFF; border-radius: 12px;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sticky-node-thumbnail img {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  .sticky-node-info {
+    flex: 1; min-width: 0;
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 8px;
+  }
+  .sticky-node-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .sticky-node-name {
+    font-size: 16px; font-weight: 500; color: #0A2540; line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sticky-node-type {
+    font-size: 15px; font-weight: 400; color: #3A4B61; line-height: 1.25; white-space: nowrap;
+  }
+  .sticky-conf-chip {
+    display: flex; align-items: center; flex-shrink: 0;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; font-weight: 500; white-space: nowrap;
+  }
+  .sticky-conf-chip.high    { background: #E6F4E7; color: #06720F; }
+  .sticky-conf-chip.medium  { background: #FFECB0; color: #765900; }
+  .sticky-conf-chip.low     { background: #FDE8E9; color: #D8161F; }
+  .sticky-conf-chip.default { background: #E0EAFE; color: #145AEA; }
+
   /* ── Fix action dialog ───────────────────────────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100;
@@ -1447,6 +1493,18 @@
     </div>
   </div>
 
+  <!-- Sticky component header — appears when preview scrolls out of view -->
+  <div class="sticky-node-header" id="sticky-node-header" aria-hidden="true">
+    <div class="sticky-node-thumbnail" id="sticky-node-thumbnail"></div>
+    <div class="sticky-node-info">
+      <div class="sticky-node-text">
+        <div class="sticky-node-name" id="sticky-node-name">—</div>
+        <div class="sticky-node-type" id="sticky-node-type">—</div>
+      </div>
+      <div class="sticky-conf-chip default" id="sticky-conf-chip"></div>
+    </div>
+  </div>
+
   <div class="content" id="content"></div>
 </div>
 
@@ -1816,6 +1874,7 @@ $('btn-scan').addEventListener('click', () => {
   parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
   $('btn-scan').disabled = true;
   $('content').innerHTML = loadingHtml('Reading context…');
+  resetStickyHeader();
 });
 
 (function initAiConsentDialog() {
@@ -3138,6 +3197,94 @@ function renderResult(data) {
       } }, '*');
     });
   });
+
+  // Update sticky header with current component info
+  updateStickyHeader(data);
+}
+
+// ── Sticky node header ─────────────────────────────────────────────────────
+let _stickyObserver = null;
+let _stickyScrollHandler = null;
+
+function formatNodeType(type) {
+  if (!type) return '';
+  const map = {
+    INSTANCE: 'Instance', COMPONENT: 'Component', COMPONENT_SET: 'Component Set',
+    FRAME: 'Frame', GROUP: 'Group', TEXT: 'Text', VECTOR: 'Vector',
+  };
+  return map[type] || (type.charAt(0) + type.slice(1).toLowerCase());
+}
+
+function updateStickyHeader(data) {
+  const header = $('sticky-node-header');
+  if (!header) return;
+
+  // Populate name + type
+  const nameEl = $('sticky-node-name');
+  const typeEl = $('sticky-node-type');
+  const chipEl = $('sticky-conf-chip');
+  if (nameEl) nameEl.textContent = data.nodeName || '—';
+  if (typeEl) typeEl.textContent = formatNodeType(data.nodeType || '');
+
+  // Confidence chip
+  const conf = ((data.result && data.result.confidence) || '').toString().toUpperCase();
+  if (chipEl) {
+    const cls = conf === 'HIGH' ? 'high' : conf === 'MEDIUM' ? 'medium' : conf === 'LOW' ? 'low' : 'default';
+    chipEl.className = 'sticky-conf-chip ' + cls;
+    chipEl.textContent = conf ? (conf.charAt(0) + conf.slice(1).toLowerCase()) : '—';
+  }
+
+  // Thumbnail — grab from preview-inner once image is ready
+  setTimeout(() => {
+    const thumbEl = $('sticky-node-thumbnail');
+    if (!thumbEl) return;
+    const previewImg = document.querySelector('#preview-inner img');
+    if (previewImg && previewImg.src) {
+      thumbEl.innerHTML = `<img src="${previewImg.src}" alt="${data.nodeName || 'Component'}">`;
+    } else {
+      thumbEl.innerHTML = '';
+    }
+  }, 400);
+
+  // Watch preview-panel: show sticky header when it scrolls out of view
+  if (_stickyObserver) _stickyObserver.disconnect();
+  if (_stickyScrollHandler) {
+    window.removeEventListener('scroll', _stickyScrollHandler, true);
+    _stickyScrollHandler = null;
+  }
+  const previewPanel = $('preview-panel');
+  if (!previewPanel) return;
+
+  function _applyStickyVisibility() {
+    const rect = previewPanel.getBoundingClientRect();
+    const outOfView = rect.bottom <= 0;
+    header.classList.toggle('visible', outOfView);
+    header.setAttribute('aria-hidden', outOfView ? 'false' : 'true');
+  }
+
+  // IntersectionObserver (preferred)
+  _stickyObserver = new IntersectionObserver((entries) => {
+    const visible = entries[0].isIntersecting;
+    header.classList.toggle('visible', !visible);
+    header.setAttribute('aria-hidden', visible ? 'true' : 'false');
+  }, { threshold: 0 });
+  _stickyObserver.observe(previewPanel);
+
+  // Scroll event fallback (covers iframe environments where IO may not fire)
+  _stickyScrollHandler = _applyStickyVisibility;
+  window.addEventListener('scroll', _stickyScrollHandler, { passive: true, capture: true });
+  document.addEventListener('scroll', _stickyScrollHandler, { passive: true, capture: true });
+}
+
+function resetStickyHeader() {
+  const header = $('sticky-node-header');
+  if (header) header.classList.remove('visible');
+  if (_stickyObserver) { _stickyObserver.disconnect(); _stickyObserver = null; }
+  if (_stickyScrollHandler) {
+    window.removeEventListener('scroll', _stickyScrollHandler, true);
+    document.removeEventListener('scroll', _stickyScrollHandler, true);
+    _stickyScrollHandler = null;
+  }
 }
 
 function runBatchApply(mode, fixOrder, annDest) {
