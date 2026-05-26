@@ -16,31 +16,56 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <style>
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularRegular.woff2") format("woff2"),
+         url("fonts/CircularRegular.woff")  format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularMedium.woff2") format("woff2"),
+         url("fonts/CircularMedium.woff")  format("woff");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularBold.woff2") format("woff2"),
+         url("fonts/CircularBold.woff")  format("woff");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
   :root {
-    --bg: #0a0a0a;
-    --surface: #141414;
-    --surface2: #1e1e1e;
-    --border: #2a2a2a;
-    --border2: #333;
-    --text: #f0f0f0;
-    --text-muted: #666;
-    --text-dim: #999;
-    --accent-blue: #4da3ff;
-    --accent-green: #3ecf8e;
-    --accent-amber: #f59e0b;
-    --accent-red: #ef4444;
-    --chip-high: #0d2e1a;
-    --chip-high-text: #3ecf8e;
-    --chip-med: #2e1f00;
-    --chip-med-text: #f59e0b;
-    --chip-low: #2a0a0a;
-    --chip-low-text: #ef4444;
-    --radius: 10px;
-    --radius-sm: 6px;
+    --bg:            #FFFFFF;
+    --surface:       #F7FAFD;
+    --surface2:      #EBF1F9;
+    --border:        #D6E8F5;
+    --border2:       #BDD4EA;
+    --text:          #031239;
+    --text-muted:    #4D6F96;
+    --text-dim:      #6B8DAF;
+    --accent-blue:   #136EF8;
+    --accent-green:  #0EA472;
+    --accent-amber:  #D97706;
+    --accent-red:    #DC2626;
+    --chip-high:     #E6F9F0;
+    --chip-high-text:#0B7A52;
+    --chip-med:      #FEF5E4;
+    --chip-med-text: #B45309;
+    --chip-low:      #FDE8E8;
+    --chip-low-text: #B91C1C;
+    --radius:        8px;
+    --radius-sm:     5px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-family: "CircularXX", "Circular Std", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: var(--bg);
     color: var(--text);
     font-size: 13px;
@@ -54,16 +79,19 @@
     padding: 12px 16px 0;
     border-bottom: 1px solid var(--border);
   }
-  .logo { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; }
+  .logo { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; }
   .logo-icon {
-    width: 24px; height: 24px;
-    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
-    border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
+    /* Logo.svg is self-contained: includes white card + drop shadow.
+       SVG is 60×61px but the visible card is 40×41px at (10,6).
+       Negative margins trim the transparent filter-bleed space so
+       the flex container measures the correct 41px card height. */
+    display: block; flex-shrink: 0; line-height: 0;
+    margin-left: -10px; margin-right: -10px;   /* trim 10px side padding */
+    margin-top: -6px;   margin-bottom: -14px;  /* trim 6px top + 14px bottom shadow bleed */
   }
-  .logo-name { font-size: 14px; font-weight: 600; letter-spacing: -0.3px; }
-  .logo-sub  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
+  .logo-icon svg { display: block; overflow: visible; }
+  .logo-name { font-size: 16px; font-weight: 500; line-height: 1.25; letter-spacing: 0; color: #0A2540; }
+  .logo-sub  { font-size: 12px; font-weight: 400; color: #000000; letter-spacing: 0; line-height: normal; }
   .dev-badge {
     font-size: 9px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
     padding: 2px 6px; border-radius: 4px;
@@ -75,13 +103,13 @@
   /* ── Tab bar ─────────────────────────────────────────────────────── */
   .tab-bar { display: flex; padding-bottom: 12px; gap: 0; }
   .tab-btn {
-    padding: 5px 12px; font-size: 12px; font-weight: 500;
+    padding: 5px 12px; font-size: 14px; font-weight: 700;
     background: none; border: none; cursor: pointer;
-    color: var(--text-muted); border-bottom: 2px solid transparent;
-    transition: all 0.15s; letter-spacing: 0.2px;
+    color: #2B3E52; border-bottom: 2px solid transparent;
+    transition: color 0.15s; letter-spacing: 0;
   }
   .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
-  .tab-btn:hover:not(.active) { color: var(--text-dim); }
+  .tab-btn:hover:not(.active) { color: #4D6F96; }
 
   /* ── Scan button row ─────────────────────────────────────────────── */
   .scan-area { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
@@ -112,22 +140,106 @@
   /* ── Empty state ─────────────────────────────────────────────────── */
   .empty-state {
     display: flex; flex-direction: column; align-items: center;
-    gap: 8px; padding: 40px 20px;
-    color: var(--text-muted); text-align: center;
+    gap: 16px; padding: 48px 24px;
+    background: #F8FAFF; border-radius: var(--radius);
+    color: var(--text); text-align: center;
   }
-  .empty-state .icon { font-size: 28px; opacity: 0.4; }
-  .empty-state p { font-size: 12px; line-height: 1.6; }
+  .empty-state .icon { display: flex; align-items: center; justify-content: center; opacity: 0.55; }
+  .empty-state p { font-size: 14px; font-weight: 500; line-height: 1.4; color: #031239; }
+
+  /* ── PIN / Login screen ─────────────────────────────────────────── */
+  #pin-screen {
+    position: fixed; inset: 0; z-index: 9998;
+    background: #FFFFFF;
+    display: flex; flex-direction: column; gap: 24px;
+    padding: 24px; box-sizing: border-box;
+  }
+  #pin-screen.gone { display: none; }
+
+  .pin-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .pin-header-left { display: flex; align-items: center; gap: 12px; }
+  .pin-app-name { font-size: 16px; font-weight: 500; color: #0A2540; line-height: 1.25; }
+  .pin-close-btn {
+    width: 24px; height: 24px; background: none; border: none;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+    opacity: 0.7; transition: opacity 0.15s;
+  }
+  .pin-close-btn:hover { opacity: 1; }
+
+  .pin-body {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 32px;
+  }
+  .pin-brand { display: flex; align-items: center; gap: 10px; }
+  .pin-brand-icon { height: 28px; width: auto; }
+  .pin-brand-name {
+    font-size: 24px; font-weight: 500; color: #0A2540;
+    letter-spacing: -0.3px;
+  }
+  .pin-description {
+    font-size: 14px; font-weight: 400; color: #3A4B61;
+    text-align: center; line-height: 1.6; max-width: 300px;
+  }
+  .pin-entry { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .pin-label { font-size: 15px; font-weight: 400; color: #3A4B61; text-align: center; }
+  .pin-inputs { display: flex; gap: 12px; }
+  .pin-digit {
+    width: 56px; height: 64px; box-sizing: border-box;
+    border: 1.5px solid #CBD2E1; border-radius: 8px;
+    background: #FFFFFF; font-size: 28px; font-weight: 500;
+    color: #0A2540; text-align: center; outline: none;
+    font-family: "CircularXX", sans-serif;
+    transition: border-color 0.15s; caret-color: transparent;
+  }
+  .pin-digit:focus { border-color: #136EF8; box-shadow: 0 0 0 3px rgba(19,110,248,0.12); }
+  .pin-digit.filled { border-color: #136EF8; }
+  .pin-error { font-size: 13px; color: #d8161f; text-align: center; min-height: 18px; }
+
+  /* ── Splash screen ──────────────────────────────────────────────── */
+  #splash {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.35s ease;
+  }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+  #splash.gone   { display: none; }
+  .splash-logo {
+    animation: splashPulse 1.6s ease-in-out infinite;
+    transform-origin: center;
+  }
+  .splash-label {
+    margin-top: 16px; font-size: 14px; font-weight: 500;
+    color: #3A4B61; letter-spacing: 0.02em;
+    animation: splashFadeLabel 1.6s ease-in-out infinite;
+  }
+  @keyframes splashPulse {
+    0%, 100% { transform: scale(1);    opacity: 1;    }
+    50%       { transform: scale(1.08); opacity: 0.75; }
+  }
+  @keyframes splashFadeLabel {
+    0%, 100% { opacity: 1;   }
+    50%       { opacity: 0.4; }
+  }
 
   /* ── Loading ─────────────────────────────────────────────────────── */
   .loading {
     display: flex; flex-direction: column; align-items: center;
-    gap: 10px; padding: 32px 20px;
-    color: var(--text-muted); font-size: 12px;
+    gap: 12px; padding: 32px 20px;
+    color: #3A4B61; font-size: 14px; font-weight: 500;
   }
+  .loading-logo {
+    animation: splashPulse 1.6s ease-in-out infinite;
+    transform-origin: center;
+  }
+  /* legacy spinner kept for autofix button */
   .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid var(--border2);
-    border-top-color: var(--accent-blue);
+    width: 14px; height: 14px;
+    border: 2px solid rgba(19,110,248,0.25);
+    border-top-color: #136EF8;
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
@@ -143,77 +255,84 @@
     gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border);
   }
   .node-info { flex: 1; min-width: 0; }
-  .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .node-type { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+  .node-name { font-size: 15px; font-weight: 500; color: #0A2540; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-type { font-size: 15px; font-weight: 400; color: #3A4B61; letter-spacing: 0; text-transform: none; }
   .confidence-chip {
-    flex-shrink: 0; padding: 2px 8px; border-radius: 20px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    flex-shrink: 0; padding: 3px 10px; border-radius: 20px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
   }
-  .chip-HIGH { background: var(--chip-high); color: var(--chip-high-text); }
-  .chip-MED  { background: var(--chip-med);  color: var(--chip-med-text);  }
-  .chip-LOW  { background: var(--chip-low);  color: var(--chip-low-text);  }
+  .chip-HIGH { background: #E6F4E7; color: #06720F; }
+  .chip-MED  { background: #FFF3CD; color: #92400E; }
+  .chip-LOW  { background: #E8F0FE; color: #1D4ED8; }
   .result-role { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  .role-label  { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-  .role-value  { font-size: 15px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.3px; }
+  .role-label  { font-size: 15px; font-weight: 500; color: #0A2540; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
+  .role-value  { font-size: 15px; font-weight: 400; color: #3A4B61; letter-spacing: 0; }
   .result-reasoning { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 
   /* ── Issues ──────────────────────────────────────────────────────── */
   .issues-section { padding: 10px 14px; border-top: 1px solid var(--border); }
-  .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .issues-count   { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
-  .issues-count.has-high { color: var(--accent-red); }
+  .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0A2540; }
+  .issues-count.has-high { color: #0A2540; }
   .issue-item {
-    display: flex; align-items: flex-start; gap: 8px;
-    padding: 7px 10px; border-radius: var(--radius-sm);
-    border: 1px solid transparent; margin-bottom: 5px;
-    font-size: 12px; line-height: 1.5;
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; border-radius: 8px;
+    border: 1px solid #CBD2E1; margin-bottom: 12px;
+    background: #FFFFFF;
+    font-size: 13px; line-height: 1.5;
   }
   .issue-item:last-child { margin-bottom: 0; }
-  .issue-HIGH   { background: #200a0a; border-color: #5e1a1a; }
-  .issue-MED    { background: #1e1400; border-color: #5e3d00; }
-  .issue-LOW    { background: #0a1220; border-color: #1a3050; }
-  .issue-MANUAL { background: #101020; border-color: #2a2a5e; }
-  .issue-sev  {
-    flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
-    text-transform: uppercase; padding: 2px 6px; border-radius: 3px; margin-top: 1px;
+  .issue-HIGH   { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MED    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-LOW    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-sev {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 6px; width: fit-content;
+    font-size: 14px; font-weight: 500; letter-spacing: 0;
   }
-  .issue-HIGH   .issue-sev { background: #5e1a1a; color: #ef4444; }
-  .issue-MED    .issue-sev { background: #5e3d00; color: #f59e0b; }
-  .issue-LOW    .issue-sev { background: #1a3050; color: #4da3ff; }
-  .issue-MANUAL .issue-sev { background: #2a2a5e; color: #a78bfa; }
-  .issue-body { flex: 1; min-width: 0; }
-  .issue-msg  { color: var(--text); }
-  .issue-wcag { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .issue-HIGH   .issue-sev { background: #fde8e9; color: #d8161f; }
+  .issue-MED    .issue-sev { background: #ffecb0; color: #765900; }
+  .issue-LOW    .issue-sev { background: #E8F0FE; color: #1D4ED8; }
+  .issue-MANUAL .issue-sev { background: #EDE9FE; color: #5B21B6; }
+  .issue-body { min-width: 0; width: 100%; }
+  .issue-msg  { font-size: 15px; font-weight: 500; color: #0A2540; line-height: 1.25; }
+  .issue-wcag { font-size: 14px; font-weight: 400; color: #3A4B61; line-height: 1.5; margin-top: 0; }
 
   /* ── Suggestions ─────────────────────────────────────────────────── */
   .suggestions-section { padding: 10px 14px; }
-  .section-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+  .section-label {
+    font-size: 15px; font-weight: 500; color: #0A2540;
+    text-transform: none; letter-spacing: 0; margin-bottom: 8px; line-height: 1.25;
+  }
   .suggestion-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 10px; background: var(--surface2);
-    border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; background: #FFFFFF;
+    border: 1px solid #CBD2E1; border-radius: 8px; margin-bottom: 6px;
   }
   .suggestion-item:last-child { margin-bottom: 0; }
-  .sug-icon  { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
-  .sug-label { flex: 1; font-size: 12px; color: var(--text-dim); }
+  .sug-icon  { flex-shrink: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+  .sug-icon img { display: block; width: 16px; height: 16px; }
+  .sug-label { flex: 1; font-size: 15px; font-weight: 400; color: #0A2540; line-height: 1.25; }
   .sug-value {
-    font-size: 11px; color: var(--text);
-    font-family: "SF Mono", "Menlo", monospace;
-    background: var(--border); padding: 1px 6px; border-radius: 4px;
-    max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; font-weight: 500; color: #145aea;
+    font-family: inherit;
+    background: #E0EAFE; padding: 4px 6px; border-radius: 6px;
+    max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* ── Dev Code panel ──────────────────────────────────────────────── */
   .devcode-section { border-top: 1px solid var(--border); }
   .devcode-toggle {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 9px 14px; cursor: pointer; user-select: none;
-    font-size: 11px; font-weight: 600; color: #a78bfa;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 12px 14px; cursor: pointer; user-select: none;
+    font-size: 15px; font-weight: 500; color: #0A2540;
+    text-transform: none; letter-spacing: 0;
     transition: background 0.12s;
   }
-  .devcode-toggle:hover { background: #0d0d1a; }
-  .devcode-toggle .toggle-arrow { font-size: 10px; transition: transform 0.2s; }
+  .devcode-toggle:hover { background: #F8FAFF; }
+  .devcode-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .devcode-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .devcode-body { display: none; padding: 0 14px 12px; }
   .devcode-body.open { display: block; }
@@ -257,25 +376,29 @@
   .btn-ask-opt.selected { background: #0d2033; border-color: var(--accent-blue); color: var(--accent-blue); }
 
   /* ── Apply ───────────────────────────────────────────────────────── */
-  .apply-row { display: flex; gap: 8px; margin-top: 12px; }
+  .apply-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .btn-apply {
-    flex: 1; height: 36px; background: var(--surface2);
-    border: 1px solid var(--border2); border-radius: var(--radius);
-    color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    width: 100%; min-height: 40px; background: #FFFFFF;
+    border: 1.5px solid #CBD2E1; border-radius: 6px;
+    color: #3A4B61; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px; box-sizing: border-box;
   }
-  .btn-apply:hover { background: var(--border2); }
+  .btn-apply:hover { background: #F8FAFF; }
   .btn-apply.primary {
-    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
-    border-color: transparent; color: #fff;
+    background: #136EF8; border: none; color: #FFFFFF;
   }
-  .btn-apply.primary:hover { opacity: 0.88; }
+  .btn-apply.primary:hover { background: #0E5ADB; }
   .btn-apply:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-apply.blocked {
-    background: var(--chip-low) !important;
-    border-color: var(--accent-red) !important;
-    color: var(--accent-red) !important;
-    opacity: 1 !important;
+    background: #d8161f !important; border: none !important;
+    color: #FFFFFF !important; opacity: 1 !important;
   }
+  .btn-apply.btn-back-ghost {
+    background: transparent; border: none; color: #3A4B61;
+  }
+  .btn-apply.btn-back-ghost:hover { background: #F8FAFF; }
   .apply-result {
     padding: 10px 14px; border-radius: var(--radius);
     font-size: 12px; line-height: 1.8; margin-top: 10px;
@@ -298,91 +421,101 @@
   .decided-section { border-top: 1px solid var(--border); }
   .decided-toggle {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 14px; cursor: pointer; user-select: none;
-    font-size: 10px; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 12px 14px; cursor: pointer; user-select: none;
+    font-size: 15px; font-weight: 500; color: #0A2540;
+    text-transform: none; letter-spacing: 0;
+    transition: background 0.12s;
   }
-  .decided-toggle:hover { background: #111; }
-  .decided-toggle .toggle-arrow { transition: transform 0.2s; }
+  .decided-toggle:hover { background: #F8FAFF; }
+  .decided-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .decided-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .decided-body { display: none; padding: 4px 14px 12px; }
   .decided-body.open { display: block; }
   .decided-row {
-    display: flex; align-items: flex-start; gap: 8px;
-    padding: 5px 0; border-bottom: 1px solid var(--border);
-    font-size: 11px;
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 6px 0;
+    font-size: 15px;
   }
-  .decided-row:last-child { border-bottom: none; }
-  .decided-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
-  .decided-value { flex: 1; color: var(--text-dim); word-break: break-word; }
-  .decided-score { color: var(--accent-blue); font-weight: 700; margin-right: 6px; }
-  .decided-sig { font-size: 10px; background: #0d2033; color: var(--accent-blue);
-                 padding: 1px 6px; border-radius: 10px; margin: 1px 2px; display: inline-block; }
+  .decided-label { width: 130px; flex-shrink: 0; color: #0A2540; font-size: 15px; font-weight: 400; }
+  .decided-value { flex: 1; color: #0A2540; font-size: 15px; word-break: break-word; }
+  .decided-score { color: #136EF8; font-weight: 700; margin-right: 6px; }
+  .decided-sig { font-size: 12px; font-weight: 500; background: #e0eafe; color: #145aea;
+                 padding: 4px 6px; border-radius: 6px; margin: 1px 2px; display: inline-block; }
 
   /* ── Audit log (all checks, pass + fail) ────────────────────────── */
   .audit-log-section { border-top: 1px solid var(--border); }
   .audit-log-toggle {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 14px; cursor: pointer; user-select: none;
-    font-size: 10px; font-weight: 700; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.6px;
+    font-size: 15px; font-weight: 500; color: #0A2540;
+    text-transform: none; letter-spacing: 0;
+    transition: background 0.12s;
   }
-  .audit-log-toggle:hover { background: #111; }
+  .audit-log-toggle:hover { background: #F8FAFF; }
+  .audit-log-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .audit-log-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .audit-log-body { display: none; padding: 4px 14px 12px; }
   .audit-log-body.open { display: block; }
   .audit-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 5px 0; border-bottom: 1px dotted var(--border);
-    font-size: 11px;
+    padding: 5px 0; border-bottom: 1px dotted #CBD2E1;
+    font-size: 14px;
   }
   .audit-row:last-child { border-bottom: none; }
   .audit-status {
-    width: 48px; flex-shrink: 0; text-align: center;
-    font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.5px;
+    width: 52px; flex-shrink: 0; text-align: center;
+    font-size: 11px; font-weight: 700; padding: 2px 5px; border-radius: 4px; letter-spacing: 0.3px;
   }
-  .audit-status.PASS   { background: #0d2e1a; color: #3ecf8e; }
-  .audit-status.WARN   { background: #2e1f00; color: #f59e0b; }
-  .audit-status.BLOCK  { background: #2a0a0a; color: #ef4444; }
-  .audit-status.MANUAL { background: #101020; color: #a78bfa; }
-  .audit-status.ERROR  { background: #2a1a00; color: #f59e0b; }
-  .audit-name { flex: 1; color: var(--text-dim); }
-  .audit-wcag { font-size: 10px; color: var(--text-muted); }
+  .audit-status.PASS   { background: #E6F4E7; color: #06720F; }
+  .audit-status.WARN   { background: #ffecb0; color: #765900; }
+  .audit-status.BLOCK  { background: #fde8e9; color: #d8161f; }
+  .audit-status.MANUAL { background: #EDE9FE; color: #5B21B6; }
+  .audit-status.ERROR  { background: #ffecb0; color: #765900; }
+  .audit-name { flex: 1; color: #0A2540; font-size: 14px; }
+  .audit-wcag { font-size: 12px; color: #3A4B61; }
 
   /* ── Stored-state banner above analysis result ─────────────────── */
   .stored-banner {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; margin: 0 16px 12px;
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: var(--radius);
-    font-size: 12px;
+    padding: 16px; margin: 0 0 12px;
+    background: #FFFFFF; border: 1px solid #CBD2E1;
+    border-radius: 8px;
   }
-  .stored-banner-icon { font-size: 16px; flex-shrink: 0; }
+  /* Icon: 40×40 blue-bg box */
+  .stored-banner-icon {
+    flex-shrink: 0; width: 40px; height: 40px;
+    background: #E0EAFE; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stored-banner-icon img { display: block; width: 24px; height: 24px; }
   .stored-banner-body { flex: 1; min-width: 0; }
-  .stored-banner-line1 { color: var(--text-dim); font-weight: 500; margin-bottom: 4px; }
+  .stored-banner-line1 {
+    font-size: 16px; font-weight: 500; color: #0A2540;
+    margin-bottom: 6px; line-height: 1.25;
+  }
   .stored-banner-line2 { display: flex; align-items: center; gap: 8px; }
   .stored-progress {
-    flex: 1; height: 6px; max-width: 120px;
-    background: var(--border); border-radius: 4px; overflow: hidden;
+    flex: 1; height: 6px;
+    background: rgba(58,75,97,0.15); border-radius: 3px; overflow: hidden;
   }
   .stored-progress-fill {
-    height: 100%; border-radius: 4px;
+    height: 100%; border-radius: 3px;
     transition: width 0.25s ease-out;
   }
-  .stored-progress-fill.zero  { background: var(--accent-red);   }
-  .stored-progress-fill.mid   { background: var(--accent-amber); }
+  .stored-progress-fill.zero  { background: #3A4B61; }
+  .stored-progress-fill.mid   { background: #3A4B61; }
   .stored-progress-fill.full  { background: var(--accent-green); }
-  .stored-progress-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-  .stored-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .stored-progress-label { font-size: 16px; font-weight: 400; color: #3A4B61; white-space: nowrap; }
+  .stored-banner-actions { display: flex; gap: 12px; flex-shrink: 0; align-items: center; }
   .btn-mini {
-    padding: 4px 10px; font-size: 11px; font-weight: 600;
-    background: var(--surface2); border: 1px solid var(--border2);
-    color: var(--text-dim); border-radius: var(--radius-sm); cursor: pointer;
-    transition: all 0.12s;
+    padding: 8px 12px; font-size: 14px; font-weight: 500; min-height: 32px;
+    background: #FFFFFF; border: 1.5px solid #CBD2E1;
+    color: #3A4B61; border-radius: 6px; cursor: pointer;
+    transition: all 0.12s; white-space: nowrap;
   }
-  .btn-mini:hover { background: var(--border2); color: var(--text); }
-  .btn-mini.primary { background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%); color: #fff; border-color: transparent; }
-  .btn-mini.primary:hover { opacity: 0.88; }
+  .btn-mini:hover { background: #F8FAFF; }
+  .btn-mini.primary { background: #136EF8; color: #fff; border-color: #136EF8; }
+  .btn-mini.primary:hover { background: #0E5ADB; }
 
   /* ── Components dashboard tab ──────────────────────────────────── */
   .dashboard-area { padding: 14px 16px; }
@@ -505,26 +638,31 @@
   .explain-overlay.open { display: block; }
 
   /* ── Inline auto-fix dropdown on issue rows ─────────────────────── */
-  .issue-actions { position: relative; flex-shrink: 0; margin-left: 6px; }
-  .btn-autofix-direct {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
-    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
-    display: inline-flex; align-items: center; gap: 4px;
-    transition: all 0.12s;
+  .issue-actions {
+    position: relative; margin-top: 2px;
+    display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;
   }
-  .btn-autofix-direct:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix-direct {
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
+    transition: background 0.12s; white-space: nowrap;
+  }
+  .btn-autofix-direct:hover { background: #EBF1F9; }
   .btn-autofix-direct:disabled { opacity: 0.4; cursor: wait; }
   .btn-autofix {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #3a2a7e;
-    background: #1e1a4e; color: #a78bfa; letter-spacing: 0.3px;
-    display: inline-flex; align-items: center; gap: 4px;
-    transition: all 0.12s;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
+    transition: background 0.12s; white-space: nowrap;
   }
-  .btn-autofix:hover { background: #2c1a6e; color: #d1b6ff; }
+  .btn-autofix:hover { background: #EBF1F9; }
   .btn-autofix:disabled { opacity: 0.4; cursor: wait; }
-  .btn-autofix .caret { font-size: 8px; opacity: 0.7; }
+  .btn-autofix .caret { font-size: 10px; opacity: 0.7; }
   .autofix-menu {
     position: absolute; right: 0; top: 26px; z-index: 30;
     background: #14141e; border: 1px solid #3a2a7e;
@@ -554,20 +692,20 @@
     display: inline-block;
   }
   .btn-acknowledge {
-    padding: 3px 9px; font-size: 10px; font-weight: 700;
-    border-radius: 12px; cursor: pointer; border: 1px solid #2a4a2a;
-    background: #0d2e1a; color: var(--accent-green); letter-spacing: 0.3px;
-    white-space: nowrap;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid #A7DFC8;
+    background: #FFFFFF; color: #0B7A52; letter-spacing: 0;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-acknowledge:hover { background: #1a5e38; }
-  .ack-badge { font-size: 10px; color: var(--accent-green); font-weight: 700; }
+  .btn-acknowledge:hover { background: #E6F9F0; }
+  .ack-badge { font-size: 12px; color: var(--accent-green); font-weight: 600; }
   .issue-acknowledged { opacity: 0.55; }
   .issue-acknowledged .issue-msg { text-decoration: line-through; }
   .designer-fix-msg {
     font-size: 10px; color: var(--text-dim); max-width: 180px;
     line-height: 1.4; margin-bottom: 4px;
   }
-  .issue-message-only { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .issue-message-only { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
   .ai-consent-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.55);
     z-index: 200; display: none; align-items: center; justify-content: center;
@@ -583,17 +721,32 @@
   .ai-consent-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .ai-consent-check { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); margin-bottom: 12px; }
   .pending-banner {
-    margin: 0 14px 10px; padding: 8px 12px; border-radius: var(--radius-sm);
-    background: #1e1400; border: 1px solid #5e4a00; font-size: 11px; color: #f5c842;
+    margin: 0 14px 10px; padding: 10px 14px; border-radius: 8px;
+    background: #1e1400; border: 1.5px dashed #5e4a00; font-size: 14px; font-weight: 500; color: #f5c842;
+    display: flex; align-items: center; gap: 8px;
   }
   .issue-pending .issue-sev { background: #3d3200; color: #f5c842; }
   .issue-pending-note { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
-  .btn-focus-ai, .btn-focus-pending {
-    padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 12px; cursor: pointer; border: 1px solid;
-    white-space: nowrap;
+  /* Build-with-AI / Re-scan → outlined blue, matches Auto Fix */
+  .btn-focus-ai, .btn-rescan-ai {
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
+    transition: background 0.12s; white-space: nowrap;
   }
-  .btn-focus-ai { border-color: #3a2a7e; background: #1e1a4e; color: #a78bfa; }
-  .btn-focus-pending { border-color: #5e4a00; background: #1e1400; color: #f5c842; }
+  .btn-focus-ai:hover, .btn-rescan-ai:hover { background: #EBF1F9; }
+  /* "I'll build it" / "Copy prompt again" → ghost, dark text */
+  .btn-focus-pending, .btn-copy-prompt-again {
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: none;
+    background: transparent; color: #0A2540; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    min-height: 32px;
+    transition: color 0.12s; white-space: nowrap;
+  }
+  .btn-focus-pending:hover, .btn-copy-prompt-again:hover { color: #3A4B61; }
   .settings-radio-group { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 16px; }
   .settings-radio {
     display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-sm);
@@ -630,12 +783,15 @@
   }
   .fix-toast.open { display: block; }
   .issue-waiting-ai {
-    background: #0d3b66 !important; border: 1px solid #2563eb !important;
-    border-radius: var(--radius-sm); padding: 10px !important;
+    background: #FFFFFF !important; border: 1px solid #CBD2E1 !important;
   }
-  .issue-waiting-ai .issue-sev { background: #1e3a5f; color: #93c5fd; }
-  .issue-waiting-ai-title { font-size: 12px; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
+  .issue-waiting-ai .issue-sev { background: #e0eafe; color: #145aea; }
+  .issue-waiting-ai-title { display: none; } /* replaced by note at bottom */
   .issue-waiting-ai-desc { font-size: 10px; color: #bfdbfe; line-height: 1.45; margin-bottom: 8px; }
+  .issue-waiting-ai-note {
+    font-size: 14px; font-weight: 400; color: #3A4B61;
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; line-height: 1.5;
+  }
   .issue-resolved-strike .issue-msg { text-decoration: line-through; opacity: 0.55; }
   .issue-fix-status { font-size: 10px; margin-top: 4px; color: var(--text-dim); }
   .issue-fix-status.ok { color: #6ee7a0; }
@@ -653,33 +809,39 @@
   /* ── Component preview panel ────────────────────────────────────── */
   .preview-panel {
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--bg);
   }
   .preview-toolbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 16px;
-    font-size: 11px; cursor: pointer; user-select: none;
+    padding: 8px 16px;
+    font-size: 12px; cursor: pointer; user-select: none;
   }
   .preview-toolbar-left {
     display: flex; align-items: center; gap: 6px;
-    font-size: 11px; font-weight: 600; color: var(--text-muted);
-    letter-spacing: 0.3px;
+    font-size: 15px; font-weight: 500; color: #3A4B61;
+    letter-spacing: 0;
   }
-  .preview-collapse-icon { font-size: 9px; transition: transform 0.2s; }
+  .preview-collapse-icon { display: flex; align-items: center; transition: transform 0.2s; }
   .preview-bg-btns { display: flex; gap: 4px; align-items: center; }
   .preview-inner img.fading { opacity: 0.35; }
   .apply-row-blockers { display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .apply-row-blockers .btn-apply { width: 100%; }
   .apply-warning { font-size: 10px; color: var(--accent-amber); margin-top: 2px; }
-  .figma-ai-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 10px; font-size: 10px; font-weight: 600;
-    border-radius: 12px; cursor: pointer;
-    border: 1px solid #3a2a7e; background: #1e1a4e; color: #a78bfa;
-    margin-top: 6px;
+  .figma-ai-card {
+    background: #F8FAFF; border: 1px dashed #CBD2E1; border-radius: 8px;
+    padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    margin-top: 8px;
   }
-  .figma-ai-btn:hover { opacity: 0.9; }
-  .figma-ai-hint { font-size: 10px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+  .figma-ai-card-title { font-size: 15px; font-weight: 500; color: #0A2540; line-height: 1.25; }
+  .figma-ai-card-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: none;
+    background: #136EF8; color: #FFFFFF; min-height: 32px;
+    align-self: flex-start;
+  }
+  .figma-ai-card-btn:hover { background: #0E5ADB; }
+  .figma-ai-card-hint { font-size: 14px; font-weight: 400; color: #3A4B61; line-height: 1.5; }
   .candidate-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; max-height: 200px; overflow-y: auto; }
   .candidate-row {
     display: flex; align-items: center; gap: 10px; padding: 8px;
@@ -697,14 +859,15 @@
   .btn-preview-bg.active { background: var(--surface2); color: var(--text); border-color: var(--accent-blue); }
   .btn-preview-bg:not(.active) { color: var(--text-muted); }
   .preview-body {
-    padding: 0 20px 20px;
+    padding: 0 16px 16px;
     transition: opacity 0.15s;
   }
   .preview-body.collapsed { display: none; }
   .preview-inner {
-    width: 520px; height: 200px;
+    width: 100%; min-height: 180px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
+    background: #F8FAFF;
     transition: background 0.2s;
     overflow: hidden;
   }
@@ -715,10 +878,11 @@
     transition: opacity 150ms ease;
   }
   .preview-placeholder {
-    color: var(--text-muted); font-size: 11px;
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    color: #2B3E52; font-size: 14px; font-weight: 500;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 32px 24px;
   }
-  .preview-placeholder .ph-icon { font-size: 24px; opacity: 0.3; }
+  .preview-placeholder .ph-icon { opacity: 0.5; display: flex; }
 
   /* ── Fix action dialog ───────────────────────────────────────────── */
   .modal-overlay {
@@ -879,9 +1043,239 @@
     transition: opacity 0.15s; margin-bottom: 12px;
   }
   .btn-inspect:hover { opacity: 0.88; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     accessiBe (xseb) brand overrides — light theme
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* Header */
+  .header { background: #FFFFFF; border-bottom-color: #CBD2E1; padding: 0 16px; align-items: stretch; }
+  .logo { padding: 12px 0; gap: 12px; }
+  .tab-bar { padding-bottom: 0; }
+  .tab-btn { padding: 14px 10px 12px; }
+  .tab-btn.active { color: #136EF8; border-bottom-color: #136EF8; border-bottom-width: 2px; }
+
+  /* Dev badge */
+  .dev-badge { background: #EBF1F9; color: #136EF8; border-color: #B3D4F8; }
+
+  /* Primary action buttons */
+  .btn-scan, .btn-inspect { background: #136EF8; }
+  .btn-scan:hover:not(:disabled), .btn-inspect:hover { background: #0E5ADB; opacity: 1; }
+  .btn-mini.primary { background: #136EF8; color: #fff; border-color: #136EF8; }
+  .btn-mini.primary:hover { background: #0E5ADB; opacity: 1; }
+  .btn-apply.primary { background: #136EF8; border: none; color: #FFFFFF; }
+  .btn-apply.primary:hover { background: #0E5ADB; opacity: 1; }
+  .btn-apply.blocked { background: #d8161f !important; border: none !important; color: #FFFFFF !important; }
+
+  /* Issue item backgrounds — white cards per design system */
+  .issue-HIGH   { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MED    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-LOW    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #CBD2E1; }
+
+  /* Dev code section */
+  .devcode-toggle         { color: #0A2540; }
+  .devcode-toggle:hover   { background: #F8FAFF; }
+  .code-block             { background: #0f1623; border-color: #1e2d45; color: #b5c9e8; }
+  .code-block .code-comment { color: #4a6a8a; }
+  .code-block .code-attr    { color: #7eb8f7; }
+
+  /* Explain panel */
+  .explain-panel  { background: #FFFFFF; border-left-color: #D6E8F5; }
+  .explain-header { background: #FFFFFF; }
+  .explain-title  { color: #136EF8; }
+  .explain-link   { color: #136EF8; }
+  .explain-link:hover { color: #0E5ADB; }
+
+  /* Autofix buttons — outlined blue (base already set, hover override) */
+  .btn-autofix-direct:hover, .btn-autofix:hover { background: #EBF1F9; }
+
+  /* Autofix menu */
+  .autofix-menu { background: #FFFFFF; border-color: #BDD4EA; box-shadow: 0 6px 18px rgba(3,18,57,0.12); }
+  .autofix-opt:hover { background: #EBF1F9; color: #031239; }
+
+  /* Acknowledge */
+  .btn-acknowledge:hover { background: #E6F9F0; }
+  .ack-badge { color: #0B7A52; }
+  .issue-fixed { border-color: #A7DFC8 !important; background: #E6F9F0 !important; }
+  .issue-fixed .issue-msg::before { color: #0B7A52; }
+
+  /* Focus AI / pending — per design system */
+  .btn-focus-ai, .btn-rescan-ai { background: #FFFFFF; border: 2px solid #136EF8; color: #136EF8; }
+  .btn-focus-pending, .btn-copy-prompt-again { background: transparent; border: none; color: #0A2540; }
+
+  /* AI consent */
+  .ai-consent-overlay { background: rgba(3,18,57,0.45); }
+  .ai-consent-dialog  { background: #FFFFFF; border-color: #D6E8F5; box-shadow: 0 8px 32px rgba(3,18,57,0.15); }
+
+  /* Fix modal */
+  .modal-overlay { background: rgba(3,18,57,0.4); }
+  .modal-box     { background: #FFFFFF; border-color: #D6E8F5; }
+  .modal-option  { background: #F7FAFD; border-color: #D6E8F5; }
+  .modal-option:hover { border-color: #BDD4EA; }
+  .modal-option.selected { border-color: #136EF8; background: #EBF1F9; }
+  .modal-option.selected .modal-radio { border-color: #136EF8; background: #136EF8; }
+
+  /* Framework tabs */
+  .fw-tab.active { background: #EBF1F9; color: #136EF8; border-color: #136EF8; }
+
+  /* Decided / audit-log toggles */
+  .decided-toggle:hover, .audit-log-toggle:hover { background: #F8FAFF; }
+  .decided-sig   { background: #e0eafe; color: #145aea; }
+  .decided-score { color: #136EF8; }
+
+  /* Audit status — light theme */
+  .audit-status.PASS   { background: #E6F4E7; color: #06720F; }
+  .audit-status.WARN   { background: #ffecb0; color: #765900; }
+  .audit-status.BLOCK  { background: #fde8e9; color: #d8161f; }
+  .audit-status.MANUAL { background: #EDE9FE; color: #5B21B6; }
+  .audit-status.ERROR  { background: #ffecb0; color: #765900; }
+
+  /* Scan badge */
+  .scan-badge.h { background: #FEE2E2; color: #DC2626; }
+  .scan-badge.m { background: #FEF3C7; color: #D97706; }
+  .scan-badge.l { background: #DBEAFE; color: #2563EB; }
+
+  /* Pending banner */
+  .pending-banner           { background: #FFFFFF; border: 1.5px dashed #136EF8; color: #0A2540; }
+  .issue-pending .issue-sev { background: #FDE68A; color: #78350F; }
+
+  /* Fix progress & toast */
+  .fix-progress-bar { background: linear-gradient(90deg, #136EF8, #0B4FD4); }
+  .fix-toast { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
+
+  /* Issue waiting AI — white card, blue badge */
+  .issue-waiting-ai            { background: #FFFFFF !important; border-color: #CBD2E1 !important; }
+  .issue-waiting-ai .issue-sev { background: #e0eafe; color: #145aea; }
+  .issue-waiting-ai-title      { color: #136EF8; }
+  .issue-waiting-ai-desc       { color: #4D6F96; }
+
+  /* Fix status */
+  .issue-fix-status.ok   { color: #0B7A52; }
+  .issue-fix-status.fail { color: #DC2626; }
+  .issue-fix-status.run  { color: #136EF8; }
+
+  /* Ask section */
+  .ask-dot   { background: #D97706; }
+  .ask-title { color: #D97706; }
+  .btn-ask-opt.selected { background: #EBF1F9; border-color: #136EF8; color: #136EF8; }
+
+  /* Role value & meta badges */
+  .role-value { color: #3A4B61; font-size: 15px; font-weight: 400; }
+  .badge-ai   { background: #EBF1F9; color: #136EF8; }
+  .badge-rule { background: #E6F9F0; color: #0B7A52; }
+
+  /* Blocked apply — solid danger red, white text (Figma spec) */
+  .btn-apply.blocked { background: #d8161f !important; border: none !important; color: #FFFFFF !important; }
+
+  /* Dashboard & inspector */
+  .dashboard-row:hover { background: #EBF1F9; }
+  .attr-key { color: #136EF8; }
+  .attr-row { border-bottom-color: #F0F4F8; }
+
+  /* Settings radio */
+  .settings-radio.selected { border-color: #136EF8; background: #EBF1F9; }
+
+  /* Preview & scan */
+  .btn-preview-bg.active { background: #EBF1F9; color: #031239; border-color: #136EF8; }
+  .scan-role { color: #136EF8; }
+
+  /* Start Analysis button — match Figma 48px, radius 6px */
+  .btn-scan {
+    height: 48px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .scan-area { padding: 16px 16px 12px; background: #FFFFFF; }
+
+  /* Scan frame secondary button */
+  .btn-scan-frame { height: 36px; border-radius: 6px; font-size: 12px; }
+
+  /* Empty state */
+  .empty-state .icon { color: #BDD4EA; }
+
+  /* Result card */
+  .result-card { background: #F8FAFF; border-color: #CBD2E1; box-shadow: 0 1px 4px rgba(3,18,57,0.06); }
+  .result-header { border-bottom-color: #CBD2E1; }
+
+  /* Section label */
+  .section-label { color: #0A2540; font-size: 16px; font-weight: 500; }
+  .role-label    { color: #0A2540; font-size: 15px; font-weight: 500; }
+
+  /* Spinner */
+  .spinner { border-color: #D6E8F5; border-top-color: #136EF8; }
 </style>
 </head>
 <body>
+
+<!-- ── PIN / Login screen ─────────────────────────────────────────── -->
+<div id="pin-screen">
+  <div class="pin-header">
+    <div class="pin-header-left">
+      <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjEiIHZpZXdCb3g9IjAgMCA2MCA2MSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjBfZGRfMTk1OV83MzExOSkiPgo8cmVjdCB4PSIxMCIgeT0iNiIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQxIiByeD0iOCIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTM0LjM1MDIgMzYuNzAwOEMzNC4yOTY3IDM2Ljg0MjIgMzQuMjI3IDM2Ljk3NzQgMzQuMTM2OSAzNy4wOTg3QzMzLjkxOSAzNy4zOTI3IDMzLjY0OTkgMzcuNTQ1NSAzMy4zNDQxIDM3LjY3MzVDMzMuMzA0NSAzNy42OTE0IDMzLjI2MyAzNy43MDY5IDMzLjIyMDIgMzcuNzIwMkMzMy4xNzg3IDM3LjczMzggMzMuMTM1OSAzNy43NDYyIDMzLjA5MzUgMzcuNzU2NUMzMy4wNzE3IDM3Ljc2MTcgMzMuMDUwNyAzNy43NjU5IDMzLjAyODkgMzcuNzcxMUMzMi45ODQyIDM3Ljc3OTYgMzIuOTU5NSAzNy44NTQ1IDMyLjkxNTEgMzcuODU5N0wzMi43ODggMzcuOTE3QzMyLjQzOTggMzcuOTE3IDMyLjUyODYgMzguMDEzMyAzMi4xNDggMzguMDE0M0MyOS40NjMzIDM4LjAxNjMgMjYuMzI4NSAzOC4wMTc2IDIzLjk3NzQgMzguMDE0M0wzMi4xNzc1IDE3LjQ2MzNDMzIuNjYwOSAxNi4yNzU2IDMzLjgxNTIgMTUuNSAzNS4wOTYzIDE1LjVINDAuMzE4MkM0MS4zODU5IDE1LjUgNDIuMTE0OCAxNi41ODIzIDQxLjcxMTUgMTcuNTcyMkwzNC4zNTAyIDM2LjcwMDhaIiBmaWxsPSJ1cmwoI3BhaW50MF9saW5lYXJfMTk1OV83MzExOSkiLz4KPHBhdGggZD0iTTM0LjM1MDIgMzYuNzAwOEMzNC4yOTY3IDM2Ljg0MjIgMzQuMjI3IDM2Ljk3NzQgMzQuMTM2OSAzNy4wOTg3QzMzLjkxOSAzNy4zOTI3IDMzLjY0OTkgMzcuNTQ1NSAzMy4zNDQxIDM3LjY3MzVDMzMuMzA0NSAzNy42OTE0IDMzLjI2MyAzNy43MDY5IDMzLjIyMDIgMzcuNzIwMkMzMy4xNzg3IDM3LjczMzggMzMuMTM1OSAzNy43NDYyIDMzLjA5MzUgMzcuNzU2NUMzMy4wNzE3IDM3Ljc2MTcgMzMuMDUwNyAzNy43NjU5IDMzLjAyODkgMzcuNzcxMUMzMi45ODQyIDM3Ljc3OTYgMzIuOTQwNCAzNy43ODY3IDMyLjg5NiAzNy43OTE5TDMyLjc4OCAzNy45MTdDMzIuNDM5OCAzNy45MTcgMzIuNTI4NiAzOC4wMTMzIDMyLjE0OCAzOC4wMTQzQzI5LjQ2MzMgMzguMDE2MyAyNi4zMjg1IDM4LjAxNzYgMjMuOTc3NCAzOC4wMTQzTDMyLjE3NzUgMTcuNDYzM0MzMi42NjA5IDE2LjI3NTYgMzMuODE1MiAxNS41IDM1LjA5NjMgMTUuNUg0MC4zMTgyQzQxLjM4NTkgMTUuNSA0Mi4xMTQ4IDE2LjU4MjMgNDEuNzExNSAxNy41NzIyTDM0LjM1MDIgMzYuNzAwOFoiIGZpbGw9InVybCgjcGFpbnQxX2xpbmVhcl8xOTU5XzczMTE5KSIgZmlsbC1vcGFjaXR5PSIwLjgiLz4KPHBhdGggZD0iTTM0LjMxMTYgMzYuNzM5NEMzNC4yNTgxIDM2Ljg4MDggMzQuMTg4NCAzNy4wMTYgMzQuMDk4MyAzNy4xMzcyQzMzLjg4MDQgMzcuNDMxMyAzMy42MTEzIDM3LjU4NCAzMy4zMDU1IDM3LjcxMjFDMzMuMjY2IDM3LjczIDMzLjIyNDUgMzcuNzQ1NSAzMy4xODE3IDM3Ljc1ODhDMzMuMTQwMSAzNy43NzI0IDMzLjA5NzMgMzcuNzg0OCAzMy4wNTQ5IDM3Ljc5NTFDMzMuMDMzMSAzNy44MDAzIDMzLjAxMjEgMzcuODA0NSAzMi45OTAzIDM3LjgwOTdDMzIuOTQ1NiAzNy44MTgxIDMyLjkwMTggMzcuODI1MyAzMi44NTc0IDM3LjgzMDVMMzIuNzg4IDM3LjkxN0MzMi40Mzk4IDM3LjkxNyAzMi41Mjg2IDM4LjAxMzMgMzIuMTQ4IDM4LjAxNDNDMjkuNDYzMyAzOC4wMTYzIDI2LjMyODUgMzguMDE3NiAyMy45Nzc0IDM4LjAxNDNMMzIuMTc3NSAxNy40NjMzQzMyLjY2MDkgMTYuMjc1NiAzMy44MTUyIDE1LjUgMzUuMDk2MyAxNS41SDQwLjMxODJDNDEuMzg1OSAxNS41IDQyLjExNDggMTYuNTgyMyA0MS43MTE1IDE3LjU3MjJMMzQuMzExNiAzNi43Mzk0WiIgZmlsbD0idXJsKCNwYWludDJfbGluZWFyXzE5NTlfNzMxMTkpIiBmaWxsLW9wYWNpdHk9IjAuNiIvPgo8bWFzayBpZD0ibWFzazBfMTk1OV83MzExOSIgc3R5bGU9Im1hc2stdHlwZTphbHBoYSIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMjMiIHk9IjE1IiB3aWR0aD0iMTkiIGhlaWdodD0iMjQiPgo8cGF0aCBkPSJNMzQuMzUwMiAzNi43MDA4QzM0LjI5NjcgMzYuODQyMiAzNC4yMjcgMzYuOTc3NCAzNC4xMzY5IDM3LjA5ODdDMzMuOTE5IDM3LjM5MjcgMzMuNjQ5OSAzNy41NDU1IDMzLjM0NDEgMzcuNjczNUMzMy4zMDQ1IDM3LjY5MTQgMzMuMjYzIDM3LjcwNjkgMzMuMjIwMiAzNy43MjAyQzMzLjE3ODcgMzcuNzMzOCAzMy4xMzU5IDM3Ljc0NjIgMzMuMDkzNSAzNy43NTY1QzMzLjA3MTcgMzcuNzYxNyAzMy4wNTA3IDM3Ljc2NTkgMzMuMDI4OSAzNy43NzExQzMyLjk4NDIgMzcuNzc5NiAzMi45NTk1IDM3Ljg1NDUgMzIuOTE1MSAzNy44NTk3TDMyLjc4OCAzNy45MTdDMzIuNDM5OCAzNy45MTcgMzIuNTI4NiAzOC4wMTMzIDMyLjE0OCAzOC4wMTQzQzI5LjQ2MzMgMzguMDE2MyAyNi4zMjg1IDM4LjAxNzYgMjMuOTc3NCAzOC4wMTQzTDMyLjE3NzUgMTcuNDYzM0MzMi42NjA5IDE2LjI3NTYgMzMuODE1MiAxNS41IDM1LjA5NjMgMTUuNUg0MC4zMTgyQzQxLjM4NTkgMTUuNSA0Mi4xMTQ4IDE2LjU4MjMgNDEuNzExNSAxNy41NzIyTDM0LjM1MDIgMzYuNzAwOFoiIGZpbGw9InVybCgjcGFpbnQzX2xpbmVhcl8xOTU5XzczMTE5KSIvPgo8L21hc2s+CjxnIG1hc2s9InVybCgjbWFzazBfMTk1OV83MzExOSkiPgo8ZyBvcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNmaWx0ZXIxX2ZfMTk1OV83MzExOSkiIHN0eWxlPSJtaXgtYmxlbmQtbW9kZTptdWx0aXBseSI+CjxwYXRoIGQ9Ik0yOS4zNjI5IDI0LjgxOTlMMjcuNTM1NiAyOC42MDYxTDI4LjAyOTUgMzAuMzM0NkwzMC44NDQ1IDM2LjA2MzNMMzIuMzA5NiAzNy40NzkxTDMzLjU5MzYgMzcuNjQzN0wyOS4zNjI5IDI0LjgxOTlaIiBmaWxsPSJ1cmwoI3BhaW50NF9saW5lYXJfMTk1OV83MzExOSkiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyMl9mXzE5NTlfNzMxMTkpIj4KPHBhdGggZD0iTTM0LjMxOCAzNi43ODc3TDQxLjY3NjMgMTcuNjcyM0M0MS43NjM0IDE3LjQ0NTggNDEuODA4MSAxNy4yMDUyIDQxLjgwODEgMTYuOTYyNlYxNi44MDI5TDQxLjc0MjMgMTYuNDczN0w0MS41Nzc3IDE2LjE3NzRMNDEuMzgwMSAxNS45MTRMNDEuMTE2NyAxNS43TDQwLjUwNzYgMTUuNTAyNEw0MS4xMDQ4IDE2LjE1NDlDNDEuMjk0NSAxNi4zNjIyIDQxLjQxNDUgMTYuNjIzOCA0MS40NDc3IDE2LjkwMjhDNDEuNDY4MiAxNy4wNzUgNDEuNDQ1NyAxNy4yNDk1IDQxLjM4MjMgMTcuNDEwOUwzMy41NDQzIDM3LjM2MzhMMzQuMzE4IDM2Ljc4NzdaIiBmaWxsPSJ1cmwoI3BhaW50NV9saW5lYXJfMTk1OV83MzExOSkiLz4KPC9nPgo8ZyBvcGFjaXR5PSIwLjciIGZpbHRlcj0idXJsKCNmaWx0ZXIzX2ZfMTk1OV83MzExOSkiPgo8cGF0aCBkPSJNMjcuNzY2MSAyOS4xMzI5TDI3LjY2NzQgMjguOTAyNEwzMi4zNDI1IDE3LjIzMDlMMzIuNjIyNCAxNi43ODY0TDMyLjk2ODEgMTYuMzkxNEwyNy43NjYxIDI5LjEzMjlaIiBmaWxsPSJ1cmwoI3BhaW50Nl9saW5lYXJfMTk1OV83MzExOSkiLz4KPC9nPgo8ZyBvcGFjaXR5PSIwLjcxIiBmaWx0ZXI9InVybCgjZmlsdGVyNF9mXzE5NTlfNzMxMTkpIj4KPHBhdGggZD0iTTM0LjEwNjEgMTUuNTY4M0wzNC4wODc1IDE1LjU4NDdMNDMuMzM5MSAxNS43MTY0TDQyLjczNzkgMTUuNDUzSDM1LjI4NzFMMzQuMTA2MSAxNS41NjgzWiIgZmlsbD0idXJsKCNwYWludDdfbGluZWFyXzE5NTlfNzMxMTkpIi8+CjwvZz4KPC9nPgo8cGF0aCBkPSJNMjMuNDk1NiAzOC4wMTQ4QzIyLjkyMTYgMzcuOTc0MyAyMi4yNDc1IDM3LjYyODQgMjEuOTAwMiAzNi44Mzc0TDE3LjExIDI1LjExMDZDMTYuNzEyOCAyNC4xMjE3IDE3LjQ0MDcgMjMuMDQ1NiAxOC41MDY1IDIzLjA0NTZIMjMuNTcwMUMyNC44NTg0IDIzLjA0NTYgMjUuODIzMyAyMy44MzA1IDI2LjMwMTUgMjUuMDI3M0wzMC40NzM2IDM1LjA3OThDMzEuODE1MyAzOC4wMzQ5IDMzLjc4MDggMzcuOTMyNCAzNC4zMDcxIDM2LjgwMDVDMzQuMzEwOSAzNi43OTM0IDM0LjMxMDYgMzYuNzkzIDM0LjMwNzEgMzYuODAwNUMzNC4wNTQzIDM3LjQzNTQgMzMuNDE3NyAzOC4wMzUyIDMyLjM0OTkgMzguMDM1MkwyMy40OTU2IDM4LjAxNDhaIiBmaWxsPSJ1cmwoI3BhaW50OF9yYWRpYWxfMTk1OV83MzExOSkiLz4KPG1hc2sgaWQ9Im1hc2sxXzE5NTlfNzMxMTkiIHN0eWxlPSJtYXNrLXR5cGU6YWxwaGEiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjE3IiB5PSIyMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE2Ij4KPHBhdGggZD0iTTIzLjQ5NTYgMzguMDE0OEMyMi45MjE2IDM3Ljk3NDMgMjIuMjQ3NSAzNy42Mjg0IDIxLjkwMDIgMzYuODM3NEwxNy4xMSAyNS4xMTA2QzE2LjcxMjggMjQuMTIxNyAxNy40NDA3IDIzLjA4NTYgMTguNTA2NSAyMy4wNDU2SDIzLjU3MDFDMjQuODU4NCAyMy4wNDU2IDI1LjgyMzMgMjMuODMwNSAyNi4zMDE1IDI1LjAyNzNMMzAuNDczNiAzNS4wNzk4QzMxLjgxNTMgMzguMDM0OSAzMy43ODA4IDM3LjkzMjQgMzQuMzA3MSAzNi44MDA1QzM0LjMxMDkgMzYuNzkzNCAzNC4zMTA2IDM2Ljc5MyAzNC4zMDcxIDM2LjgwMDVDMzQuMDU0MyAzNy40MzU0IDMzLjQxNzcgMzguMDM1MiAzMi4zNDk5IDM4LjAzNTJMMjMuNDk1NiAzOC4wMTQ4WiIgZmlsbD0idXJsKCNwYWludDlfcmFkaWFsXzE5NTlfNzMxMTkpIi8+CjwvbWFzaz4KPGcgbWFzaz0idXJsKCNtYXNrMV8xOTU5XzczMTE5KSI+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXI1X2ZfMTk1OV83MzExOSkiPgo8cGF0aCBkPSJNMjcuNzMzOSAzNC42NzQxQzI2Ljc0ODkgMzYuNDI3MiAyMS45Mjc5IDM2LjMwNjkgMTkuOTMwMiAzNi4wMjc2TDIxLjM0MjUgMzguMDkwMUwzMi42NTg3IDM4LjQzMzlMMzMuNTI3OCAzNi4wMjc2TDI4LjUxMjQgMjguMjkzM0MyOC42NjMzIDI5LjY4OTggMjguNzE4OCAzMi45MjEgMjcuNzMzOSAzNC42NzQxWiIgZmlsbD0idXJsKCNwYWludDEwX2xpbmVhcl8xOTU5XzczMTE5KSIvPgo8L2c+CjxnIG9wYWNpdHk9IjAuOTMiIGZpbHRlcj0idXJsKCNmaWx0ZXI2X2ZfMTk1OV83MzExOSkiPgo8cGF0aCBkPSJNMjIuMDA0NCAzNi45NTIzTDIwLjk2NzMgMzQuNTMyNEMyMS4zNTEyIDM1LjI3MDEgMjIuMTAxNSAzNy4yMzk3IDIzLjUxODkgMzcuNTQ0OUMyNi4xMzY0IDM3LjU0NDkgMzAuMTY1IDM3LjM3NTggMzEuNDIwNyAzNy4zOTY4QzMzLjAwMSAzNy40MjMxIDMzLjg2OCAzNy40MTg3IDM0LjA4NzUgMzcuMTY2M0MzMy42OTI0IDM3Ljg3NzQgMzIuNzM3NiAzOC4wMjIzIDMyLjMwOTYgMzguMDA1OUgyMy41MTg5QzIyLjUzMTIgMzcuODYxIDIyLjA5NzcgMzcuMjQzMSAyMi4wMDQ0IDM2Ljk1MjNaIiBmaWxsPSJ1cmwoI3BhaW50MTFfbGluZWFyXzE5NTlfNzMxMTkpIi8+CjwvZz4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjdfZl8xOTU5XzczMTE5KSI+CjxwYXRoIGQ9Ik0yNS43NzQyIDI0LjU4OTRDMjUuMTgzOSAyMy41MzU3IDI0LjE1NTQgMjMuMjIzMSAyMy42ODM1IDIzLjE1NzJDMjUuMDc5NSAyMy4xNTcyIDI1Ljg0NTUgMjQuMTk5OCAyNi4wNTQgMjQuNzIxMUwzMS4xNTcyIDM2LjMyNjdDMzIuMjM1NCAzNy43ODg2IDMzLjQzOTIgMzcuNDk1NSAzMy45MDY0IDM3LjE2NjNDMzIuNzIxMSAzOC41ODg2IDMxLjI4MzUgMzYuODkxOSAzMC41OTc1IDM1Ljg2NThDMjkuMjY5NiAzMi42MDYzIDI2LjM4NjYgMjUuNjgyNSAyNS43NzQyIDI0LjU4OTRaIiBmaWxsPSJ1cmwoI3BhaW50MTJfbGluZWFyXzE5NTlfNzMxMTkpIi8+CjwvZz4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjhfZl8xOTU5XzczMTE5KSI+CjxwYXRoIGQ9Ik0zMC40NzM2IDM1LjA3OThDMzEuODMyMiAzOC4wNzE3IDMzLjc4MDggMzcuOTMyNCAzNC4zMDcxIDM2LjgwMDVDMzQuMzExIDM2Ljc5MzQgMzQuMzEwNiAzNi43OTMgMzQuMzA3MSAzNi44MDA1QzM0LjA5MTUgMzcuMzQyMiAzMy43NjA0IDM3LjY2OTIgMzMuMDAzMyAzNy42NDExQzMyLjcxNjIgMzcuNjMwNCAzMi40MzU0IDM3LjU0MTYgMzIuMTkzIDM3LjM4NzVDMzAuOTM0MSAzNi41ODcgMzAuNDczNiAzNS4wNzk4IDMwLjQ3MzYgMzUuMDc5OFoiIGZpbGw9IiNBQURFRkYiLz4KPC9nPgo8ZyBvcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNmaWx0ZXI5X2ZfMTk1OV83MzExOSkiPgo8cGF0aCBkPSJNMTcuMDgyMyAyNC44MzYzTDIxLjY1ODcgMzYuMDYzM0wyMi4xMTk3IDM2Ljg4NjRMMTcuMjk2MyAyNC45MzUxQzE3LjA3MjQgMjMuOTA3OSAxNy45MjE5IDIzLjI0NSAxOC40MTU3IDIzLjA5MTRDMTcuMTI1MSAyMy4zMTUyIDE2Ljk4OSAyNC4zNDc5IDE3LjA4MjMgMjQuODM2M1oiIGZpbGw9InVybCgjcGFpbnQxM19saW5lYXJfMTk1OV83MzExOSkiLz4KPC9nPgo8L2c+CjwvZz4KPGRlZnM+CjxmaWx0ZXIgaWQ9ImZpbHRlcjBfZGRfMTk1OV83MzExOSIgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYxIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUNvbG9yTWF0cml4IGluPSJTb3VyY2VBbHBoYSIgdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDEyNyAwIiByZXN1bHQ9ImhhcmRBbHBoYSIvPgo8ZmVPZmZzZXQgZHk9IjEiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMS41Ii8+CjxmZUNvbG9yTWF0cml4IHR5cGU9Im1hdHJpeCIgdmFsdWVzPSIwIDAgMCAwIDAuMDMxMzcyNiAwIDAgMCAwIDAuMDc0NTA5OCAwIDAgMCAwIDAuMzA5ODA0IDAgMCAwIDAuMDQgMCIvPgo8ZmVCbGVuZCBtb2RlPSJub3JtYWwiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9ImVmZmVjdDFfZHJvcFNoYWRvd18xOTU5XzczMTE5Ii8+CjxmZUNvbG9yTWF0cml4IGluPSJTb3VyY2VBbHBoYSIgdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDEyNyAwIiByZXN1bHQ9ImhhcmRBbHBoYSIvPgo8ZmVPZmZzZXQgZHk9IjQiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iNSIvPgo8ZmVDb2xvck1hdHJpeCB0eXBlPSJtYXRyaXgiIHZhbHVlcz0iMCAwIDAgMCAwLjAzMTM3MjYgMCAwIDAgMCAwLjA3NDUwOTggMCAwIDAgMCAwLjMwOTgwNCAwIDAgMCAwLjA4IDAiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbjI9ImVmZmVjdDFfZHJvcFNoYWRvd18xOTU5XzczMTE5IiByZXN1bHQ9ImVmZmVjdDJfZHJvcFNoYWRvd18xOTU5XzczMTE5Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iZWZmZWN0Ml9kcm9wU2hhZG93XzE5NTlfNzMxMTkiIHJlc3VsdD0ic2hhcGUiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjFfZl8xOTU5XzczMTE5IiB4PSIyNi4yMDIyIiB5PSIyMy40ODY0IiB3aWR0aD0iOC43MjQ4MSIgaGVpZ2h0PSIxNS40OTA3IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuNjY2NzA4IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMTk1OV83MzExOSIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyMl9mXzE5NTlfNzMxMTkiIHg9IjMzLjMxMzgiIHk9IjE1LjI3MTkiIHdpZHRoPSI4LjcyNDc5IiBoZWlnaHQ9IjIyLjMyMjQiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4xMTUyMzMiIHJlc3VsdD0iZWZmZWN0MV9mb3JlZ3JvdW5kQmx1cl8xOTU5XzczMTE5Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXIzX2ZfMTk1OV83MzExOSIgeD0iMjcuNDQ2OCIgeT0iMTYuMTcwOCIgd2lkdGg9IjUuNzQxOSIgaGVpZ2h0PSIxMy4xODI3IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMTEwMjk1IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMTk1OV83MzExOSIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyNF9mXzE5NTlfNzMxMTkiIHg9IjMzLjgwNDQiIHk9IjE1LjE2OTkiIHdpZHRoPSI5LjgxNzg4IiBoZWlnaHQ9IjAuODI5NjgxIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMTQxNTczIiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMTk1OV83MzExOSIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyNV9mXzE5NTlfNzMxMTkiIHg9IjE5LjI3MTgiIHk9IjI3LjYzNDgiIHdpZHRoPSIxNC45MTQ1IiBoZWlnaHQ9IjExLjQ1NzUiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4zMjkyMzgiIHJlc3VsdD0iZWZmZWN0MV9mb3JlZ3JvdW5kQmx1cl8xOTU5XzczMTE5Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI2X2ZfMTk1OV83MzExOSIgeD0iMjAuNjM0OCIgeT0iMzQuMTk5OSIgd2lkdGg9IjEzLjc4NTIiIGhlaWdodD0iNC4xMzk3NCIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVGbG9vZCBmbG9vZC1vcGFjaXR5PSIwIiByZXN1bHQ9IkJhY2tncm91bmRJbWFnZUZpeCIvPgo8ZmVCbGVuZCBtb2RlPSJub3JtYWwiIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9IkJhY2tncm91bmRJbWFnZUZpeCIgcmVzdWx0PSJzaGFwZSIvPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIwLjE2NjI2NSIgcmVzdWx0PSJlZmZlY3QxX2ZvcmVncm91bmRCbHVyXzE5NTlfNzMxMTkiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjdfZl8xOTU5XzczMTE5IiB4PSIyMy4yODE5IiB5PSIyMi43NTU1IiB3aWR0aD0iMTEuMDI2MiIgaGVpZ2h0PSIxNS4zNTciIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4yMDA4MzUiIHJlc3VsdD0iZWZmZWN0MV9mb3JlZ3JvdW5kQmx1cl8xOTU5XzczMTE5Ii8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI4X2ZfMTk1OV83MzExOSIgeD0iMzAuMzQxOSIgeT0iMzQuOTQ4MSIgd2lkdGg9IjQuMDk5NjkiIGhlaWdodD0iMi44MjY0IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMDY1ODQ3NyIgcmVzdWx0PSJlZmZlY3QxX2ZvcmVncm91bmRCbHVyXzE5NTlfNzMxMTkiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjlfZl8xOTU5XzczMTE5IiB4PSIxNi44OTQzIiB5PSIyMi45MjY3IiB3aWR0aD0iNS4zODk5NyIgaGVpZ2h0PSIxNC4xMjQzIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMDgyMzA5NiIgcmVzdWx0PSJlZmZlY3QxX2ZvcmVncm91bmRCbHVyXzE5NTlfNzMxMTkiLz4KPC9maWx0ZXI+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQwX2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iNDguNDMzNSIgeTE9Ii0xNy4wMDI5IiB4Mj0iMjguNzA0NCIgeTI9IjQ0LjA4MDMiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agb2Zmc2V0PSIwLjU5Mjc4IiBzdG9wLWNvbG9yPSIjMkM2RUU0Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzA5MUQ3MiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MV9saW5lYXJfMTk1OV83MzExOSIgeDE9IjI5LjQxMjMiIHkxPSIxNS40ODU5IiB4Mj0iNDAuOTEwOSIgeTI9IjI1LjU0NjYiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agb2Zmc2V0PSIwLjA3NzY5MTUiIHN0b3AtY29sb3I9IiM2NkIwRjYiLz4KPHN0b3Agb2Zmc2V0PSIwLjk2IiBzdG9wLWNvbG9yPSIjMDkxRDcyIiBzdG9wLW9wYWNpdHk9IjAiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDJfbGluZWFyXzE5NTlfNzMxMTkiIHgxPSI0MC40MTcxIiB5MT0iMTUuNSIgeDI9IjMxLjYzOCIgeTI9IjM3LjAwMzQiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzA4MUE2QyIgc3RvcC1vcGFjaXR5PSIwIi8+CjxzdG9wIG9mZnNldD0iMC45NiIgc3RvcC1jb2xvcj0iIzA4MUE2QyIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50M19saW5lYXJfMTk1OV83MzExOSIgeDE9IjQ4LjQzMzUiIHkxPSItMTcuMDAyOSIgeDI9IjMxLjUxMjQiIHkyPSIzNi42OTY3IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIG9mZnNldD0iMC42MzgiIHN0b3AtY29sb3I9IiMyQzZFRTQiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDkxRDcyIi8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQ0X2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iMzEuNjUxMSIgeTE9IjMxLjU1MjgiIHgyPSIyOC44ODU1IiB5Mj0iMzIuMjYwNiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLW9wYWNpdHk9IjAiLz4KPHN0b3Agb2Zmc2V0PSIxIi8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQ1X2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iMzcuNzc1IiB5MT0iMTUuNjUwNiIgeDI9IjM3Ljc3NSIgeTI9IjM3LjEzMzQiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzAwNTFFNiIgc3RvcC1vcGFjaXR5PSIwLjQ4Ii8+CjxzdG9wIG9mZnNldD0iMC4zNjA5MTMiIHN0b3AtY29sb3I9IiMwMDJDOEEiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDQwRTRCIi8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQ2X2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iMzEuMDQyMSIgeTE9IjI0LjU4OTQiIHgyPSIyOC43Mzc0IiB5Mj0iMjkuODA3OCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjQzBFRkZGIi8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzExMjk3MSIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50N19saW5lYXJfMTk1OV83MzExOSIgeDE9IjMzLjk1NTgiIHkxPSIxNS41ODQ3IiB4Mj0iNDMuMzM5MSIgeTI9IjE1LjU4NDciIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzE2NERCQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzNTgwRkYiLz4KPC9saW5lYXJHcmFkaWVudD4KPHJhZGlhbEdyYWRpZW50IGlkPSJwYWludDhfcmFkaWFsXzE5NTlfNzMxMTkiIGN4PSIwIiBjeT0iMCIgcj0iMSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTguMTAyOSAyNC4wNDYxKSByb3RhdGUoNTguNjg4NCkgc2NhbGUoMjMuNDIxOSA0MS40NDkxKSI+CjxzdG9wIG9mZnNldD0iMC4wMDM1MjYzNiIgc3RvcC1jb2xvcj0iI0E0RUFGRiIvPgo8c3RvcCBvZmZzZXQ9IjAuNDQ0NzAzIiBzdG9wLWNvbG9yPSIjMDA5MkZGIi8+CjxzdG9wIG9mZnNldD0iMC44MzkyNTYiIHN0b3AtY29sb3I9IiMwMzQ2QUQiLz4KPC9yYWRpYWxHcmFkaWVudD4KPHJhZGlhbEdyYWRpZW50IGlkPSJwYWludDlfcmFkaWFsXzE5NTlfNzMxMTkiIGN4PSIwIiBjeT0iMCIgcj0iMSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTguMTAyOSAyNC4wNDYxKSByb3RhdGUoNTguNjg4NCkgc2NhbGUoMjMuNDIxOSA0MS40NDkxKSI+CjxzdG9wIG9mZnNldD0iMC4wMDM1MjYzNiIgc3RvcC1jb2xvcj0iI0E0RUFGRiIvPgo8c3RvcCBvZmZzZXQ9IjAuNDQ0NzAzIiBzdG9wLWNvbG9yPSIjMDA5MkZGIi8+CjxzdG9wIG9mZnNldD0iMC44MzkyNTYiIHN0b3AtY29sb3I9IiMwMzQ2QUQiLz4KPC9yYWRpYWxHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDEwX2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iMjcuODYwNiIgeTE9IjM0LjAyOTYiIHgyPSIyOS4yNDk0IiB5Mj0iMzcuNDg3MyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjM0M5NUZEIiBzdG9wLW9wYWNpdHk9IjAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMTY1MUM2Ii8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQxMV9saW5lYXJfMTk1OV83MzExOSIgeDE9IjI3LjY4MzgiIHkxPSIzNC44NDUyIiB4Mj0iMjguMDI5NSIgeTI9IjM5Ljc4MzciIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzAxN0RFOCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwMDI1ODIiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDEyX2xpbmVhcl8xOTU5XzczMTE5IiB4MT0iMjUuODczIiB5MT0iMjQuNzM3NSIgeDI9IjI3Ljg4MTMiIHkyPSIzMS44MTYyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiMxRDk5RjciLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDAzM0M2Ii8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQxM19saW5lYXJfMTk1OV83MzExOSIgeDE9IjIwLjU1NTgiIHkxPSIyOS41NDQ0IiB4Mj0iMjEuNTkyOSIgeTI9IjM2Ljg4NjQiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0id2hpdGUiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+Cg==" class="pin-brand-icon" style="height:22px" alt="A11y Shift logo">
+      <span class="pin-app-name">A11y Shift</span>
+    </div>
+  </div>
+  <div class="pin-body">
+    <div class="pin-brand">
+      <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjI2IiB2aWV3Qm94PSIwIDAgMTgwIDI2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNMTc5LjY0MiAxNS43NjExQzE3OS42NDIgMTYuMjIwMiAxNzkuNjA5IDE2LjU0ODEgMTc5LjU0MyAxNy4wMzk5SDE2Ni45NTJDMTY3LjI0NyAxOS42NjMxIDE2OC45NTIgMjEuMjM2OSAxNzEuNTc1IDIxLjIzNjlDMTczLjU3NiAyMS4yMzY5IDE3NC41OTIgMjAuMTU0OSAxNzUuMDg0IDE4LjYxMzhIMTc5LjM0NkMxNzguNTkyIDIyLjE4NzggMTc2LjE2NiAyNC45MDk0IDE3MS41NDMgMjQuOTA5NEMxNjUuOTM2IDI0LjkwOTQgMTYyLjg1MyAyMS4xMzg2IDE2Mi44NTMgMTUuOTkwNkMxNjIuODUzIDEwLjU4MDQgMTY2LjE5OCA3LjA3MTkxIDE3MS40NzcgNy4wNzE5MUMxNzUuNDc3IDcuMDcxOTEgMTc5LjY0MiA5LjQ2NTU0IDE3OS42NDIgMTUuNzYxMVpNMTY3LjExNiAxNC4xNTQ0SDE3NS40NDVDMTc1LjI4MSAxMi4wNTU5IDE3NC4wMzUgMTAuNDgyIDE3MS42MDggMTAuNDgyQzE2OC43NTUgMTAuNDgyIDE2Ny41NDIgMTIuMDg4NyAxNjcuMTE2IDE0LjE1NDRaIiBmaWxsPSIjMDAwNzFBIi8+CjxwYXRoIGQ9Ik0xNTcuMTgyIDExLjg2NzNDMTU3LjA1IDExLjkwMDggMTU2Ljg1MyAxMi4wMzUyIDE1Ni44NTMgMTIuMzM3NUMxNTYuODUzIDEyLjYwNjIgMTU2Ljk4NCAxMi43NzQyIDE1Ny4yMTUgMTIuODA3OEMxNjAuNzExIDEzLjU0NjggMTYxLjk5OCAxNS45NjUzIDE2MS45OTggMTguMjE1OEMxNjEuOTk4IDIyLjExMjIgMTU5LjQyNSAyNC43MzIzIDE1NC42NzYgMjQuNzMyM0gxNDIuNDcyVjEuMDg0ODJIMTUyLjc2M0MxNTcuODQyIDEuMDg0ODIgMTYwLjk0MiAyLjk2NTg3IDE2MC45NDIgNy4xOTgyM0MxNjAuOTQyIDkuMzE0NDEgMTU5LjQ1OCAxMS4xMjgzIDE1Ny4xODIgMTEuODY3M1pNMTUyLjY2NCA0Ljk4MTI4SDE0Ni45NThWMTAuNzU4OEgxNTIuNjY0QzE1NS4xMzcgMTAuNzU4OCAxNTYuMjI2IDkuMzgxNTkgMTU2LjIyNiA3LjcwMjA4QzE1Ni4yMjYgNi4wMjI1NyAxNTUuMTM3IDQuOTgxMjggMTUyLjY2NCA0Ljk4MTI4Wk0xNDYuOTU4IDIwLjgzNThIMTUzLjUyMUMxNTYuMjU5IDIwLjgzNTggMTU3LjUxMiAxOS40OTIyIDE1Ny41MTIgMTcuNjc4NEMxNTcuNTEyIDE1LjkzMTcgMTU2LjA5NCAxNC41MjA5IDE1My41MjEgMTQuNTIwOUgxNDYuOTU4VjIwLjgzNThaIiBmaWxsPSIjMDAwNzFBIi8+CjxwYXRoIGQ9Ik0xMzUuNjc0IDUuMjM1NzFWMS4wMzg2N0gxMzkuODcxVjUuMjM1NzFIMTM1LjY3NFpNMTM1LjY3NCA3LjMzNDI0SDEzOS44NzFWMjQuNjQ3MUgxMzUuNjc0VjcuMzM0MjRaIiBmaWxsPSIjMDAwNzFBIi8+CjxwYXRoIGQ9Ik0xMTguNTQyIDE4LjgxMDVIMTIyLjY3M0MxMjIuNzA2IDIwLjA4OTMgMTIzLjQ2IDIxLjYzMDQgMTI2LjUwOSAyMS42MzA0QzEyOS4xOTggMjEuNjMwNCAxMzAuMDgzIDIwLjcxMjMgMTMwLjA4MyAxOS41NjQ3QzEzMC4wODMgMTguMjg1OSAxMjguMzc4IDE4LjA4OTIgMTI1LjA2NyAxNy42OTU3QzExOS43NTUgMTcuMDM5OSAxMTkuMDY2IDE0LjI4NTYgMTE5LjA2NiAxMi4zNTFDMTE5LjA2NiA5LjUzMTEyIDEyMS41NTggNy4wNzE5MSAxMjYuNDc3IDcuMDcxOTFDMTMxLjAzNCA3LjA3MTkxIDEzMy41MjYgOS40OTgzMyAxMzMuNzU2IDEyLjY0NjFIMTI5LjYyNEMxMjkuNTI2IDExLjU2NDEgMTI4LjgwNSAxMC4zNTA5IDEyNi4zNzggMTAuMzUwOUMxMjMuOTg1IDEwLjM1MDkgMTIzLjI2MyAxMS4xMzc4IDEyMy4yNjMgMTIuMTIxNUMxMjMuMjYzIDEyLjk0MTIgMTIzLjYyNCAxMy42Mjk4IDEyNy4wMDEgMTMuOTU3N0MxMzEuMjMxIDE0LjM4NCAxMzQuMjggMTUuNzYxMSAxMzQuMjggMTkuMjM2OEMxMzQuMjggMjIuODQzNiAxMzEuNDkzIDI0LjkwOTQgMTI2LjM3OCAyNC45MDk0QzEyMS4zNjEgMjQuOTA5NCAxMTguNzA1IDIyLjUxNTcgMTE4LjU0MiAxOC44MTA1WiIgZmlsbD0iIzAwMDcxQSIvPgo8cGF0aCBkPSJNMTAyLjIwMiAxOC44MTA1SDEwNi4zMzNDMTA2LjM2NiAyMC4wODkzIDEwNy4xMiAyMS42MzA0IDExMC4xNyAyMS42MzA0QzExMi44NTggMjEuNjMwNCAxMTMuNzQ0IDIwLjcxMjMgMTEzLjc0NCAxOS41NjQ3QzExMy43NDQgMTguMjg1OSAxMTIuMDM5IDE4LjA4OTIgMTA4LjcyNyAxNy42OTU3QzEwMy40MTUgMTcuMDM5OSAxMDIuNzI3IDE0LjI4NTYgMTAyLjcyNyAxMi4zNTFDMTAyLjcyNyA5LjUzMTEyIDEwNS4yMTkgNy4wNzE5MSAxMTAuMTM3IDcuMDcxOTFDMTE0LjY5NSA3LjA3MTkxIDExNy4xODcgOS40OTgzMyAxMTcuNDE2IDEyLjY0NjFIMTEzLjI4NUMxMTMuMTg2IDExLjU2NDEgMTEyLjQ2NSAxMC4zNTA5IDExMC4wMzkgMTAuMzUwOUMxMDcuNjQ1IDEwLjM1MDkgMTA2LjkyNCAxMS4xMzc4IDEwNi45MjQgMTIuMTIxNUMxMDYuOTI0IDEyLjk0MTIgMTA3LjI4NCAxMy42Mjk4IDExMC42NjIgMTMuOTU3N0MxMTQuODkxIDE0LjM4NCAxMTcuOTQxIDE1Ljc2MTEgMTEzLjk0MSAxOS4yMzY4QzExNy45NDEgMjIuODQzNiAxMTUuMTU0IDI0LjkwOTQgMTEwLjAzOSAyNC45MDk0QzEwNS4wMjIgMjQuOTA5NCAxMDIuMzY2IDIyLjUxNTcgMTAyLjIwMiAxOC44MTA1WiIgZmlsbD0iIzAwMDcxQSIvPgo8cGF0aCBkPSJNMTAxLjYyNiAxNS43NjExQzEwMS42MjYgMTYuMjIwMiAxMDEuNTkzIDE2LjU0ODEgMTAxLjUyNyAxNy4wMzk5SDg4LjkzNjJDODkuMjMxMyAxOS42NjMxIDkwLjkzNjQgMjEuMjM2OSA5My41NTk1IDIxLjIzNjlDOTUuNTU5NyAyMS4yMzY5IDk2LjU3NjEgMjAuMTU0OSA5Ny4wNjggMTguNjEzOEgxMDEuMzMxQzEwMC41NzYgMjIuMTg3OCA5OC4xNSAyNC45MDk0IDkzLjUyNjcgMjQuOTA5NEM4Ny45MTk3IDI0LjkwOTQgODQuODM3NSAyMS4xMzg2IDg0LjgzNzUgMTUuOTkwNkM4NC44Mzc1IDEwLjU4MDQgODguMTgyIDcuMDcxOTEgOTMuNDYxMSA3LjA3MTkxQzk3LjQ2MTUgNy4wNzE5MSAxMDEuNjI2IDkuNDY1NTQgMTAxLjYyNiAxNS43NjExWk04OS4xMDAyIDE0LjE1NDRIOTcuNDI4N0M5Ny4yNjQ3IDEyLjA1NTkgOTYuMDE4NyAxMC40ODIgOTMuNTkyMyAxMC40ODJDOTAuNzM5NiAxMC40ODIgODkuNTI2NCAxMi4wODg3IDg5LjEwMDIgMTQuMTU0NFoiIGZpbGw9IiMwMDA3MUEiLz4KPHBhdGggZD0iTTY3LjM0NTIgMTUuOTkwNkM2Ny4zNDUyIDEwLjg0MjcgNzAuNzIyNSA3LjA3MTkxIDc2LjEgNy4wNzE5MUM4MC45NTI4IDcuMDcxOTEgODMuODM4MyAxMC4zNTA5IDg0LjEzMzQgMTMuODkyMUg4MC4wMDE5Qzc5LjczOTYgMTIuMjUyNiA3OC40NjA4IDEwLjg3NTUgNzYuMSAxMC44NzU1QzczLjIxNDUgMTAuODc1NSA3MS41NDIzIDEyLjk3NCA3MS41NDIzIDE1Ljk5MDZDNzEuNTQyMyAxOS4wMDczIDczLjIxNDUgMjEuMTA1OCA3Ni4xIDIxLjEwNThDNzguNDYwOCAyMS4xMDU4IDc5LjczOTYgMTkuNzI4NiA4MC4wMDE5IDE4LjA4OTJIODQuMTMzNEM4My44MzgzIDIxLjYzMDQgODAuOTg1NiAyNC45MDk0IDc2LjEgMjQuOTA5NEM3MC44MjA5IDI0LjkwOTQgNjcuMzQ1MiAyMS4xMzg2IDY3LjM0NTIgMTUuOTkwNloiIGZpbGw9IiMwMDA3MUEiLz4KPHBhdGggZD0iTTQ5Ljg1MjggMTUuOTkwNkM0OS44NTI4IDEwLjg0MjcgNTMuMjMwMSA3LjA3MTkxIDU4LjYwNzYgNy4wNzE5MUM2My40NjA0IDcuMDcxOTEgNjYuMzQ1OSAxMC4zNTA5IDY2LjY0MSAxMy44OTIxSDYyLjUwOTVDNjIuMjQ3MiAxMi4yNTI2IDYwLjk2ODQgMTAuODc1NSA1OC42MDc2IDEwLjg3NTVDNTUuNzIyMSAxMC44NzU1IDU0LjA0OTggMTIuOTc0IDU0LjA0OTggMTUuOTkwNkM1NC4wNDk4IDE5LjAwNzMgNTUuNzIyMSAyMS4xMDU4IDU4LjYwNzYgMjEuMTA1OEM2MC45Njg0IDIxLjEwNTggNjIuMjQ3MiAxOS43Mjg2IDYyLjUwOTUgMTguMDg5Mkg2Ni42NDFDNjYuMzQ1OSAyMS42MzA0IDYzLjQ5MzIgMjQuOTA5NCA1OC42MDc2IDI0LjkwOTRDNTMuMzI4NSAyNC45MDk0IDQ5Ljg1MjggMjEuMTM4NiA0OS44NTI4IDE1Ljk5MDZaIiBmaWxsPSIjMDAwNzFBIi8+CjxwYXRoIGQ9Ik0zMi4yMDAzIDE5Ljg5MjZDMzIuMjAwMyAxNi4wNTYyIDM1LjAyMDIgMTQuNjQ2MyAzOC40OTU5IDE0LjQ0OTVDNDEuNTc4MSAxNC4yODU2IDQ0LjI5OTYgMTQuNTgwNyA0NC4yNjY4IDEyLjk3NEM0NC4yMzQgMTEuNzkzNiA0My43NzUgMTAuNDgyIDQwLjc5MTEgMTAuNDgyQzM3Ljg0MDEgMTAuNDgyIDM3LjA4NTkgMTEuNjk1MiAzNi44NTY0IDEzLjEwNTJIMzIuNzI0OUMzMy4zMTUyIDguNzQ0MTcgMzcuMDUzMiA3LjA3MTkxIDQwLjkyMjMgNy4wNzE5MUM0NC44ODk4IDcuMDcxOTEgNDguNDYzOSA4LjM4MzQ5IDQ4LjQ2MzkgMTUuMDcyNVYyNC42NDdINDQuMjY2OFYyMy40MzM4QzQ0LjI2NjggMjIuNjQ2OSA0NC40NjM2IDIyLjEyMjMgNDQuNzU4NyAyMS41MzIxQzQ0Ljg4OTggMjEuMjM2OSA0NS4wMjEgMjAuOTA5MSA0NC43MjU5IDIwLjc3NzlDNDQuMzk4IDIwLjY0NjcgNDQuMjY2OCAyMC45NzQ2IDQ0LjIwMTIgMjEuMTM4NkM0My4yMTc2IDIzLjUzMjIgNDEuMzE1OCAyNC45MDk0IDM4LjIzMzYgMjQuOTA5NEMzNC45ODc0IDI0LjkwOTQgMzIuMjAwMyAyMi44MTA4IDMyLjIwMDMgMTkuODkyNlpNNDQuMjY2OCAxNS43MjgzQzQzLjI4MzEgMTYuODEwNCA0MS43MDkzIDE2Ljk3NDMgMzkuMjE3MyAxNy4yMzY2QzM3LjQxMzggMTcuNDMzNCAzNi4zOTc0IDE4LjEyMiAzNi4zOTc0IDE5LjY2MzFDMzYuMzk3NCAyMS4xMDU4IDM3Ljc3NDUgMjIuMDIzOSAzOS43MDkxIDIxLjc2MTZDNDEuOTM4OCAyMS40NjY1IDQ0LjIzNCAyMC4wMjM3IDQ0LjI2NjggMTUuNzI4M1oiIGZpbGw9IiMwMDA3MUEiLz4KPHBhdGggZD0iTTE5LjcwOTkgMjQuMDg0MUMxOS42NDkxIDI0LjI0NDcgMTkuNTY5OSAyNC4zOTgzIDE5LjQ2NzUgMjQuNTM2MUMxOS4yMiAyNC44NzAyIDE4LjkxNDMgMjUuMDQzNiAxOC41NjY5IDI1LjE4OTFDMTguNTIyIDI1LjIwOTQgMTguNDc0OSAyNS4yMjcxIDE4LjQyNjIgMjUuMjQyMkMxOC4zNzkxIDI1LjI1NzcgMTguMzMwNSAyNS4yNzE2IDE4LjI4MjIgMjUuMjgzNEMxOC4yNTc1IDI1LjI4OTMgMTguMjMzNiAyNS4yOTQxIDE4LjIwODkgMjUuM0MxOC4xNTgxIDI1LjMwOTYgMTguMTMwMSAyNS4zOTQ3IDE4LjA3OTYgMjUuNDAwNkwxNy45MzUyIDI1LjQ2NThDMTcuNTM5NiAyNS40NjU4IDE3LjY0MDYgMjUuNTc1MiAxNy4yMDgxIDI1LjU3NjNDMTQuMTU4MyAyNS41Nzg1IDEwLjU5NzIgMjUuNTc5OSA3LjkyNjM5IDI1LjU3NjNMMTcuMjQxNyAyLjIzMDI4QzE3Ljc5MDggMC44ODEwNjQgMTkuMTAyMSAwIDIwLjU1NzQgMEgyNi40ODk1QzI3LjcwMjQgMCAyOC41MzA1IDEuMjI5NTEgMjguMDcyMyAyLjM1NDA1TDE5LjcwOTkgMjQuMDg0MVoiIGZpbGw9InVybCgjcGFpbnQwX2xpbmVhcl8yMTMzXzM5NTEpIi8+CjxwYXRoIGQ9Ik0xOS43MDk5IDI0LjA4NDFDMTkuNjQ5MSAyNC4yNDQ3IDE5LjU2OTkgMjQuMzk4MyAxOS40Njc1IDI0LjUzNjFDMTkuMjIgMjQuODcwMiAxOC45MTQzIDI1LjA0MzYgMTguNTY2OSAyNS4xODkxQzE4LjUyMiAyNS4yMDk0IDE4LjQ3NDkgMjUuMjI3MSAxOC40MjYyIDI1LjI0MjJDMTguMzc5MSAyNS4yNTc3IDE4LjMzMDUgMjUuMjcxNiAxOC4yODIyIDI1LjI4MzRDMTguMjU3NSAyNS4yODkzIDE4LjIzMzYgMjUuMjk0MSAxOC4yMDg5IDI1LjNDMTguMTU4MSAyNS4zMDk2IDE4LjEwODQgMjUuMzE3NyAxOC4wNTc5IDI1LjMyMzZMMTcuOTM1MiAyNS40NjU4QzE3LjUzOTYgMjUuNDY1OCAxNy42NDA2IDI1LjU3NTIgMTcuMjA4MSAyNS41NzYzQzE0LjE1ODMgMjUuNTc4NSAxMC41OTcyIDI1LjU3OTkgNy45MjYzOSAyNS41NzYzTDE3LjI0MTcgMi4yMzAyOEMxNy43OTA4IDAuODgxMDY0IDE5LjEwMjEgMCAyMC41NTc0IDBIMjYuNDg5NUMyNy43MDI0IDAgMjguNTMwNSAxLjIyOTUxIDI4LjA3MjMgMi4zNTQwNUwxOS43MDk5IDI0LjA4NDFaIiBmaWxsPSJ1cmwoI3BhaW50MV9saW5lYXJfMjEzM18zOTUxKSIgZmlsbC1vcGFjaXR5PSIwLjgiLz4KPHBhdGggZD0iTTE5LjY2NjEgMjQuMTI4QzE5LjYwNTMgMjQuMjg4NiAxOS41MjYxIDI0LjQ0MjIgMTkuNDIzNyAyNC41Nzk5QzE5LjE3NjIgMjQuOTE0IDE4Ljg3MDQgMjUuMDg3NSAxOC41MjMxIDI1LjIzM0MxOC40NzgyIDI1LjI1MzIgMTguNDMxIDI1LjI3MDkgMTguMzgyNCAyNS4yODZDMTguMzM1MyAyNS4zMDE1IDE4LjI4NjYgMjUuMzE1NSAxOC4yMzg0IDI1LjMyNzNDMTguMjEzNyAyNS4zMzMyIDE4LjE4OTggMjUuMzM3OSAxOC4xNjUxIDI1LjM0MzhDMTguMTE0MyAyNS4zNTM0IDE4LjA2NDUgMjUuMzYxNSAxOC4wMTQxIDI1LjM2NzRMMTcuOTM1MiAyNS40NjU4QzE3LjUzOTYgMjUuNDY1OCAxNy42NDA2IDI1LjU3NTIgMTcuMjA4MSAyNS41NzYzQzE0LjE1ODMgMjUuNTc4NSAxMC41OTcyIDI1LjU3OTkgNy45MjYzOSAyNS41NzYzTDE3LjI0MTcgMi4yMzAyOEMxNy43OTA4IDAuODgxMDY0IDE5LjEwMjEgMCAyMC41NTc0IDBIMjYuNDg5NUMyNy43MDI0IDAgMjguNTMwNSAxLjIyOTUxIDI4LjA3MjMgMi4zNTQwNUwxOS42NjYxIDI0LjEyOFoiIGZpbGw9InVybCgjcGFpbnQyX2xpbmVhcl8yMTMzXzM5NTEpIiBmaWxsLW9wYWNpdHk9IjAuNiIvPgo8bWFzayBpZD0ibWFzazBfMjEzM18zOTUxIiBzdHlsZT0ibWFzay10eXBlOmFscGhhIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSI3IiB5PSIwIiB3aWR0aD0iMjIiIGhlaWdodD0iMjYiPgo8cGF0aCBkPSJNMTkuNzA5OSAyNC4wODQxQzE5LjY0OTEgMjQuMjQ0NyAxOS41Njk5IDI0LjM5ODMgMTkuNDY3NSAyNC41MzYxQzE5LjIyIDI0Ljg3MDIgMTguOTE0MyAyNS4wNDM2IDE4LjU2NjkgMjUuMTg5MUMxOC41MjIgMjUuMjA5NCAxOC40NzQ5IDI1LjIyNzEgMTguNDI2MiAyNS4yNDIyQzE4LjM3OTEgMjUuMjU3NyAxOC4zMzA1IDI1LjI3MTYgMTguMjgyMiAyNS4yODM0QzE4LjI1NzUgMjUuMjg5MyAxOC4yMzM2IDI1LjI5NDEgMTguMjA4OSAyNS4zQzE4LjE1ODEgMjUuMzA5NiAxOC4xMzAxIDI1LjM5NDcgMTguMDc5NiAyNS40MDA2TDE3LjkzNTIgMjUuNDY1OEMxNy41Mzk2IDI1LjQ2NTggMTcuNjQwNiAyNS41NzUyIDE3LjIwODEgMjUuNTc2M0MxNC4xNTgzIDI1LjU3ODUgMTAuNTk3MiAyNS41Nzk5IDcuOTI2MzkgMjUuNTc2M0wxNy4yNDE3IDIuMjMwMjhDMTcuNzkwOCAwLjg4MTA2NCAxOS4xMDIxIDAgMjAuNTU3NCAwSDI2LjQ4OTVDMjcuNzAyNCAwIDI4LjUzMDUgMS4yMjk1MSAyOC4wNzIzIDIuMzU0MDVMMTkuNzA5OSAyNC4wODQxWiIgZmlsbD0idXJsKCNwYWludDNfbGluZWFyXzIxMzNfMzk1MSkiLz4KPC9tYXNrPgo8ZyBtYXNrPSJ1cmwoI21hc2swXzIxMzNfMzk1MSkiPgo8ZyBvcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNmaWx0ZXIwX2ZfMjEzM18zOTUxKSIgc3R5bGU9Im1peC1ibGVuZC1tb2RlOm11bHRpcGx5Ij4KPHBhdGggZD0iTTE0LjA0NDMgMTAuNTg3NEwxMS45Njg1IDE0Ljg4ODVMMTIuNTI5NSAxNi44NTIxTDE1LjcyNzQgMjMuMzZMMTcuMzkxNyAyNC45NjgyTDE4Ljg1MDQgMjUuMTU1MkwxNC4wNDQzIDEwLjU4NzRaIiBmaWxsPSJ1cmwoI3BhaW50NF9saW5lYXJfMjEzM18zOTUxKSIvPgo8L2c+CjxnIGZpbHRlcj0idXJsKCNmaWx0ZXIxX2ZfMjEzM18zOTUxKSI+CjxwYXRoIGQ9Ik0xOS42NzMyIDI0LjE4MjhMMjguMDMyMyAyLjQ2NzdDMjguMTMxMyAyLjIxMDQ1IDI4LjE4MjEgMS45MzcxNyAyOC4xODIxIDEuNjYxNTJWMS40ODAxTDI4LjEwNzMgMS4xMDYwOUwyNy45MjAzIDAuNzY5NDc3TDI3LjY5NTkgMC40NzAyNjVMMjcuMzk2NyAwLjIyNzE1NUwyNi43MDQ3IDAuMDAyNzQ2NThMMjcuMzgzMSAwLjc0Mzk1QzI3LjU5ODYgMC45Nzk0MyAyNy43MzQ5IDEuMjc2NTkgMjcuNzcyNiAxLjU5MzU3QzI3Ljc5NTkgMS43ODkxNiAyNy43NzA0IDEuOTg3NDcgMjcuNjk4NCAyLjE3MDhMMTguNzk0MyAyNC44MzczTDE5LjY3MzIgMjQuMTgyOFoiIGZpbGw9InVybCgjcGFpbnQ1X2xpbmVhcl8yMTMzXzM5NTEpIi8+CjwvZz4KPGcgb3BhY2l0eT0iMC43IiBmaWx0ZXI9InVybCgjZmlsdGVyMl9mXzIxMzNfMzk1MSkiPgo8cGF0aCBkPSJNMTIuMjMwNCAxNS40ODY5TDEyLjExODIgMTUuMjI1MUwxNy40MjkyIDEuOTY2MzFMMTcuNzQ3MSAxLjQ2MTM5TDE4LjEzOTggMS4wMTI1N0wxMi4yMzA0IDE1LjQ4NjlaIiBmaWxsPSJ1cmwoI3BhaW50Nl9saW5lYXJfMjEzM18zOTUxKSIvPgo8L2c+CjxnIG9wYWNpdHk9IjAuNzEiIGZpbHRlcj0idXJsKCNmaWx0ZXIzX2ZfMjEzM18zOTUxKSI+CjxwYXRoIGQ9Ik0xOS40MzI2IDAuMDc3NTQ1MkwxOS40MTE1IDAuMDk2MjQ1OUwyOS45MjEzIDAuMjQ1ODUyTDI5LjIzODMgLTAuMDUzMzZIMjAuNzc0MkwxOS40MzI2IDAuMDc3NTQ1MloiIGZpbGw9InVybCgjcGFpbnQ3X2xpbmVhcl8yMTMzXzM5NTEpIi8+CjwvZz4KPC9nPgo8cGF0aCBkPSJNNy4zNzg5NSAyNS41NzY4QzYuNzI2OTkgMjUuNTMwNyA1Ljk2MTE1IDI1LjEzNzggNS41NjY2NiAyNC4yMzkzTDAuMTI0OTA4IDEwLjkxNzdDLTAuMzI2MzA2IDkuNzk0MjYgMC41MDA2MTIgOC41NzE3NSAxLjcxMTM0IDguNTcxNzVINy40NjM2OEM4LjkyNzA5IDguNTcxNzUgMTAuMDIzMyA5LjQ2MzQ5IDEwLjU2NjYgMTAuODIzTDE1LjMwNiAyMi4yNDI2QzE2LjgzMDEgMjUuNTk5NiAxOS4wNjMgMjUuNDgzMiAxOS42NjA4IDI0LjE5NzRDMTkuNjY0OSAyNC4xODg5IDE5LjY2NTIgMjQuMTg5MyAxOS42NjA4IDI0LjE5NzRDMTkuMzczNyAyNC45MTg3IDE4LjY1MDUgMjUuNiAxNy40Mzc1IDI1LjZMNy4zNzg5NSAyNS41NzY4WiIgZmlsbD0idXJsKCNwYWludDhfcmFkaWFsXzIxMzNfMzk1MSkiLz4KPG1hc2sgaWQ9Im1hc2sxXzIxMzNfMzk1MSIgc3R5bGU9Im1hc2stdHlwZTphbHBoYSIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iOCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE4Ij4KPHBhdGggZD0iTTcuMzc4OTUgMjUuNTc2OEM2LjcyNjk5IDI1LjUzMDggNS45NjExNSAyNS4xMzc4IDUuNTY2NjYgMjQuMjM5M0wwLjEyNDkwOCAxMC45MTc3Qy0wLjMyNjMwNiA5Ljc5NDI4IDAuNTAwNjEyIDguNTcxNzYgMS43MTEzNCA4LjU3MTc2SDcuNDYzNjhDOC45MjcwOSA4LjU3MTc2IDEwLjAyMzMgOS40NjM1MSAxMC41NjY2IDEwLjgyM0wxNS4zMDYgMjIuMjQyNkMxNi44MzAxIDI1LjU5OTYgMTkuMDYzIDI1LjQ4MzIgMTkuNjYwOCAyNC4xOTc0QzE5LjY2NDkgMjQuMTg4OSAxOS42NjUyIDI0LjE4OTMgMTkuNjYwOCAyNC4xOTc0QzE5LjM3MzcgMjQuOTE4NyAxOC42NTA1IDI1LjYgMTcuNDM3NSAyNS42TDcuMzc4OTUgMjUuNTc2OFoiIGZpbGw9InVybCgjcGFpbnQ5X3JhZGlhbF8yMTMzXzM5NTEpIi8+CjwvbWFzaz4KPGcgbWFzaz0idXJsKCNtYXNrMV8yMTMzXzM5NTEpIj4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjRfZl8yMTMzXzM5NTEpIj4KPHBhdGggZD0iTTEyLjE5MzcgMjEuNzgxOEMxMS4wNzQ4IDIzLjc3MzMgNS41OTgxMSAyMy42MzY3IDMuMzI4NzQgMjMuMzE5NEw0LjkzMzA2IDI1LjY2MjRMMTcuNzg4MyAyNi4wNTI5TDE4Ljc3NTUgMjMuMzE5NEwxMy4wNzgxIDE0LjUzMzJDMTMuMjQ5NSAxNi4xMTk2IDEzLjMxMjYgMTkuNzkwMyAxMi4xOTM3IDIxLjc4MThaIiBmaWxsPSJ1cmwoI3BhaW50MTBfbGluZWFyXzIxMzNfMzk1MSkiLz4KPC9nPgo8ZyBvcGFjaXR5PSIwLjkzIiBmaWx0ZXI9InVybCgjZmlsdGVyNV9mXzIxMzNfMzk1MSkiPgo8cGF0aCBkPSJNNS42ODQ5OCAyNC4zNjk4TDQuNTA2ODQgMjEuNjIwOEM0Ljk0MjkgMjIuNDU4OSA1Ljc5NTIgMjQuNjk2MyA3LjQwNTQ1IDI1LjA0M0MxMC4zNzg5IDI1LjA0MyAxNC45NTUzIDI0Ljg1MSAxNi4zODE4IDI0Ljg3NDdDMTguMTc3MSAyNC45MDQ3IDE5LjE2MiAyNC44OTk3IDE5LjQxMTMgMjQuNjEyOUMxOC45NjI1IDI1LjQyMDggMTcuODc3OSAyNS41ODU0IDE3LjM5MTYgMjUuNTY2N0g3LjQwNTQ1QzYuMjgzNDEgMjUuNDAyMSA1Ljc5MDk1IDI0LjcwMDIgNS42ODQ5OCAyNC4zNjk4WiIgZmlsbD0idXJsKCNwYWludDExX2xpbmVhcl8yMTMzXzM5NTEpIi8+CjwvZz4KPGcgZmlsdGVyPSJ1cmwoI2ZpbHRlcjZfZl8yMTMzXzM5NTEpIj4KPHBhdGggZD0iTTkuOTY3NTIgMTAuMzI1NkM5LjI5Njk1IDkuMTI4NjIgOC4xMjg2MiA4Ljc3MzQgNy41OTI1MyA4LjY5ODU5QzkuMTc4MzUgOC42OTg1OSAxMC4wNDg2IDkuODgyOTcgMTAuMjg1NCAxMC40NzUyTDE2LjA4MjcgMjMuNjU5MkMxNy4zMDc0IDI1LjMxOTggMTguNjc1IDI0Ljk4NjkgMTkuMjA1NyAyNC42MTI5QzE3Ljg1OTIgMjYuMjI4NyAxNi4yMjYgMjQuMzAxMiAxNS40NDY4IDIzLjEzNTZDMTMuOTM4MyAxOS40MzI4IDEwLjY2MzIgMTEuNTY3MyA5Ljk2NzUyIDEwLjMyNTZaIiBmaWxsPSJ1cmwoI3BhaW50MTJfbGluZWFyXzIxMzNfMzk1MSkiLz4KPC9nPgo8ZyBmaWx0ZXI9InVybCgjZmlsdGVyN19mXzIxMzNfMzk1MSkiPgo8cGF0aCBkPSJNMTUuMzA1OSAyMi4yNDI2QzE2Ljg0OTMgMjUuNjQxNSAxOS4wNjMgMjUuNDgzMiAxOS42NjA4IDI0LjE5NzRDMTkuNjY0OCAyNC4xODg5IDE5LjY2NTIgMjQuMTg5MyAxOS42NjA4IDI0LjE5NzRDMTkuNDE1OCAyNC44MTI4IDE5LjAzOTcgMjUuMTg0MiAxOC4xNzk3IDI1LjE1MjNDMTcuODUzNiAyNS4xNDAyIDE3LjUzNDUgMjUuMDM5MyAxNy4yNTkxIDI0Ljg2NDJDMTUuODI5IDIzLjk1NDggMTUuMzA1OSAyMi4yNDI2IDE1LjMwNTkgMjIuMjQyNloiIGZpbGw9IiNBQURFRkYiLz4KPC9nPgo8ZyBvcGFjaXR5PSIwLjUiIGZpbHRlcj0idXJsKCNmaWx0ZXI4X2ZfMjEzM18zOTUxKSI+CjxwYXRoIGQ9Ik0wLjA5MzQ3NzEgMTAuNjA2MUw1LjI5MjI4IDIzLjM2TDUuODE1OTEgMjQuMjk1TDAuMzM2NTk0IDEwLjcxODNDMC4wODIyNjQyIDkuNTUxMzUgMS4wNDcyMiA4Ljc5ODMzIDEuNjA4MjQgOC42MjM3OUMwLjE0MjA5OSA4Ljg3ODEyIC0wLjAxMjQ5MzcgMTAuMDUxMyAwLjA5MzQ3NzEgMTAuNjA2MVoiIGZpbGw9InVybCgjcGFpbnQxM19saW5lYXJfMjEzM18zOTUxKSIvPgo8L2c+CjwvZz4KPGRlZnM+CjxmaWx0ZXIgaWQ9ImZpbHRlcjBfZl8yMTMzXzM5NTEiIHg9IjEwLjQ1MzciIHk9IjkuMDcyNiIgd2lkdGg9IjkuOTExMzYiIGhlaWdodD0iMTcuNTk3NCIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVGbG9vZCBmbG9vZC1vcGFjaXR5PSIwIiByZXN1bHQ9IkJhY2tncm91bmRJbWFnZUZpeCIvPgo8ZmVCbGVuZCBtb2RlPSJub3JtYWwiIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9IkJhY2tncm91bmRJbWFnZUZpeCIgcmVzdWx0PSJzaGFwZSIvPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIwLjc1NzM4IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXIxX2ZfMjEzM18zOTUxIiB4PSIxOC41MzI1IiB5PSItMC4yNTkwNzkiIHdpZHRoPSI5LjkxMTQ0IiBoZWlnaHQ9IjI1LjM1ODIiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4xMzA5MDUiIHJlc3VsdD0iZWZmZWN0MV9mb3JlZ3JvdW5kQmx1cl8yMTMzXzM5NTEiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjJfZl8yMTMzXzM5NTEiIHg9IjExLjg2NzYiIHk9IjAuNzYxOTgzIiB3aWR0aD0iNi41MjI3OSIgaGVpZ2h0PSIxNC45NzU2IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMTI1Mjk1IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXIzX2ZfMjEzM18zOTUxIiB4PSIxOS4wODk4IiB5PSItMC4zNzUwMTMiIHdpZHRoPSIxMS4xNTMxIiBoZWlnaHQ9IjAuOTQyNTE1IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMTYwODI2IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI0X2ZfMjEzM18zOTUxIiB4PSIyLjU4MDcxIiB5PSIxMy43ODUyIiB3aWR0aD0iMTYuOTQyOCIgaGVpZ2h0PSIxMy4wMTU3IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMzc0MDE1IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI1X2ZfMjEzM18zOTUxIiB4PSI0LjEyOTA4IiB5PSIyMS4yNDMiIHdpZHRoPSIxNS42NjAxIiBoZWlnaHQ9IjQuNzAyNzQiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4xODg4NzciIHJlc3VsdD0iZWZmZWN0MV9mb3JlZ3JvdW5kQmx1cl8yMTMzXzM5NTEiLz4KPC9maWx0ZXI+CjxmaWx0ZXIgaWQ9ImZpbHRlcjZfZl8yMTMzXzM5NTEiIHg9IjcuMTM2MjMiIHk9IjguMjQyMyIgd2lkdGg9IjEyLjUyNTgiIGhlaWdodD0iMTcuNDQ1NiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiBjb2xvci1pbnRlcnBvbGF0aW9uLWZpbHRlcnM9InNSR0IiPgo8ZmVGbG9vZCBmbG9vZC1vcGFjaXR5PSIwIiByZXN1bHQ9IkJhY2tncm91bmRJbWFnZUZpeCIvPgo8ZmVCbGVuZCBtb2RlPSJub3JtYWwiIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9IkJhY2tncm91bmRJbWFnZUZpeCIgcmVzdWx0PSJzaGFwZSIvPgo8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIwLjIyODE0OSIgcmVzdWx0PSJlZmZlY3QxX2ZvcmVncm91bmRCbHVyXzIxMzNfMzk1MSIvPgo8L2ZpbHRlcj4KPGZpbHRlciBpZD0iZmlsdGVyN19mXzIxMzNfMzk1MSIgeD0iMTUuMTU2MyIgeT0iMjIuMDkzIiB3aWR0aD0iNC42NTcyNCIgaGVpZ2h0PSIzLjIxMDc5IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CjxmZUZsb29kIGZsb29kLW9wYWNpdHk9IjAiIHJlc3VsdD0iQmFja2dyb3VuZEltYWdlRml4Ii8+CjxmZUJsZW5kIG1vZGU9Im5vcm1hbCIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iQmFja2dyb3VuZEltYWdlRml4IiByZXN1bHQ9InNoYXBlIi8+CjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjAuMDc0ODAzIiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJmaWx0ZXI4X2ZfMjEzM18zOTUxIiB4PSItMC4xMjAxMTMiIHk9IjguNDM2NzkiIHdpZHRoPSI2LjEyMzA0IiBoZWlnaHQ9IjE2LjA0NTIiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4KPGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz4KPGZlQmxlbmQgbW9kZT0ibm9ybWFsIiBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0ic2hhcGUiLz4KPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC4wOTM1MDM3IiByZXN1bHQ9ImVmZmVjdDFfZm9yZWdyb3VuZEJsdXJfMjEzM18zOTUxIi8+CjwvZmlsdGVyPgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MF9saW5lYXJfMjEzM18zOTUxIiB4MT0iMzUuNzA4NSIgeTE9Ii0zNi45MjMzIiB4Mj0iMTMuMjk2MyIgeTI9IjMyLjQ2NzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agb2Zmc2V0PSIwLjU5Mjc4IiBzdG9wLWNvbG9yPSIjMkM2RUU0Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzA5MUQ3MiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MV9saW5lYXJfMjEzM18zOTUxIiB4MT0iMTQuMTAwNCIgeTE9Ii0wLjAxNTk2MTMiIHgyPSIyNy4xNjI4IiB5Mj0iMTEuNDEyOSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBvZmZzZXQ9IjAuMDc3NjkxNSIgc3RvcC1jb2xvcj0iIzY2QjBGNiIvPgo8c3RvcCBvZmZzZXQ9IjAuOTYiIHN0b3AtY29sb3I9IiMwOTFENzIiIHN0b3Atb3BhY2l0eT0iMCIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50Ml9saW5lYXJfMjEzM18zOTUxIiB4MT0iMjYuNjAxOSIgeTE9Ii0xLjAxMzJlLTA2IiB4Mj0iMTYuNjI4OCIgeTI9IjI0LjQyNzkiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzA4MUE2QyIgc3RvcC1vcGFjaXR5PSIwIi8+CjxzdG9wIG9mZnNldD0iMC45NiIgc3RvcC1jb2xvcj0iIzA4MUE2QyIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50M19saW5lYXJfMjEzM18zOTUxIiB4MT0iMzUuNzA4NSIgeTE9Ii0zNi45MjMzIiB4Mj0iMTYuNDg2MSIgeTI9IjI0LjA3OTQiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agb2Zmc2V0PSIwLjYzOCIgc3RvcC1jb2xvcj0iIzJDNkVFNCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwOTFENzIiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDRfbGluZWFyXzIxMzNfMzk1MSIgeDE9IjE2LjY0MzciIHkxPSIxOC4yMzYiIHgyPSIxMy41MDIiIHkyPSIxOS4wNDAxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3Atb3BhY2l0eT0iMCIvPgo8c3RvcCBvZmZzZXQ9IjEiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDVfbGluZWFyXzIxMzNfMzk1MSIgeDE9IjIzLjYwMDQiIHkxPSIwLjE3MTA1MyIgeDI9IjIzLjYwMDQiIHkyPSIyNC41NzU1IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiMwMDUxRTYiIHN0b3Atb3BhY2l0eT0iMC40OCIvPgo8c3RvcCBvZmZzZXQ9IjAuMzYwOTEzIiBzdG9wLWNvbG9yPSIjMDAyQzhBIi8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzA0MEU0QiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50Nl9saW5lYXJfMjEzM18zOTUxIiB4MT0iMTUuOTUxOCIgeTE9IjEwLjMyNTUiIHgyPSIxMy4zMzM3IiB5Mj0iMTYuMjUzNyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjQzBFRkZGIi8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzExMjk3MSIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50N19saW5lYXJfMjEzM18zOTUxIiB4MT0iMTkuMjYxOSIgeTE9IjAuMDk2MjQ1OSIgeDI9IjI5LjkyMTMiIHkyPSIwLjA5NjI0NTkiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzE2NERCQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMzNTgwRkYiLz4KPC9saW5lYXJHcmFkaWVudD4KPHJhZGlhbEdyYWRpZW50IGlkPSJwYWludDhfcmFkaWFsXzIxMzNfMzk1MSIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSgxLjI1Mjk1IDkuNzA4NDIpIHJvdGF0ZSg1OC42ODg0KSBzY2FsZSgyNi42MDczIDQ3LjA4NjEpIj4KPHN0b3Agb2Zmc2V0PSIwLjAwMzUyNjM2IiBzdG9wLWNvbG9yPSIjQTRFQUZGIi8+CjxzdG9wIG9mZnNldD0iMC40NDQ3MDMiIHN0b3AtY29sb3I9IiMwMDkyRkYiLz4KPHN0b3Agb2Zmc2V0PSIwLjgzOTI1NiIgc3RvcC1jb2xvcj0iIzAzNDZBRCIvPgo8L3JhZGlhbEdyYWRpZW50Pgo8cmFkaWFsR3JhZGllbnQgaWQ9InBhaW50OV9yYWRpYWxfMjEzM18zOTUxIiBjeD0iMCIgY3k9IjAiIHI9IjEiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIiBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDEuMjUyOTUgOS43MDg0Mykgcm90YXRlKDU4LjY4ODQpIHNjYWxlKDI2LjYwNzMgNDcuMDg2MSkiPgo8c3RvcCBvZmZzZXQ9IjAuMDAzNTI2MzYiIHN0b3AtY29sb3I9IiNBNEVBRkYiLz4KPHN0b3Agb2Zmc2V0PSIwLjQ0NDcwMyIgc3RvcC1jb2xvcj0iIzAwOTJGRiIvPgo8c3RvcCBvZmZzZXQ9IjAuODM5MjU2IiBzdG9wLWNvbG9yPSIjMDM0NkFEIi8+CjwvcmFkaWFsR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQxMF9saW5lYXJfMjEzM18zOTUxIiB4MT0iMTIuMzM3NyIgeTE9IjIxLjA0OTYiIHgyPSIxMy45MTU0IiB5Mj0iMjQuOTc3NSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjM0M5NUZEIiBzdG9wLW9wYWNpdHk9IjAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMTY1MUM2Ii8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQxMV9saW5lYXJfMjEzM18zOTUxIiB4MT0iMTIuMTM2NyIgeTE9IjIxLjk3NjEiIHgyPSIxMi41Mjk1IiB5Mj0iMjcuNTg2MyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjMDE3REU4Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAwMjU4MiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MTJfbGluZWFyXzIxMzNfMzk1MSIgeDE9IjEwLjA3OTciIHkxPSIxMC40OTM5IiB4Mj0iMTIuMzYxMiIgeTI9IjE4LjUzNTIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzFEOTlGNyIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwMDMzQzYiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJwYWludDEzX2xpbmVhcl8yMTMzXzM5NTEiIHgxPSI0LjAzOTM0IiB5MT0iMTUuOTU0NSIgeDI9IjUuMjE3NDkiIHkyPSIyNC4yOTUiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0id2hpdGUiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+Cg==" class="pin-brand-logo" alt="accessiBe" style="height:26px; width:auto">
+    </div>
+    <p class="pin-description">accessiBe's plugin is an AI-powered web accessibility solution that uses advanced automation to help websites achieve ADA and WCAG 2.1 compliance.</p>
+    <div class="pin-entry">
+      <p class="pin-label">Please enter your PIN</p>
+      <div class="pin-inputs" id="pin-inputs">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 1">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 2">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 3">
+        <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="PIN digit 4">
+      </div>
+      <div class="pin-error" id="pin-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Splash / loading screen ────────────────────────────────────── -->
+<div id="splash">
+  <div style="display:flex;flex-direction:column;align-items:center">
+  <div class="splash-logo">
+    <svg width="80" height="81" viewBox="0 0 60 61" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g filter="url(#sp_f0)">
+        <rect x="10" y="6" width="40" height="41" rx="8" fill="white"/>
+        <path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#sp_p0)"/>
+        <path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9404 37.7867 32.896 37.7919L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#sp_p1)" fill-opacity="0.8"/>
+        <path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#sp_p2)"/>
+      </g>
+      <defs>
+        <filter id="sp_f0" x="0" y="0" width="60" height="61" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+          <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+          <feOffset dy="4"/><feGaussianBlur stdDeviation="5"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.031 0 0 0 0 0.075 0 0 0 0 0.31 0 0 0 0.12 0"/>
+          <feBlend mode="normal" in2="BackgroundImageFix" result="shadow"/>
+          <feBlend mode="normal" in="SourceGraphic" in2="shadow" result="shape"/>
+        </filter>
+        <linearGradient id="sp_p0" x1="48.4" y1="-17" x2="28.7" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0.59" stop-color="#2C6EE4"/>
+          <stop offset="1" stop-color="#091D72"/>
+        </linearGradient>
+        <linearGradient id="sp_p1" x1="29.4" y1="15.5" x2="40.9" y2="25.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0.08" stop-color="#66B0F6"/>
+          <stop offset="0.96" stop-color="#091D72" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="sp_p2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1 24) rotate(58.7) scale(23.4 41.4)">
+          <stop offset="0.004" stop-color="#A4EAFF"/>
+          <stop offset="0.445" stop-color="#0092FF"/>
+          <stop offset="0.84" stop-color="#0346AD"/>
+        </radialGradient>
+      </defs>
+    </svg>
+  </div>
+  <div class="splash-label">Loading...</div>
+  </div>
+</div>
+
 <div class="ai-consent-overlay" id="ai-consent-overlay">
   <div class="ai-consent-dialog">
     <h3>Allow AI-generated text?</h3>
@@ -909,10 +1303,96 @@
 
 <div class="header">
   <div class="logo">
-    <div class="logo-icon">♿</div>
+    <div class="logo-icon">
+      <svg width="60" height="61" viewBox="0 0 60 61" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_dd_1959_73119)">
+<rect x="10" y="6" width="40" height="41" rx="8" fill="white"/>
+<path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#paint0_linear_1959_73119)"/>
+<path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9404 37.7867 32.896 37.7919L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#paint1_linear_1959_73119)" fill-opacity="0.8"/>
+<path d="M34.3116 36.7394C34.2581 36.8808 34.1884 37.016 34.0983 37.1372C33.8804 37.4313 33.6113 37.584 33.3055 37.7121C33.266 37.73 33.2245 37.7455 33.1817 37.7588C33.1401 37.7724 33.0973 37.7848 33.0549 37.7951C33.0331 37.8003 33.0121 37.8045 32.9903 37.8097C32.9456 37.8181 32.9018 37.8253 32.8574 37.8305L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3116 36.7394Z" fill="url(#paint2_linear_1959_73119)" fill-opacity="0.6"/>
+<mask id="mask0_1959_73119" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="23" y="15" width="19" height="24">
+<path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#paint3_linear_1959_73119)"/>
+</mask>
+<g mask="url(#mask0_1959_73119)">
+<g opacity="0.5" filter="url(#filter1_f_1959_73119)" style="mix-blend-mode:multiply">
+<path d="M29.3629 24.8199L27.5356 28.6061L28.0295 30.3346L30.8445 36.0633L32.3096 37.4791L33.5936 37.6437L29.3629 24.8199Z" fill="url(#paint4_linear_1959_73119)"/>
+</g>
+<g filter="url(#filter2_f_1959_73119)">
+<path d="M34.318 36.7877L41.6763 17.6723C41.7634 17.4458 41.8081 17.2052 41.8081 16.9626V16.8029L41.7423 16.4737L41.5777 16.1774L41.3801 15.914L41.1167 15.7L40.5076 15.5024L41.1048 16.1549C41.2945 16.3622 41.4145 16.6238 41.4477 16.9028C41.4682 17.075 41.4457 17.2495 41.3823 17.4109L33.5443 37.3638L34.318 36.7877Z" fill="url(#paint5_linear_1959_73119)"/>
+</g>
+<g opacity="0.7" filter="url(#filter3_f_1959_73119)">
+<path d="M27.7661 29.1329L27.6674 28.9024L32.3425 17.2309L32.6224 16.7864L32.9681 16.3914L27.7661 29.1329Z" fill="url(#paint6_linear_1959_73119)"/>
+</g>
+<g opacity="0.71" filter="url(#filter4_f_1959_73119)">
+<path d="M34.1061 15.5683L34.0875 15.5847L43.3391 15.7164L42.7379 15.453H35.2871L34.1061 15.5683Z" fill="url(#paint7_linear_1959_73119)"/>
+</g>
+</g>
+<path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.3109 36.7934 34.3106 36.793 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#paint8_radial_1959_73119)"/>
+<mask id="mask1_1959_73119" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="17" y="23" width="18" height="16">
+<path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.3109 36.7934 34.3106 36.793 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#paint9_radial_1959_73119)"/>
+</mask>
+<g mask="url(#mask1_1959_73119)">
+<g filter="url(#filter5_f_1959_73119)">
+<path d="M27.7339 34.6741C26.7489 36.4272 21.9279 36.3069 19.9302 36.0276L21.3425 38.0901L32.6587 38.4339L33.5278 36.0276L28.5124 28.2933C28.6633 29.6898 28.7188 32.921 27.7339 34.6741Z" fill="url(#paint10_linear_1959_73119)"/>
+</g>
+<g opacity="0.93" filter="url(#filter6_f_1959_73119)">
+<path d="M22.0044 36.9523L20.9673 34.5324C21.3512 35.2701 22.1015 37.2397 23.5189 37.5449C26.1364 37.5449 30.165 37.3758 31.4207 37.3968C33.001 37.4231 33.868 37.4187 34.0875 37.1663C33.6924 37.8774 32.7376 38.0223 32.3096 38.0059H23.5189C22.5312 37.861 22.0977 37.2431 22.0044 36.9523Z" fill="url(#paint11_linear_1959_73119)"/>
+</g>
+<g filter="url(#filter7_f_1959_73119)">
+<path d="M25.7742 24.5894C25.1839 23.5357 24.1554 23.2231 23.6835 23.1572C25.0795 23.1572 25.8455 24.1998 26.054 24.7211L31.1572 36.3267C32.2354 37.7886 33.4392 37.4955 33.9064 37.1663C32.7211 38.5886 31.2835 36.8919 30.5975 35.8658C29.2696 32.6063 26.3866 25.6825 25.7742 24.5894Z" fill="url(#paint12_linear_1959_73119)"/>
+</g>
+<g filter="url(#filter8_f_1959_73119)">
+<path d="M30.4736 35.0798C31.8322 38.0717 33.7808 37.9324 34.3071 36.8005C34.311 36.7934 34.3106 36.793 34.3071 36.8005C34.0915 37.3422 33.7604 37.6692 33.0033 37.6411C32.7162 37.6304 32.4354 37.5416 32.193 37.3875C30.9341 36.587 30.4736 35.0798 30.4736 35.0798Z" fill="#AADEFF"/>
+</g>
+<g opacity="0.5" filter="url(#filter9_f_1959_73119)">
+<path d="M17.0823 24.8363L21.6587 36.0633L22.1197 36.8864L17.2963 24.9351C17.0724 23.9079 17.9219 23.245 18.4157 23.0914C17.1251 23.3152 16.989 24.3479 17.0823 24.8363Z" fill="url(#paint13_linear_1959_73119)"/>
+</g>
+</g>
+</g>
+<defs>
+<filter id="filter0_dd_1959_73119" x="0" y="0" width="60" height="61" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.0313726 0 0 0 0 0.0745098 0 0 0 0 0.309804 0 0 0 0.04 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1959_73119"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="5"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.0313726 0 0 0 0 0.0745098 0 0 0 0 0.309804 0 0 0 0.08 0"/>
+<feBlend mode="normal" in2="effect1_dropShadow_1959_73119" result="effect2_dropShadow_1959_73119"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect2_dropShadow_1959_73119" result="shape"/>
+</filter>
+<filter id="filter1_f_1959_73119" x="26.2022" y="23.4864" width="8.72481" height="15.4907" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.666708" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter2_f_1959_73119" x="33.3138" y="15.2719" width="8.72479" height="22.3224" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.115233" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter3_f_1959_73119" x="27.4468" y="16.1708" width="5.7419" height="13.1827" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.110295" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter4_f_1959_73119" x="33.8044" y="15.1699" width="9.81788" height="0.829681" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.141573" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter5_f_1959_73119" x="19.2718" y="27.6348" width="14.9145" height="11.4575" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.329238" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter6_f_1959_73119" x="20.6348" y="34.1999" width="13.7852" height="4.13974" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.166265" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter7_f_1959_73119" x="23.2819" y="22.7555" width="11.0262" height="15.357" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.200835" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter8_f_1959_73119" x="30.3419" y="34.9481" width="4.09969" height="2.8264" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.0658477" result="effect1_foregroundBlur_1959_73119"/></filter>
+<filter id="filter9_f_1959_73119" x="16.8943" y="22.9267" width="5.38997" height="14.1243" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="0.0823096" result="effect1_foregroundBlur_1959_73119"/></filter>
+<linearGradient id="paint0_linear_1959_73119" x1="48.4335" y1="-17.0029" x2="28.7044" y2="44.0803" gradientUnits="userSpaceOnUse"><stop offset="0.59278" stop-color="#2C6EE4"/><stop offset="1" stop-color="#091D72"/></linearGradient>
+<linearGradient id="paint1_linear_1959_73119" x1="29.4123" y1="15.4859" x2="40.9109" y2="25.5466" gradientUnits="userSpaceOnUse"><stop offset="0.0776915" stop-color="#66B0F6"/><stop offset="0.96" stop-color="#091D72" stop-opacity="0"/></linearGradient>
+<linearGradient id="paint2_linear_1959_73119" x1="40.4171" y1="15.5" x2="31.638" y2="37.0034" gradientUnits="userSpaceOnUse"><stop stop-color="#081A6C" stop-opacity="0"/><stop offset="0.96" stop-color="#081A6C"/></linearGradient>
+<linearGradient id="paint3_linear_1959_73119" x1="48.4335" y1="-17.0029" x2="31.5124" y2="36.6967" gradientUnits="userSpaceOnUse"><stop offset="0.638" stop-color="#2C6EE4"/><stop offset="1" stop-color="#091D72"/></linearGradient>
+<linearGradient id="paint4_linear_1959_73119" x1="31.6511" y1="31.5528" x2="28.8855" y2="32.2606" gradientUnits="userSpaceOnUse"><stop stop-opacity="0"/><stop offset="1"/></linearGradient>
+<linearGradient id="paint5_linear_1959_73119" x1="37.775" y1="15.6506" x2="37.775" y2="37.1334" gradientUnits="userSpaceOnUse"><stop stop-color="#0051E6" stop-opacity="0.48"/><stop offset="0.360913" stop-color="#002C8A"/><stop offset="1" stop-color="#040E4B"/></linearGradient>
+<linearGradient id="paint6_linear_1959_73119" x1="31.0421" y1="24.5894" x2="28.7374" y2="29.8078" gradientUnits="userSpaceOnUse"><stop stop-color="#C0EFFF"/><stop offset="1" stop-color="#112971"/></linearGradient>
+<linearGradient id="paint7_linear_1959_73119" x1="33.9558" y1="15.5847" x2="43.3391" y2="15.5847" gradientUnits="userSpaceOnUse"><stop stop-color="#164DBA"/><stop offset="1" stop-color="#3580FF"/></linearGradient>
+<radialGradient id="paint8_radial_1959_73119" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1029 24.0461) rotate(58.6884) scale(23.4219 41.4491)"><stop offset="0.00352636" stop-color="#A4EAFF"/><stop offset="0.444703" stop-color="#0092FF"/><stop offset="0.839256" stop-color="#0346AD"/></radialGradient>
+<radialGradient id="paint9_radial_1959_73119" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1029 24.0461) rotate(58.6884) scale(23.4219 41.4491)"><stop offset="0.00352636" stop-color="#A4EAFF"/><stop offset="0.444703" stop-color="#0092FF"/><stop offset="0.839256" stop-color="#0346AD"/></radialGradient>
+<linearGradient id="paint10_linear_1959_73119" x1="27.8606" y1="34.0296" x2="29.2494" y2="37.4873" gradientUnits="userSpaceOnUse"><stop stop-color="#3C95FD" stop-opacity="0"/><stop offset="1" stop-color="#1651C6"/></linearGradient>
+<linearGradient id="paint11_linear_1959_73119" x1="27.6838" y1="34.8452" x2="28.0295" y2="39.7837" gradientUnits="userSpaceOnUse"><stop stop-color="#017DE8"/><stop offset="1" stop-color="#002582"/></linearGradient>
+<linearGradient id="paint12_linear_1959_73119" x1="25.873" y1="24.7375" x2="27.8813" y2="31.8162" gradientUnits="userSpaceOnUse"><stop stop-color="#1D99F7"/><stop offset="1" stop-color="#0033C6"/></linearGradient>
+<linearGradient id="paint13_linear_1959_73119" x1="20.5558" y1="29.5444" x2="21.5929" y2="36.8864" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+</defs>
+      </svg>
+    </div>
     <div>
-      <div class="logo-name">A11y Shift <span class="dev-badge" id="dev-badge">Dev Mode</span></div>
-      <div class="logo-sub">WCAG 2.2 · ARIA APG</div>
+      <div class="logo-name">A11y Shift <span class="dev-badge" id="dev-badge">Dev</span></div>
+      <div class="logo-sub">WCAG 2.2 ARIA APG</div>
     </div>
   </div>
   <div class="tab-bar">
@@ -927,7 +1407,12 @@
 <div class="tab-pane active" id="tab-analyze">
   <div class="scan-area">
     <div class="scan-row">
-      <button class="btn-scan" id="btn-scan"><span>⚡</span><span>Start Analysis</span></button>
+      <button class="btn-scan" id="btn-scan">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/>
+        </svg>
+        <span>Start Analysis</span>
+      </button>
     </div>
   </div>
 
@@ -935,7 +1420,11 @@
   <div class="preview-panel" id="preview-panel">
     <div class="preview-toolbar" id="preview-toolbar">
       <div class="preview-toolbar-left">
-        <span class="preview-collapse-icon" id="preview-collapse-icon">▲</span>
+        <span class="preview-collapse-icon" id="preview-collapse-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L8 6L12 10" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
         <span>Preview</span>
       </div>
       <div class="preview-bg-btns">
@@ -945,21 +1434,20 @@
       </div>
     </div>
     <div class="preview-body" id="preview-body">
-      <div class="preview-inner" id="preview-inner" style="background:#F5F5F5">
+      <div class="preview-inner" id="preview-inner">
         <div class="preview-placeholder">
-          <span class="ph-icon">◎</span>
+          <span class="ph-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 3L4 20L9 15L12 21L14 20L11 14L18 14L4 3Z" fill="#2B3E52" stroke="#2B3E52" stroke-width="0.5" stroke-linejoin="round"/>
+            </svg>
+          </span>
           <span>Select a component and run analysis</span>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="content" id="content">
-    <div class="empty-state">
-      <div class="icon">◎</div>
-      <p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p>
-    </div>
-  </div>
+  <div class="content" id="content"></div>
 </div>
 
 <!-- ── SCAN FRAME TAB ─────────────────────────────────────────────── -->
@@ -967,7 +1455,15 @@
   <div class="scan-tab" id="scan-panel">
     <div class="scan-area">
       <div class="scan-row">
-        <button class="btn-scan" id="btn-scan-frame"><span>🔍</span><span>Scan Selected Frame</span></button>
+        <button class="btn-scan" id="btn-scan-frame">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+            <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/>
+          </svg>
+          <span>Scan Selected Frame</span>
+        </button>
       </div>
     </div>
     <div id="scan-content" style="padding:14px 16px">
@@ -1087,6 +1583,12 @@
 <script>
 const $ = id => document.getElementById(id);
 
+const _loadingLogoSvg = `<svg width="56" height="57" viewBox="0 0 60 61" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#ll_f0)"><rect x="10" y="6" width="40" height="41" rx="8" fill="white"/><path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#ll_p0)"/><path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9404 37.7867 32.896 37.7919L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#ll_p1)" fill-opacity="0.8"/><path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#ll_p2)"/></g><defs><filter id="ll_f0" x="0" y="0" width="60" height="61" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="5"/><feColorMatrix type="matrix" values="0 0 0 0 0.031 0 0 0 0 0.075 0 0 0 0 0.31 0 0 0 0.12 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="shadow"/><feBlend mode="normal" in="SourceGraphic" in2="shadow" result="shape"/></filter><linearGradient id="ll_p0" x1="48.4" y1="-17" x2="28.7" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0.59" stop-color="#2C6EE4"/><stop offset="1" stop-color="#091D72"/></linearGradient><linearGradient id="ll_p1" x1="29.4" y1="15.5" x2="40.9" y2="25.5" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#66B0F6"/><stop offset="0.96" stop-color="#091D72" stop-opacity="0"/></linearGradient><radialGradient id="ll_p2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1 24) rotate(58.7) scale(23.4 41.4)"><stop offset="0.004" stop-color="#A4EAFF"/><stop offset="0.445" stop-color="#0092FF"/><stop offset="0.84" stop-color="#0346AD"/></radialGradient></defs></svg>`;
+
+function loadingHtml(label) {
+  return `<div class="loading"><div class="loading-logo">${_loadingLogoSvg}</div><span>${label}</span></div>`;
+}
+
 function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -1191,13 +1693,15 @@ $('btn-save-settings').addEventListener('click', () => {
 // ── Preview panel ──────────────────────────────────────────────────────────
 // State persistence uses figma.clientStorage via main thread — localStorage is
 // disabled inside the plugin's data: URL iframe (browser SecurityError).
-const BG_LIGHT = '#F5F5F5';
-const BG_DARK  = '#1A1A1A';
+const BG_LIGHT = '#F8FAFF';
+const BG_DARK  = '#1A1A2E';
 const previewState = { collapsed: false, bgLight: true };
 
 function applyPreviewCollapsed() {
   $('preview-body').classList.toggle('collapsed', previewState.collapsed);
-  $('preview-collapse-icon').textContent = previewState.collapsed ? '▼' : '▲';
+  const chevronUp   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10L8 6L12 10" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const chevronDown = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6L8 10L12 6" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  $('preview-collapse-icon').innerHTML = previewState.collapsed ? chevronDown : chevronUp;
 }
 function applyPreviewBg() {
   $('preview-inner').style.background = previewState.bgLight ? BG_LIGHT : BG_DARK;
@@ -1297,17 +1801,21 @@ function getIssuePrompt(issue, idx) {
 
 function renderFigmaAiButton(issueIdx) {
   return `
-    <button class="figma-ai-btn" data-issue-idx="${issueIdx != null ? issueIdx : ''}">
-      <span aria-hidden="true">✦</span> Copy Figma AI prompt
-    </button>
-    <div class="figma-ai-hint">Open Figma AI (Ctrl+Alt+I / ⌘⌥I) and paste after copying</div>`;
+    <div class="figma-ai-card">
+      <div class="figma-ai-card-title">Paste the prompt in Figma AI chat, apply the fix, then re-scan here</div>
+      <button class="figma-ai-card-btn" data-issue-idx="${issueIdx != null ? issueIdx : ''}">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 1L8.5 5.5L13 7L8.5 8.5L7 13L5.5 8.5L1 7L5.5 5.5L7 1Z" fill="white"/></svg>
+        Copy Figma AI prompt
+      </button>
+      <div class="figma-ai-card-hint">Open Figma AI (Ctrl+Alt+I / ⌘⌥I) and paste after copying</div>
+    </div>`;
 }
 
 // ── Analyze tab ────────────────────────────────────────────────────────────
 $('btn-scan').addEventListener('click', () => {
   parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
   $('btn-scan').disabled = true;
-  $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Reading context…</span></div>`;
+  $('content').innerHTML = loadingHtml('Reading context…');
 });
 
 (function initAiConsentDialog() {
@@ -1337,7 +1845,7 @@ $('btn-scan').addEventListener('click', () => {
 $('btn-scan-frame').addEventListener('click', () => {
   parent.postMessage({ pluginMessage: { type: 'SCAN_FRAME' } }, '*');
   $('btn-scan-frame').disabled = true;
-  $('scan-content').innerHTML = `<div class="loading" style="padding:28px 20px"><div class="spinner"></div><span>Scanning components…</span></div>`;
+  $('scan-content').innerHTML = loadingHtml('Scanning components…');
 });
 
 // ── Dev inspector ──────────────────────────────────────────────────────────
@@ -1362,8 +1870,8 @@ function renderAriaSchema(schema) {
   return `
     <div class="devcode-section">
       <div class="devcode-toggle" id="devcode-toggle">
-        <span>{ } ARIA Schema — copy &amp; implement in any framework</span>
-        <span class="toggle-arrow">▶</span>
+        <span>( ) ARIA Schema — Copy &amp; Implementation in any framework</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="devcode-body" id="devcode-body">
         <div class="devcode-header-row">
@@ -1388,8 +1896,8 @@ function renderAriaSchemaWithFrameworks(schema) {
   return `
     <div class="devcode-section" id="${panelId}">
       <div class="devcode-toggle devcode-toggle-fw">
-        <span>{ } ARIA Schema &amp; Framework Code</span>
-        <span class="toggle-arrow">▶</span>
+        <span>( ) ARIA Schema &amp; Framework Code</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="devcode-body devcode-body-fw">
         <div class="fw-tabs" style="padding-top:8px">
@@ -1595,18 +2103,18 @@ function renderAutoFixControl(issue, idx) {
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
         <button class="btn-focus-ai btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
       </div>
+      <div class="issue-waiting-ai-note"><svg width="16" height="16" viewBox="0 0 16 16" fill="#136EF8" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>Waiting for Figma AI fix</div>
     </div>`;
   }
   if (issue.designerPending) {
     const age = formatPendingAge(issue.pendingSince);
     return `
     <div class="issue-actions issue-message-only">
-      <span class="ack-badge">Pending</span>
-      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+      <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Build with AI</button>
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
+      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
     </div>`;
   }
   if (issue.fixKind === 'focus_state') {
@@ -1619,6 +2127,7 @@ function renderAutoFixControl(issue, idx) {
         ${renderFigmaAiButton(idx)}
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
+      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
     </div>`;
   }
   if (issue.acknowledged) {
@@ -1642,7 +2151,7 @@ function renderAutoFixControl(issue, idx) {
     return `
     <div class="issue-actions">
       <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
-        ✨ Auto-fix
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix
       </button>
     </div>`;
   }
@@ -1650,7 +2159,7 @@ function renderAutoFixControl(issue, idx) {
   return `
     <div class="issue-actions">
       <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">
-        ✨ Auto-fix <span class="caret">▾</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix <span class="caret">▾</span>
       </button>
       <div class="autofix-menu" data-menu-idx="${idx}">
         ${isAiContent ? `
@@ -1796,7 +2305,15 @@ function renderStoredBanner(snapshot, nodeId) {
   const pct      = total > 0 ? Math.round((resolved / total) * 100) : 100;
   return `
     <div class="stored-banner" id="stored-banner" data-nodeid="${nodeId}">
-      <div class="stored-banner-icon">📋</div>
+      <div class="stored-banner-icon">
+        <svg width="24" height="24" viewBox="4 4 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 19.8999H29" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.1993 15.1V12.7C12.1993 12.3818 12.3258 12.0765 12.5508 11.8515C12.7759 11.6265 13.0811 11.5 13.3993 11.5H15.7993" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M27.8001 15.1V12.7C27.8001 12.3818 27.6736 12.0765 27.4486 11.8515C27.2236 11.6265 26.9183 11.5 26.6001 11.5H24.2001" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.2007 24.7025V27.1025C12.2007 27.4208 12.3272 27.726 12.5522 27.9511C12.7773 28.1761 13.0825 28.3025 13.4007 28.3025H15.8007" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M27.8001 24.7025V27.1025C27.8001 27.4208 27.6736 27.726 27.4486 27.9511C27.2236 28.1761 26.9183 28.3025 26.6001 28.3025H24.2001" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div class="stored-banner-body">
         <div class="stored-banner-line1">Last scanned ${relativeTime(snapshot.timestamp)}</div>
         <div class="stored-banner-line2">
@@ -1806,8 +2323,8 @@ function renderStoredBanner(snapshot, nodeId) {
         </div>
       </div>
       <div class="stored-banner-actions">
-        <button class="btn-mini primary" id="btn-rescan">Re-scan</button>
         <button class="btn-mini" id="btn-keep">Keep</button>
+        <button class="btn-mini primary" id="btn-rescan">Re-scan</button>
       </div>
     </div>`;
 }
@@ -1868,7 +2385,7 @@ function renderFromStoredSnapshot(msg) {
     suppressStoredBannerFor = msg.nodeId;
     // Trigger a fresh analysis on this node — selection is already on it
     parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
-    $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Re-scanning…</span></div>`;
+    $('content').innerHTML = loadingHtml('Re-scanning…');
   });
   $('btn-keep').addEventListener('click', () => {
     const b = $('stored-banner'); if (b) b.remove();
@@ -2178,7 +2695,10 @@ function renderResult(data) {
   currentState = data;
   const r    = data.result;
   const conf = r.confidence;
-  const sugIcons = { rename: '✏️', setPluginData: '🏷️', addAnnotation: '📌' };
+  // Figma asset icons (pencil=rename, document=setPluginData/addAnnotation)
+  const _iconPencil   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M10.6191 1.3457C10.8526 1.36898 11.0743 1.46071 11.2559 1.60938L11.3438 1.68848L14.3115 4.65625C14.5349 4.87965 14.6601 5.18309 14.6602 5.49902C14.6602 5.81495 14.5349 6.11839 14.3115 6.3418L12.6592 7.99316C12.6609 8.1644 12.5974 8.33618 12.4668 8.4668C12.3362 8.59741 12.1644 8.66094 11.9932 8.65918L6.18555 14.4668C6.06179 14.5904 5.8937 14.6602 5.71875 14.6602H2.53125C2.21532 14.6601 1.91188 14.5349 1.68848 14.3115C1.46508 14.0881 1.33986 13.7847 1.33984 13.4688V10.501C1.33984 10.3445 1.3708 10.1895 1.43066 10.0449L1.48047 9.93945C1.5356 9.83627 1.60546 9.74124 1.68848 9.6582L7.33984 4.00586C7.33834 3.83495 7.40284 3.66357 7.5332 3.5332C7.66357 3.40284 7.83495 3.33834 8.00586 3.33984L9.6582 1.68848L9.74609 1.60938C9.95803 1.43584 10.2246 1.33984 10.501 1.33984L10.6191 1.3457ZM2.66016 10.5537V13.3398H5.44629L10.9258 7.85938L8.13965 5.07324L2.66016 10.5537ZM9.07324 4.13965L11.8594 6.92578L13.2871 5.49902L10.501 2.71289L9.07324 4.13965Z" fill="#3A4B61"/></svg>`;
+  const _iconDocument = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M11.8184 1.33984C13.3877 1.33994 14.6601 2.61229 14.6602 4.18164V11.8184C14.6601 13.3877 13.3877 14.6601 11.8184 14.6602H4.18164C2.61229 14.6601 1.33994 13.3877 1.33984 11.8184V4.18164C1.33994 2.61229 2.61229 1.33994 4.18164 1.33984H11.8184ZM4.18164 2.66016C3.3413 2.66025 2.66025 3.3413 2.66016 4.18164V11.8184C2.66025 12.6587 3.3413 13.3397 4.18164 13.3398H11.8184C12.6587 13.3397 13.3397 12.6587 13.3398 11.8184V4.18164C13.3397 3.3413 12.6587 2.66025 11.8184 2.66016H4.18164ZM7.25 10.0068C7.61451 10.0068 7.91016 10.3025 7.91016 10.667C7.90998 11.0314 7.6144 11.3271 7.25 11.3271H5C4.6356 11.3271 4.34002 11.0314 4.33984 10.667C4.33984 10.3025 4.63549 10.0068 5 10.0068H7.25ZM11 7.33984C11.3645 7.33984 11.6602 7.63549 11.6602 8C11.6602 8.36451 11.3645 8.66016 11 8.66016H5C4.63549 8.66016 4.33984 8.36451 4.33984 8C4.33984 7.63549 4.63549 7.33984 5 7.33984H11ZM11 4.67285C11.3644 4.67285 11.66 4.96865 11.6602 5.33301C11.6602 5.69752 11.3645 5.99316 11 5.99316H5C4.63549 5.99316 4.33984 5.69752 4.33984 5.33301C4.34002 4.96865 4.6356 4.67285 5 4.67285H11Z" fill="#3A4B61"/></svg>`;
+  const sugIcons = { rename: _iconPencil, setPluginData: _iconDocument, addAnnotation: _iconDocument };
   const sugKeyLabels = {
     'a11y.v1.componentType': 'component-type',
     'a11y.v1.ariaRole':      'aria-role',
@@ -2214,13 +2734,14 @@ function renderResult(data) {
   // Passed = audits in auditLog with status PASS
   const auditLog     = r.auditLog || [];
   const passedAudits = auditLog.filter(a => a.status === 'PASS');
+  const _checkSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM16.7295 9.31641C16.3518 8.91355 15.7193 8.89293 15.3164 9.27051L10.667 13.6289L8.68359 11.7705C8.28068 11.3929 7.64819 11.4136 7.27051 11.8164C6.89294 12.2193 6.91355 12.8518 7.31641 13.2295L9.98242 15.7295C10.3671 16.0901 10.9659 16.0901 11.3506 15.7295L16.6836 10.7295C17.0865 10.3518 17.1071 9.71933 16.7295 9.31641Z" fill="#078912"/></svg>`;
   const passedHtml   = passedAudits.length === 0 ? '' : `
     <div style="padding:8px 14px 4px;">
       <div class="section-label">Passed checks</div>
       ${passedAudits.map(a => `
-        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--chip-high-text)">
-          <span style="font-size:13px">✅</span>
-          <span style="color:var(--text-dim)">${a.name}</span>
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:14px;font-weight:400;color:#3A4B61;line-height:1.5">
+          ${_checkSvg}
+          <span>${a.name}</span>
         </div>`).join('')}
     </div>`;
 
@@ -2230,7 +2751,8 @@ function renderResult(data) {
     ? data.pendingDesignerCount
     : waitingCount + pendingOnlyCount;
   const pendingParts = [];
-  if (waitingCount > 0) pendingParts.push('⏳ ' + waitingCount + ' waiting for Figma AI');
+  const _sparkIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>`;
+  if (waitingCount > 0) pendingParts.push(_sparkIcon + ' ' + waitingCount + ' waiting for Figma AI');
   if (pendingOnlyCount > 0) pendingParts.push('✏️ ' + pendingOnlyCount + ' pending designer');
   const pendingBanner = pendingCount > 0
     ? `<div class="pending-banner" id="pending-banner">${pendingParts.join(' · ') || (pendingCount + ' pending designer action' + (pendingCount !== 1 ? 's' : ''))}</div>`
@@ -2250,7 +2772,7 @@ function renderResult(data) {
     <div class="issues-section" id="issues-section">
       ${pendingBanner}
       <div class="issues-header">
-        <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} issue${issues.length !== 1 ? 's' : ''} found</span>
+        <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} Issue${issues.length !== 1 ? 's' : ''} Found</span>
       </div>
       ${resolvedIssues.map((i, ridx) => `
         <div class="issue-item issue-${i.severity} issue-resolved-strike" data-resolved-idx="${ridx}">
@@ -2262,7 +2784,17 @@ function renderResult(data) {
         </div>`).join('')}
       ${issues.map((i, idx) => `
         <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}${i.waitingForAi ? ' issue-waiting-ai' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.waitingForAi ? '⏳ Waiting' : (i.designerPending ? '✏️ Pending' : (i.severity === 'HIGH' ? '❌' : i.severity === 'MANUAL' ? '🔍' : '⚠️') + ' ' + i.severity)}</span>
+          <span class="issue-sev">${(()=>{
+            const _x = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><path d="M2.5 2.5L9.5 9.5M9.5 2.5L2.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+            const _tri = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><path d="M6 2L10.5 10H1.5L6 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+            const _ring = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><circle cx="6" cy="6" r="3.5" stroke="currentColor" stroke-width="1.2"/></svg>`;
+            if (i.waitingForAi)    return _ring  + ' Waiting';
+            if (i.designerPending) return _tri   + ' Pending';
+            if (i.severity==='HIGH')   return _x   + ' High';
+            if (i.severity==='MED')    return _tri + ' Medium';
+            if (i.severity==='LOW')    return _ring+ ' Low';
+            return _ring + ' Manual';
+          })()}</span>
           <div class="issue-body">
             ${i.waitingForAi ? '<div class="issue-waiting-ai-title">🤖 Waiting for Figma AI fix</div>' : ''}
             <div class="issue-title-row">
@@ -2279,7 +2811,7 @@ function renderResult(data) {
   const signals = r.signalDetails || [];
   const sigHtml = signals.length > 0
     ? signals.map(s => `<span class="decided-sig">${s}</span>`).join(' ')
-    : '<span style="color:var(--text-muted);font-size:10px">No spec signals matched</span>';
+    : '<span style="color:#3A4B61;font-size:14px">No spec signals matched</span>';
 
   const detectionBadge = r.detectionPath === 'spec-engine'
     ? `<span class="meta-badge badge-rule">Spec engine · score ${r.signalScore || 0}</span>`
@@ -2287,7 +2819,7 @@ function renderResult(data) {
     ? `<span class="meta-badge badge-ai">${r.detectionPath === 'vision-tiebreak' ? 'Vision tiebreak' : 'Vision AI (GPT-4o)'}</span>`
     : r.detectionPath === 'text-ai'
     ? `<span class="meta-badge badge-ai">Text AI + spec audit</span>`
-    : `<span class="meta-badge" style="background:#1a1a2e;color:var(--text-muted)">Rule engine fallback</span>`;
+    : `<span class="meta-badge" style="background:#E8F0FE;color:#3A4B61">Rule engine fallback</span>`;
 
   const auditLogRows = auditLog.map(a => `
     <div class="audit-row">
@@ -2299,8 +2831,8 @@ function renderResult(data) {
   const howDecidedHtml = `
     <div class="decided-section">
       <div class="decided-toggle" id="decided-toggle">
-        <span>🔍 How I decided</span>
-        <span class="toggle-arrow">▶</span>
+        <span>How I decided</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="decided-body" id="decided-body">
         <div class="decided-row">
@@ -2320,7 +2852,7 @@ function renderResult(data) {
           <div class="audit-log-section">
             <div class="audit-log-toggle" id="audit-log-toggle">
               <span>Audit checks (${auditLog.length})</span>
-              <span class="toggle-arrow">▶</span>
+              <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             </div>
             <div class="audit-log-body" id="audit-log-body">
               ${auditLogRows}
@@ -2356,13 +2888,13 @@ function renderResult(data) {
       <div class="result-header">
         <div class="node-info">
           <div class="node-name">${data.nodeName}</div>
-          <div class="node-type">${data.nodeType}</div>
+          <div class="node-type">${data.nodeType ? data.nodeType[0] + data.nodeType.slice(1).toLowerCase() : ''}</div>
         </div>
-        <span class="confidence-chip chip-${conf}">${conf}</span>
+        <span class="confidence-chip chip-${conf}">${conf[0] + conf.slice(1).toLowerCase()}</span>
       </div>
       <div class="result-role">
-        <div class="role-label">Identified role</div>
-        <div class="role-value">${r.role}</div>
+        <div class="role-label">Identified Role</div>
+        <div class="role-value">${r.role ? r.role[0].toUpperCase() + r.role.slice(1) : ''}</div>
       </div>
       ${passedHtml}
       ${issuesHtml}
@@ -2373,18 +2905,18 @@ function renderResult(data) {
     </div>
     ${askHtml}
     <div class="apply-row">
-      <button class="btn-apply" id="btn-back">← Back</button>
-      <div class="apply-row-blockers">
-        <button class="btn-apply primary" id="btn-apply-blockers" style="display:${hasHigh ? '' : 'none'}"
-          ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
-          Fix blockers &amp; continue
-        </button>
-        <button class="btn-apply ${hasHigh ? '' : 'primary'}" id="btn-apply"
-          ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
-          ${hasHigh ? 'Fix all anyway' : 'Apply Fixes…'}
-        </button>
-        ${hasHigh ? '<div class="apply-warning">Fix all anyway runs every fix without prioritizing blockers.</div>' : ''}
-      </div>
+      <button class="btn-apply primary" id="btn-apply-blockers" style="display:${hasHigh ? '' : 'none'}"
+        ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
+        Fix blockers &amp; continue
+      </button>
+      <button class="btn-apply ${hasHigh ? '' : 'primary'}" id="btn-apply"
+        ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
+        ${hasHigh ? 'Fix all anyway' : 'Apply Fixes…'}
+      </button>
+      <button class="btn-apply btn-back-ghost" id="btn-back">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 12L6 8L10 4" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Back
+      </button>
     </div>
     <div id="apply-feedback"></div>
 <div class="fix-progress-wrap" id="fix-progress-wrap">
@@ -2567,7 +3099,7 @@ function renderResult(data) {
     });
   }
 
-  document.querySelectorAll('#content .figma-ai-btn').forEach(btn => {
+  document.querySelectorAll('#content .figma-ai-card-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.issueIdx, 10);
@@ -2582,7 +3114,7 @@ function renderResult(data) {
 
   document.querySelectorAll('#content .issue-item[data-issue-idx]').forEach(row => {
     row.addEventListener('click', e => {
-      if (e.target.closest('button, .btn-explain, .autofix-menu, .autofix-opt, .figma-ai-btn')) return;
+      if (e.target.closest('button, .btn-explain, .autofix-menu, .autofix-opt, .figma-ai-card-btn')) return;
       const idx = parseInt(row.dataset.issueIdx, 10);
       const issue = (currentState.result.issues || [])[idx];
       if (!issue) return;
@@ -2861,7 +3393,79 @@ function renderNodeData(msg) {
 
 // ── Individual message handlers (all defined before the dispatch map) ────────
 
+const _splashStart = Date.now();
+const _splashMin   = 1800; // minimum ms to show splash
+
+function hideSplash() {
+  const s = document.getElementById('splash');
+  if (!s || s.classList.contains('gone')) return;
+  const elapsed = Date.now() - _splashStart;
+  const delay   = Math.max(0, _splashMin - elapsed);
+  setTimeout(() => {
+    s.classList.add('hidden');
+    setTimeout(() => {
+      s.classList.add('gone');
+      // Show PIN screen after splash
+      const firstDigit = document.querySelector('.pin-digit');
+      if (firstDigit) setTimeout(() => firstDigit.focus(), 80);
+    }, 380);
+  }, delay);
+}
+
+// ── PIN screen logic ───────────────────────────────────────────────
+// TODO: replace _PIN with a real secret when publishing
+const _PIN = ''; // empty = any 4 digits accepted for now
+
+function hidePinScreen() {
+  const ps = document.getElementById('pin-screen');
+  if (ps) ps.classList.add('gone');
+}
+
+(function initPinScreen() {
+  const digits = Array.from(document.querySelectorAll('.pin-digit'));
+  const errorEl = document.getElementById('pin-error');
+
+  digits.forEach((input, idx) => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !input.value && idx > 0) {
+        digits[idx - 1].value = '';
+        digits[idx - 1].classList.remove('filled');
+        digits[idx - 1].focus();
+      }
+    });
+    input.addEventListener('input', () => {
+      // allow only single digit
+      input.value = input.value.replace(/\D/g, '').slice(-1);
+      if (errorEl) errorEl.textContent = '';
+      if (input.value) {
+        input.classList.add('filled');
+        if (idx < digits.length - 1) digits[idx + 1].focus();
+      } else {
+        input.classList.remove('filled');
+      }
+      // check if all 4 filled
+      const entered = digits.map(d => d.value).join('');
+      if (entered.length === 4) {
+        if (!_PIN || entered === _PIN) {
+          // correct — enter the plugin
+          setTimeout(hidePinScreen, 250);
+        } else {
+          // wrong PIN
+          if (errorEl) errorEl.textContent = 'Incorrect PIN. Try again.';
+          digits.forEach(d => { d.value = ''; d.classList.remove('filled'); });
+          setTimeout(() => digits[0].focus(), 80);
+        }
+      }
+    });
+    // prevent non-numeric paste
+    input.addEventListener('paste', e => e.preventDefault());
+  });
+
+  // Close button removed from PIN screen per design
+})();
+
 function handleInit(msg) {
+  hideSplash();
   isDevMode = msg.editorType === 'dev';
   if (isDevMode) {
     $('dev-badge').classList.add('visible');
@@ -2936,7 +3540,7 @@ function handleAiLoading(msg) {
   const label = (msg && msg.phase === 'vision')
     ? 'Analyzing screenshot with Vision AI\u2026'
     : 'Classifying component with AI\u2026';
-  $('content').innerHTML = '<div class="loading"><div class="spinner"></div><span>' + label + '</span></div>';
+  $('content').innerHTML = loadingHtml(label);
 }
 
 function handleScanProgress() {
