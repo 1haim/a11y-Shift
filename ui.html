@@ -177,13 +177,18 @@
   /* ── Loading ─────────────────────────────────────────────────────── */
   .loading {
     display: flex; flex-direction: column; align-items: center;
-    gap: 10px; padding: 32px 20px;
-    color: var(--text-muted); font-size: 12px;
+    gap: 12px; padding: 32px 20px;
+    color: #3A4B61; font-size: 14px; font-weight: 500;
   }
+  .loading-logo {
+    animation: splashPulse 1.6s ease-in-out infinite;
+    transform-origin: center;
+  }
+  /* legacy spinner kept for autofix button */
   .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid var(--border2);
-    border-top-color: var(--accent-blue);
+    width: 14px; height: 14px;
+    border: 2px solid rgba(19,110,248,0.25);
+    border-top-color: #136EF8;
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
@@ -1491,6 +1496,12 @@
 <script>
 const $ = id => document.getElementById(id);
 
+const _loadingLogoSvg = `<svg width="56" height="57" viewBox="0 0 60 61" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#ll_f0)"><rect x="10" y="6" width="40" height="41" rx="8" fill="white"/><path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9595 37.8545 32.9151 37.8597L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#ll_p0)"/><path d="M34.3502 36.7008C34.2967 36.8422 34.227 36.9774 34.1369 37.0987C33.919 37.3927 33.6499 37.5455 33.3441 37.6735C33.3045 37.6914 33.263 37.7069 33.2202 37.7202C33.1787 37.7338 33.1359 37.7462 33.0935 37.7565C33.0717 37.7617 33.0507 37.7659 33.0289 37.7711C32.9842 37.7796 32.9404 37.7867 32.896 37.7919L32.788 37.917C32.4398 37.917 32.5286 38.0133 32.148 38.0143C29.4633 38.0163 26.3285 38.0176 23.9774 38.0143L32.1775 17.4633C32.6609 16.2756 33.8152 15.5 35.0963 15.5H40.3182C41.3859 15.5 42.1148 16.5823 41.7115 17.5722L34.3502 36.7008Z" fill="url(#ll_p1)" fill-opacity="0.8"/><path d="M23.4956 38.0148C22.9216 37.9743 22.2475 37.6284 21.9002 36.8374L17.11 25.1106C16.7128 24.1217 17.4407 23.0456 18.5065 23.0456H23.5701C24.8584 23.0456 25.8233 23.8305 26.3015 25.0273L30.4736 35.0798C31.8153 38.0349 33.7808 37.9324 34.3071 36.8005C34.0543 37.4354 33.4177 38.0352 32.3499 38.0352L23.4956 38.0148Z" fill="url(#ll_p2)"/></g><defs><filter id="ll_f0" x="0" y="0" width="60" height="61" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="5"/><feColorMatrix type="matrix" values="0 0 0 0 0.031 0 0 0 0 0.075 0 0 0 0 0.31 0 0 0 0.12 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="shadow"/><feBlend mode="normal" in="SourceGraphic" in2="shadow" result="shape"/></filter><linearGradient id="ll_p0" x1="48.4" y1="-17" x2="28.7" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0.59" stop-color="#2C6EE4"/><stop offset="1" stop-color="#091D72"/></linearGradient><linearGradient id="ll_p1" x1="29.4" y1="15.5" x2="40.9" y2="25.5" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#66B0F6"/><stop offset="0.96" stop-color="#091D72" stop-opacity="0"/></linearGradient><radialGradient id="ll_p2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(18.1 24) rotate(58.7) scale(23.4 41.4)"><stop offset="0.004" stop-color="#A4EAFF"/><stop offset="0.445" stop-color="#0092FF"/><stop offset="0.84" stop-color="#0346AD"/></radialGradient></defs></svg>`;
+
+function loadingHtml(label) {
+  return `<div class="loading"><div class="loading-logo">${_loadingLogoSvg}</div><span>${label}</span></div>`;
+}
+
 function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -1713,7 +1724,7 @@ function renderFigmaAiButton(issueIdx) {
 $('btn-scan').addEventListener('click', () => {
   parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
   $('btn-scan').disabled = true;
-  $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Reading context…</span></div>`;
+  $('content').innerHTML = loadingHtml('Reading context…');
 });
 
 (function initAiConsentDialog() {
@@ -1743,7 +1754,7 @@ $('btn-scan').addEventListener('click', () => {
 $('btn-scan-frame').addEventListener('click', () => {
   parent.postMessage({ pluginMessage: { type: 'SCAN_FRAME' } }, '*');
   $('btn-scan-frame').disabled = true;
-  $('scan-content').innerHTML = `<div class="loading" style="padding:28px 20px"><div class="spinner"></div><span>Scanning components…</span></div>`;
+  $('scan-content').innerHTML = loadingHtml('Scanning components…');
 });
 
 // ── Dev inspector ──────────────────────────────────────────────────────────
@@ -2283,7 +2294,7 @@ function renderFromStoredSnapshot(msg) {
     suppressStoredBannerFor = msg.nodeId;
     // Trigger a fresh analysis on this node — selection is already on it
     parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
-    $('content').innerHTML = `<div class="loading"><div class="spinner"></div><span>Re-scanning…</span></div>`;
+    $('content').innerHTML = loadingHtml('Re-scanning…');
   });
   $('btn-keep').addEventListener('click', () => {
     const b = $('stored-banner'); if (b) b.remove();
@@ -3381,7 +3392,7 @@ function handleAiLoading(msg) {
   const label = (msg && msg.phase === 'vision')
     ? 'Analyzing screenshot with Vision AI\u2026'
     : 'Classifying component with AI\u2026';
-  $('content').innerHTML = '<div class="loading"><div class="spinner"></div><span>' + label + '</span></div>';
+  $('content').innerHTML = loadingHtml(label);
 }
 
 function handleScanProgress() {
