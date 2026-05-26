@@ -164,31 +164,32 @@
   /* ── Issues ──────────────────────────────────────────────────────── */
   .issues-section { padding: 10px 14px; border-top: 1px solid var(--border); }
   .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text); }
-  .issues-count.has-high { color: var(--accent-red); }
+  .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0A2540; }
+  .issues-count.has-high { color: #0A2540; }
   .issue-item {
-    display: flex; flex-direction: column; gap: 6px;
+    display: flex; flex-direction: column; gap: 8px;
     padding: 12px 14px; border-radius: var(--radius);
-    border: 1px solid transparent; margin-bottom: 8px;
+    border: 1px solid #E2E8F0; margin-bottom: 8px;
+    background: #FFFFFF;
     font-size: 13px; line-height: 1.5;
   }
   .issue-item:last-child { margin-bottom: 0; }
-  .issue-HIGH   { background: #FDE8E8; border-color: #FBBCBC; }
-  .issue-MED    { background: #FEF5E5; border-color: #FDD9A1; }
-  .issue-LOW    { background: #EEF5FF; border-color: #BFDBFE; }
-  .issue-MANUAL { background: #F0EEFF; border-color: #D1C4FE; }
+  .issue-HIGH   { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-MED    { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-LOW    { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #E2E8F0; }
   .issue-sev {
     display: inline-flex; align-items: center; gap: 4px;
-    padding: 4px 10px; border-radius: 20px; width: fit-content;
+    padding: 3px 10px; border-radius: 20px; width: fit-content;
     font-size: 12px; font-weight: 600; letter-spacing: 0;
   }
-  .issue-HIGH   .issue-sev { background: #FECACA; color: #7F1D1D; }
-  .issue-MED    .issue-sev { background: #FDE68A; color: #78350F; }
-  .issue-LOW    .issue-sev { background: #BFDBFE; color: #1E3A8A; }
-  .issue-MANUAL .issue-sev { background: #DDD6FE; color: #4C1D95; }
+  .issue-HIGH   .issue-sev { background: #FFEAEA; color: #C0392B; }
+  .issue-MED    .issue-sev { background: #FFF3CD; color: #92400E; }
+  .issue-LOW    .issue-sev { background: #E8F0FE; color: #1D4ED8; }
+  .issue-MANUAL .issue-sev { background: #EDE9FE; color: #5B21B6; }
   .issue-body { min-width: 0; width: 100%; }
-  .issue-msg  { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
-  .issue-wcag { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .issue-msg  { font-size: 14px; font-weight: 600; color: #0A2540; line-height: 1.4; }
+  .issue-wcag { font-size: 11px; color: #64748B; margin-top: 2px; }
 
   /* ── Suggestions ─────────────────────────────────────────────────── */
   .suggestions-section { padding: 10px 14px; }
@@ -510,7 +511,10 @@
   .explain-overlay.open { display: block; }
 
   /* ── Inline auto-fix dropdown on issue rows ─────────────────────── */
-  .issue-actions { position: relative; margin-top: 2px; }
+  .issue-actions {
+    position: relative; margin-top: 2px;
+    display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
   .btn-autofix-direct {
     padding: 6px 14px; font-size: 13px; font-weight: 600;
     border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
@@ -572,7 +576,7 @@
     font-size: 10px; color: var(--text-dim); max-width: 180px;
     line-height: 1.4; margin-bottom: 4px;
   }
-  .issue-message-only { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .issue-message-only { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
   .ai-consent-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.55);
     z-index: 200; display: none; align-items: center; justify-content: center;
@@ -593,12 +597,24 @@
   }
   .issue-pending .issue-sev { background: #3d3200; color: #f5c842; }
   .issue-pending-note { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
-  .btn-focus-ai, .btn-focus-pending {
-    padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 12px; cursor: pointer; border: 1px solid;
-    white-space: nowrap;
+  /* Build-with-AI / Re-scan → outlined blue like btn-autofix */
+  .btn-focus-ai, .btn-rescan-ai {
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    background: #FFFFFF; color: #136EF8; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.12s; white-space: nowrap;
   }
-  .btn-focus-ai { border-color: #3a2a7e; background: #1e1a4e; color: #a78bfa; }
-  .btn-focus-pending { border-color: #5e4a00; background: #1e1400; color: #f5c842; }
+  .btn-focus-ai:hover, .btn-rescan-ai:hover { background: #EBF1F9; }
+  /* "I'll build it" / "Copy prompt again" → plain text link */
+  .btn-focus-pending, .btn-copy-prompt-again {
+    padding: 6px 4px; font-size: 13px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: none;
+    background: transparent; color: #64748B; letter-spacing: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: color 0.12s; white-space: nowrap;
+  }
+  .btn-focus-pending:hover, .btn-copy-prompt-again:hover { color: #2B3E52; }
   .settings-radio-group { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 16px; }
   .settings-radio {
     display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-sm);
@@ -635,12 +651,15 @@
   }
   .fix-toast.open { display: block; }
   .issue-waiting-ai {
-    background: #0d3b66 !important; border: 1px solid #2563eb !important;
-    border-radius: var(--radius-sm); padding: 10px !important;
+    background: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
   }
-  .issue-waiting-ai .issue-sev { background: #1e3a5f; color: #93c5fd; }
-  .issue-waiting-ai-title { font-size: 12px; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
+  .issue-waiting-ai .issue-sev { background: #E8F0FE; color: #1D4ED8; }
+  .issue-waiting-ai-title { display: none; } /* replaced by note at bottom */
   .issue-waiting-ai-desc { font-size: 10px; color: #bfdbfe; line-height: 1.45; margin-bottom: 8px; }
+  .issue-waiting-ai-note {
+    font-size: 12px; color: #64748B; display: flex; align-items: center; gap: 5px; margin-top: 4px;
+  }
+  .issue-waiting-ai-note::before { content: "✦"; color: #136EF8; font-size: 11px; }
   .issue-resolved-strike .issue-msg { text-decoration: line-through; opacity: 0.55; }
   .issue-fix-status { font-size: 10px; margin-top: 4px; color: var(--text-dim); }
   .issue-fix-status.ok { color: #6ee7a0; }
@@ -884,11 +903,11 @@
   .btn-mini.primary, .btn-apply.primary { background: #136EF8; }
   .btn-mini.primary:hover, .btn-apply.primary:hover { background: #0E5ADB; opacity: 1; }
 
-  /* Issue item backgrounds — already set in base, kept for specificity */
-  .issue-HIGH   { background: #FDE8E8; border-color: #FBBCBC; }
-  .issue-MED    { background: #FEF5E5; border-color: #FDD9A1; }
-  .issue-LOW    { background: #EEF5FF; border-color: #BFDBFE; }
-  .issue-MANUAL { background: #F0EEFF; border-color: #D1C4FE; }
+  /* Issue item backgrounds — white cards per design system */
+  .issue-HIGH   { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-MED    { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-LOW    { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #E2E8F0; }
 
   /* Dev code section */
   .devcode-toggle         { color: #136EF8; }
@@ -917,9 +936,9 @@
   .issue-fixed { border-color: #A7DFC8 !important; background: #E6F9F0 !important; }
   .issue-fixed .issue-msg::before { color: #0B7A52; }
 
-  /* Focus AI / pending */
-  .btn-focus-ai      { background: #EBF1F9; border-color: #BDD4EA; color: #136EF8; }
-  .btn-focus-pending { background: #FEF5E4; border-color: #FDD9A1; color: #B45309; }
+  /* Focus AI / pending — per design system */
+  .btn-focus-ai, .btn-rescan-ai { background: #FFFFFF; border-color: #136EF8; color: #136EF8; }
+  .btn-focus-pending, .btn-copy-prompt-again { background: transparent; border: none; color: #64748B; }
 
   /* AI consent */
   .ai-consent-overlay { background: rgba(3,18,57,0.45); }
@@ -961,9 +980,9 @@
   .fix-progress-bar { background: linear-gradient(90deg, #136EF8, #0B4FD4); }
   .fix-toast { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
 
-  /* Issue waiting AI */
-  .issue-waiting-ai            { background: #EBF1F9 !important; border-color: #BDD4EA !important; }
-  .issue-waiting-ai .issue-sev { background: #BFDBFE; color: #1E3A8A; }
+  /* Issue waiting AI — white card, blue badge */
+  .issue-waiting-ai            { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
+  .issue-waiting-ai .issue-sev { background: #E8F0FE; color: #1D4ED8; }
   .issue-waiting-ai-title      { color: #136EF8; }
   .issue-waiting-ai-desc       { color: #4D6F96; }
 
@@ -1756,34 +1775,33 @@ function renderAutoFixControl(issue, idx) {
   if (issue.waitingForAi) {
     return `
     <div class="issue-actions issue-message-only">
-      <div class="issue-waiting-ai-desc">Prompt copied · Paste it in Figma AI chat, apply the fix, then re-scan here.</div>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-        <button class="btn-focus-ai btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
-        <button class="btn-focus-pending btn-copy-prompt-again" data-issue-idx="${idx}" data-strategy="prompt">Copy prompt again</button>
+      <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+        <button class="btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
+        <button class="btn-copy-prompt-again" data-issue-idx="${idx}" data-strategy="prompt">Copy prompt again</button>
       </div>
+      <div class="issue-waiting-ai-note">Waiting for Figma AI fix</div>
     </div>`;
   }
   if (issue.designerPending) {
     const age = formatPendingAge(issue.pendingSince);
     return `
     <div class="issue-actions issue-message-only">
-      <span class="ack-badge">Pending</span>
-      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+      <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">✦ Build with AI</button>
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
+      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
     </div>`;
   }
   if (issue.fixKind === 'focus_state') {
     const age = issue.pendingSince ? formatPendingAge(issue.pendingSince) : '';
     return `
     <div class="issue-actions issue-message-only">
-      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
+      <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">✦ Build with AI</button>
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
+      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
     </div>`;
   }
   if (issue.acknowledged) {
@@ -2402,7 +2420,7 @@ function renderResult(data) {
         </div>`).join('')}
       ${issues.map((i, idx) => `
         <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}${i.waitingForAi ? ' issue-waiting-ai' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.waitingForAi ? '⏳ Waiting' : (i.designerPending ? '✏️ Pending' : (i.severity === 'HIGH' ? '✕ High' : i.severity === 'MED' ? '△ Medium' : i.severity === 'LOW' ? '△ Low' : '○ Manual'))}</span>
+          <span class="issue-sev">${i.waitingForAi ? '◎ Waiting' : (i.designerPending ? '△ Pending' : (i.severity === 'HIGH' ? '✕ High' : i.severity === 'MED' ? '△ Medium' : i.severity === 'LOW' ? '△ Low' : '○ Manual'))}</span>
           <div class="issue-body">
             ${i.waitingForAi ? '<div class="issue-waiting-ai-title">🤖 Waiting for Figma AI fix</div>' : ''}
             <div class="issue-title-row">
