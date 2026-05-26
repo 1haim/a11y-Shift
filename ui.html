@@ -16,6 +16,31 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <style>
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularRegular.woff2") format("woff2"),
+         url("fonts/CircularRegular.woff")  format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularMedium.woff2") format("woff2"),
+         url("fonts/CircularMedium.woff")  format("woff");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "CircularXX";
+    src: url("fonts/CircularBold.woff2") format("woff2"),
+         url("fonts/CircularBold.woff")  format("woff");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
   :root {
     --bg:            #FFFFFF;
     --surface:       #F7FAFD;
@@ -147,8 +172,8 @@
     gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border);
   }
   .node-info { flex: 1; min-width: 0; }
-  .node-name { font-size: 14px; font-weight: 600; color: #0A2540; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .node-type { font-size: 13px; color: #64748B; letter-spacing: 0; text-transform: none; }
+  .node-name { font-size: 15px; font-weight: 500; color: #0A2540; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-type { font-size: 15px; font-weight: 400; color: #3A4B61; letter-spacing: 0; text-transform: none; }
   .confidence-chip {
     flex-shrink: 0; padding: 3px 10px; border-radius: 20px;
     font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
@@ -157,8 +182,8 @@
   .chip-MED  { background: #FFF3CD; color: #92400E; }
   .chip-LOW  { background: #E8F0FE; color: #1D4ED8; }
   .result-role { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  .role-label  { font-size: 14px; font-weight: 600; color: #0A2540; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
-  .role-value  { font-size: 14px; font-weight: 400; color: #0A2540; letter-spacing: 0; }
+  .role-label  { font-size: 15px; font-weight: 500; color: #0A2540; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
+  .role-value  { font-size: 15px; font-weight: 400; color: #3A4B61; letter-spacing: 0; }
   .result-reasoning { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 
   /* ── Issues ──────────────────────────────────────────────────────── */
@@ -1021,7 +1046,7 @@
   .btn-ask-opt.selected { background: #EBF1F9; border-color: #136EF8; color: #136EF8; }
 
   /* Role value & meta badges */
-  .role-value { color: #0A2540; font-size: 14px; font-weight: 400; }
+  .role-value { color: #3A4B61; font-size: 15px; font-weight: 400; }
   .badge-ai   { background: #EBF1F9; color: #136EF8; }
   .badge-rule { background: #E6F9F0; color: #0B7A52; }
 
@@ -1062,7 +1087,7 @@
 
   /* Section label */
   .section-label { color: #0A2540; font-size: 16px; font-weight: 500; }
-  .role-label    { color: #0A2540; font-size: 14px; font-weight: 600; }
+  .role-label    { color: #0A2540; font-size: 15px; font-weight: 500; }
 
   /* Spinner */
   .spinner { border-color: #D6E8F5; border-top-color: #136EF8; }
@@ -2023,7 +2048,13 @@ function renderStoredBanner(snapshot, nodeId) {
   return `
     <div class="stored-banner" id="stored-banner" data-nodeid="${nodeId}">
       <div class="stored-banner-icon">
-        <img src="https://www.figma.com/api/mcp/asset/55d6e3a0-0172-42bb-833b-c12150493782" width="24" height="24" alt="">
+        <svg width="24" height="24" viewBox="4 4 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 19.8999H29" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.1993 15.1V12.7C12.1993 12.3818 12.3258 12.0765 12.5508 11.8515C12.7759 11.6265 13.0811 11.5 13.3993 11.5H15.7993" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M27.8001 15.1V12.7C27.8001 12.3818 27.6736 12.0765 27.4486 11.8515C27.2236 11.6265 26.9183 11.5 26.6001 11.5H24.2001" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12.2007 24.7025V27.1025C12.2007 27.4208 12.3272 27.726 12.5522 27.9511C12.7773 28.1761 13.0825 28.3025 13.4007 28.3025H15.8007" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M27.8001 24.7025V27.1025C27.8001 27.4208 27.6736 27.726 27.4486 27.9511C27.2236 28.1761 26.9183 28.3025 26.6001 28.3025H24.2001" stroke="#3A4B61" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
       <div class="stored-banner-body">
         <div class="stored-banner-line1">Last scanned ${relativeTime(snapshot.timestamp)}</div>
@@ -2382,8 +2413,8 @@ function renderResult(data) {
   const r    = data.result;
   const conf = r.confidence;
   // Figma asset icons (pencil=rename, document=setPluginData/addAnnotation)
-  const _iconPencil   = '<img src="https://www.figma.com/api/mcp/asset/fcbd1b57-9b90-412b-ab9d-a42be352f094" width="16" height="16" alt="">';
-  const _iconDocument = '<img src="https://www.figma.com/api/mcp/asset/10587eb4-5491-4e3e-99e4-090e93489685" width="16" height="16" alt="">';
+  const _iconPencil   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M10.6191 1.3457C10.8526 1.36898 11.0743 1.46071 11.2559 1.60938L11.3438 1.68848L14.3115 4.65625C14.5349 4.87965 14.6601 5.18309 14.6602 5.49902C14.6602 5.81495 14.5349 6.11839 14.3115 6.3418L12.6592 7.99316C12.6609 8.1644 12.5974 8.33618 12.4668 8.4668C12.3362 8.59741 12.1644 8.66094 11.9932 8.65918L6.18555 14.4668C6.06179 14.5904 5.8937 14.6602 5.71875 14.6602H2.53125C2.21532 14.6601 1.91188 14.5349 1.68848 14.3115C1.46508 14.0881 1.33986 13.7847 1.33984 13.4688V10.501C1.33984 10.3445 1.3708 10.1895 1.43066 10.0449L1.48047 9.93945C1.5356 9.83627 1.60546 9.74124 1.68848 9.6582L7.33984 4.00586C7.33834 3.83495 7.40284 3.66357 7.5332 3.5332C7.66357 3.40284 7.83495 3.33834 8.00586 3.33984L9.6582 1.68848L9.74609 1.60938C9.95803 1.43584 10.2246 1.33984 10.501 1.33984L10.6191 1.3457ZM2.66016 10.5537V13.3398H5.44629L10.9258 7.85938L8.13965 5.07324L2.66016 10.5537ZM9.07324 4.13965L11.8594 6.92578L13.2871 5.49902L10.501 2.71289L9.07324 4.13965Z" fill="#3A4B61"/></svg>`;
+  const _iconDocument = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M11.8184 1.33984C13.3877 1.33994 14.6601 2.61229 14.6602 4.18164V11.8184C14.6601 13.3877 13.3877 14.6601 11.8184 14.6602H4.18164C2.61229 14.6601 1.33994 13.3877 1.33984 11.8184V4.18164C1.33994 2.61229 2.61229 1.33994 4.18164 1.33984H11.8184ZM4.18164 2.66016C3.3413 2.66025 2.66025 3.3413 2.66016 4.18164V11.8184C2.66025 12.6587 3.3413 13.3397 4.18164 13.3398H11.8184C12.6587 13.3397 13.3397 12.6587 13.3398 11.8184V4.18164C13.3397 3.3413 12.6587 2.66025 11.8184 2.66016H4.18164ZM7.25 10.0068C7.61451 10.0068 7.91016 10.3025 7.91016 10.667C7.90998 11.0314 7.6144 11.3271 7.25 11.3271H5C4.6356 11.3271 4.34002 11.0314 4.33984 10.667C4.33984 10.3025 4.63549 10.0068 5 10.0068H7.25ZM11 7.33984C11.3645 7.33984 11.6602 7.63549 11.6602 8C11.6602 8.36451 11.3645 8.66016 11 8.66016H5C4.63549 8.66016 4.33984 8.36451 4.33984 8C4.33984 7.63549 4.63549 7.33984 5 7.33984H11ZM11 4.67285C11.3644 4.67285 11.66 4.96865 11.6602 5.33301C11.6602 5.69752 11.3645 5.99316 11 5.99316H5C4.63549 5.99316 4.33984 5.69752 4.33984 5.33301C4.34002 4.96865 4.6356 4.67285 5 4.67285H11Z" fill="#3A4B61"/></svg>`;
   const sugIcons = { rename: _iconPencil, setPluginData: _iconDocument, addAnnotation: _iconDocument };
   const sugKeyLabels = {
     'a11y.v1.componentType': 'component-type',
@@ -2420,7 +2451,7 @@ function renderResult(data) {
   // Passed = audits in auditLog with status PASS
   const auditLog     = r.auditLog || [];
   const passedAudits = auditLog.filter(a => a.status === 'PASS');
-  const _checkSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><circle cx="10" cy="10" r="9" fill="#E6F4E7"/><path d="M6.5 10L8.8 12.5L13.5 7.5" stroke="#06720F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const _checkSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM16.7295 9.31641C16.3518 8.91355 15.7193 8.89293 15.3164 9.27051L10.667 13.6289L8.68359 11.7705C8.28068 11.3929 7.64819 11.4136 7.27051 11.8164C6.89294 12.2193 6.91355 12.8518 7.31641 13.2295L9.98242 15.7295C10.3671 16.0901 10.9659 16.0901 11.3506 15.7295L16.6836 10.7295C17.0865 10.3518 17.1071 9.71933 16.7295 9.31641Z" fill="#078912"/></svg>`;
   const passedHtml   = passedAudits.length === 0 ? '' : `
     <div style="padding:8px 14px 4px;">
       <div class="section-label">Passed checks</div>
