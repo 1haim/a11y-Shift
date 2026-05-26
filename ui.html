@@ -893,19 +893,21 @@
     box-shadow: 0px 4px 5px rgba(8,19,79,0.08), 0px 1px 1.5px rgba(8,19,79,0.04);
     display: none;
     align-items: center;
-    gap: 16px;
-    padding: 12px;
+    gap: 12px;
+    padding: 10px 12px;
     width: 100%;
   }
   .sticky-node-header.visible { display: flex; }
   .sticky-node-thumbnail {
-    width: 120px; height: 80px; min-width: 120px;
-    background: #F8FAFF; border-radius: 12px;
+    width: 80px; height: 52px; min-width: 80px;
+    background: #F8FAFF; border-radius: 8px;
     overflow: hidden;
     display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
   .sticky-node-thumbnail img {
     width: 100%; height: 100%; object-fit: contain;
+    display: block; border: none; outline: none;
   }
   .sticky-node-info {
     flex: 1; min-width: 0;
@@ -914,11 +916,11 @@
   }
   .sticky-node-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .sticky-node-name {
-    font-size: 16px; font-weight: 500; color: #0A2540; line-height: 1.25;
+    font-size: 15px; font-weight: 500; color: #0A2540; line-height: 1.25;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .sticky-node-type {
-    font-size: 15px; font-weight: 400; color: #3A4B61; line-height: 1.25; white-space: nowrap;
+    font-size: 14px; font-weight: 400; color: #3A4B61; line-height: 1.25; white-space: nowrap;
   }
   .sticky-conf-chip {
     display: flex; align-items: center; flex-shrink: 0;
@@ -1809,21 +1811,44 @@ function savePreviewState() {
   });
 })();
 
+// Last preview stored as data URI so the sticky header thumbnail can use it
+let _stickyPreviewDataUrl = null;
+
+function updateStickyThumbnail() {
+  const thumbEl = $('sticky-node-thumbnail');
+  if (!thumbEl) return;
+  if (_stickyPreviewDataUrl) {
+    const existing = thumbEl.querySelector('img');
+    if (existing) {
+      existing.src = _stickyPreviewDataUrl;
+    } else {
+      thumbEl.innerHTML = `<img src="${_stickyPreviewDataUrl}" alt="Component preview">`;
+    }
+  }
+}
+
 function showPreviewImage(bytes) {
-  const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
-  const url  = URL.createObjectURL(blob);
-  const img  = document.createElement('img');
-  img.alt    = 'Component preview';
-  img.src    = url;
-  img.onload = () => URL.revokeObjectURL(url);
+  // Convert bytes → base64 data URI so the URL stays valid (blob URLs are revoked on load)
+  const u8 = new Uint8Array(bytes);
+  let binary = '';
+  for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
+  const dataUrl = 'data:image/png;base64,' + btoa(binary);
+  _stickyPreviewDataUrl = dataUrl;
+
+  const img = document.createElement('img');
+  img.alt = 'Component preview';
+  img.src = dataUrl;
   $('preview-inner').innerHTML = '';
   $('preview-inner').appendChild(img);
   updateScrollToComponentButton();
+  updateStickyThumbnail();
 }
 
 function showPreviewBase64(imageData) {
   const inner = $('preview-inner');
   if (!inner || !imageData) return;
+  const dataUrl = 'data:image/png;base64,' + imageData;
+  _stickyPreviewDataUrl = dataUrl;
   let img = inner.querySelector('img');
   if (!img) {
     inner.innerHTML = '';
@@ -1833,8 +1858,9 @@ function showPreviewBase64(imageData) {
   }
   img.classList.add('fading');
   setTimeout(() => {
-    img.src = 'data:image/png;base64,' + imageData;
+    img.src = dataUrl;
     img.classList.remove('fading');
+    updateStickyThumbnail();
   }, 150);
 }
 
@@ -3243,17 +3269,8 @@ function updateStickyHeader(data) {
     chipEl.textContent = conf ? (conf.charAt(0) + conf.slice(1).toLowerCase()) : '—';
   }
 
-  // Thumbnail — grab from preview-inner once image is ready
-  setTimeout(() => {
-    const thumbEl = $('sticky-node-thumbnail');
-    if (!thumbEl) return;
-    const previewImg = document.querySelector('#preview-inner img');
-    if (previewImg && previewImg.src) {
-      thumbEl.innerHTML = `<img src="${previewImg.src}" alt="${data.nodeName || 'Component'}">`;
-    } else {
-      thumbEl.innerHTML = '';
-    }
-  }, 400);
+  // Thumbnail — use stored data URI (blob URLs are revoked and can't be reused)
+  updateStickyThumbnail();
 
   // Watch preview-panel: show sticky header when it scrolls out of view
   if (_stickyObserver) _stickyObserver.disconnect();
