@@ -249,7 +249,7 @@
     transition: background 0.12s;
   }
   .devcode-toggle:hover { background: #F8FAFF; }
-  .devcode-toggle .toggle-arrow { font-size: 10px; transition: transform 0.2s; color: #3A4B61; }
+  .devcode-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .devcode-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .devcode-body { display: none; padding: 0 14px 12px; }
   .devcode-body.open { display: block; }
@@ -340,52 +340,52 @@
     transition: background 0.12s;
   }
   .decided-toggle:hover { background: #F8FAFF; }
-  .decided-toggle .toggle-arrow { transition: transform 0.2s; color: #3A4B61; font-size: 10px; }
+  .decided-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .decided-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .decided-body { display: none; padding: 4px 14px 12px; }
   .decided-body.open { display: block; }
   .decided-row {
-    display: flex; align-items: flex-start; gap: 8px;
-    padding: 5px 0; border-bottom: 1px solid var(--border);
-    font-size: 11px;
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 6px 0;
+    font-size: 15px;
   }
-  .decided-row:last-child { border-bottom: none; }
-  .decided-label { width: 130px; flex-shrink: 0; color: var(--text-muted); }
-  .decided-value { flex: 1; color: var(--text-dim); word-break: break-word; }
-  .decided-score { color: var(--accent-blue); font-weight: 700; margin-right: 6px; }
-  .decided-sig { font-size: 10px; background: #0d2033; color: var(--accent-blue);
-                 padding: 1px 6px; border-radius: 10px; margin: 1px 2px; display: inline-block; }
+  .decided-label { width: 130px; flex-shrink: 0; color: #0A2540; font-size: 15px; font-weight: 400; }
+  .decided-value { flex: 1; color: #0A2540; font-size: 15px; word-break: break-word; }
+  .decided-score { color: #136EF8; font-weight: 700; margin-right: 6px; }
+  .decided-sig { font-size: 12px; font-weight: 500; background: #e0eafe; color: #145aea;
+                 padding: 4px 6px; border-radius: 6px; margin: 1px 2px; display: inline-block; }
 
   /* ── Audit log (all checks, pass + fail) ────────────────────────── */
   .audit-log-section { border-top: 1px solid var(--border); }
   .audit-log-toggle {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 14px; cursor: pointer; user-select: none;
-    font-size: 13px; font-weight: 500; color: #3A4B61;
+    font-size: 15px; font-weight: 500; color: #0A2540;
     text-transform: none; letter-spacing: 0;
     transition: background 0.12s;
   }
   .audit-log-toggle:hover { background: #F8FAFF; }
+  .audit-log-toggle .toggle-arrow { transition: transform 0.2s; display: inline-flex; align-items: center; flex-shrink: 0; }
   .audit-log-toggle.open .toggle-arrow { transform: rotate(90deg); }
   .audit-log-body { display: none; padding: 4px 14px 12px; }
   .audit-log-body.open { display: block; }
   .audit-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 5px 0; border-bottom: 1px dotted var(--border);
-    font-size: 11px;
+    padding: 5px 0; border-bottom: 1px dotted #CBD2E1;
+    font-size: 14px;
   }
   .audit-row:last-child { border-bottom: none; }
   .audit-status {
-    width: 48px; flex-shrink: 0; text-align: center;
-    font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.5px;
+    width: 52px; flex-shrink: 0; text-align: center;
+    font-size: 11px; font-weight: 700; padding: 2px 5px; border-radius: 4px; letter-spacing: 0.3px;
   }
-  .audit-status.PASS   { background: #0d2e1a; color: #3ecf8e; }
-  .audit-status.WARN   { background: #2e1f00; color: #f59e0b; }
-  .audit-status.BLOCK  { background: #2a0a0a; color: #ef4444; }
-  .audit-status.MANUAL { background: #101020; color: #a78bfa; }
-  .audit-status.ERROR  { background: #2a1a00; color: #f59e0b; }
-  .audit-name { flex: 1; color: var(--text-dim); }
-  .audit-wcag { font-size: 10px; color: var(--text-muted); }
+  .audit-status.PASS   { background: #E6F4E7; color: #06720F; }
+  .audit-status.WARN   { background: #ffecb0; color: #765900; }
+  .audit-status.BLOCK  { background: #fde8e9; color: #d8161f; }
+  .audit-status.MANUAL { background: #EDE9FE; color: #5B21B6; }
+  .audit-status.ERROR  { background: #ffecb0; color: #765900; }
+  .audit-name { flex: 1; color: #0A2540; font-size: 14px; }
+  .audit-wcag { font-size: 12px; color: #3A4B61; }
 
   /* ── Stored-state banner above analysis result ─────────────────── */
   .stored-banner {
@@ -634,8 +634,9 @@
   .ai-consent-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .ai-consent-check { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); margin-bottom: 12px; }
   .pending-banner {
-    margin: 0 14px 10px; padding: 8px 12px; border-radius: var(--radius-sm);
-    background: #1e1400; border: 1px solid #5e4a00; font-size: 11px; color: #f5c842;
+    margin: 0 14px 10px; padding: 10px 14px; border-radius: 8px;
+    background: #1e1400; border: 1.5px dashed #5e4a00; font-size: 14px; font-weight: 500; color: #f5c842;
+    display: flex; align-items: center; gap: 8px;
   }
   .issue-pending .issue-sev { background: #3d3200; color: #f5c842; }
   .issue-pending-note { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
@@ -957,8 +958,8 @@
   .issue-MANUAL { background: #FFFFFF; border-color: #CBD2E1; }
 
   /* Dev code section */
-  .devcode-toggle         { color: #136EF8; }
-  .devcode-toggle:hover   { background: #EBF1F9; }
+  .devcode-toggle         { color: #0A2540; }
+  .devcode-toggle:hover   { background: #F8FAFF; }
   .code-block             { background: #F1F6FC; border-color: #D6E8F5; color: #031239; }
   .code-block .code-comment { color: #6B8DAF; }
   .code-block .code-attr    { color: #136EF8; }
@@ -1004,17 +1005,15 @@
 
   /* Decided / audit-log toggles */
   .decided-toggle:hover, .audit-log-toggle:hover { background: #F8FAFF; }
-  .devcode-toggle:hover { background: #F8FAFF; }
-  .devcode-toggle { color: #0A2540; }
-  .decided-sig   { background: #EBF1F9; color: #136EF8; }
+  .decided-sig   { background: #e0eafe; color: #145aea; }
   .decided-score { color: #136EF8; }
 
-  /* Audit status */
-  .audit-status.PASS   { background: #D1FAE5; color: #064E3B; }
-  .audit-status.WARN   { background: #FEF3C7; color: #78350F; }
-  .audit-status.BLOCK  { background: #FEE2E2; color: #7F1D1D; }
-  .audit-status.MANUAL { background: #EDE9FE; color: #4C1D95; }
-  .audit-status.ERROR  { background: #FEF3C7; color: #78350F; }
+  /* Audit status — light theme */
+  .audit-status.PASS   { background: #E6F4E7; color: #06720F; }
+  .audit-status.WARN   { background: #ffecb0; color: #765900; }
+  .audit-status.BLOCK  { background: #fde8e9; color: #d8161f; }
+  .audit-status.MANUAL { background: #EDE9FE; color: #5B21B6; }
+  .audit-status.ERROR  { background: #ffecb0; color: #765900; }
 
   /* Scan badge */
   .scan-badge.h { background: #FEE2E2; color: #DC2626; }
@@ -1022,7 +1021,7 @@
   .scan-badge.l { background: #DBEAFE; color: #2563EB; }
 
   /* Pending banner */
-  .pending-banner           { background: #FEF5E4; border-color: #FDD9A1; color: #B45309; }
+  .pending-banner           { background: #FFFFFF; border: 1.5px dashed #136EF8; color: #0A2540; }
   .issue-pending .issue-sev { background: #FDE68A; color: #78350F; }
 
   /* Fix progress & toast */
@@ -1616,7 +1615,7 @@ function renderAriaSchema(schema) {
     <div class="devcode-section">
       <div class="devcode-toggle" id="devcode-toggle">
         <span>( ) ARIA Schema — Copy &amp; Implementation in any framework</span>
-        <span class="toggle-arrow">›</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="devcode-body" id="devcode-body">
         <div class="devcode-header-row">
@@ -1642,7 +1641,7 @@ function renderAriaSchemaWithFrameworks(schema) {
     <div class="devcode-section" id="${panelId}">
       <div class="devcode-toggle devcode-toggle-fw">
         <span>( ) ARIA Schema &amp; Framework Code</span>
-        <span class="toggle-arrow">›</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="devcode-body devcode-body-fw">
         <div class="fw-tabs" style="padding-top:8px">
@@ -2468,7 +2467,8 @@ function renderResult(data) {
     ? data.pendingDesignerCount
     : waitingCount + pendingOnlyCount;
   const pendingParts = [];
-  if (waitingCount > 0) pendingParts.push('⏳ ' + waitingCount + ' waiting for Figma AI');
+  const _sparkIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>`;
+  if (waitingCount > 0) pendingParts.push(_sparkIcon + ' ' + waitingCount + ' waiting for Figma AI');
   if (pendingOnlyCount > 0) pendingParts.push('✏️ ' + pendingOnlyCount + ' pending designer');
   const pendingBanner = pendingCount > 0
     ? `<div class="pending-banner" id="pending-banner">${pendingParts.join(' · ') || (pendingCount + ' pending designer action' + (pendingCount !== 1 ? 's' : ''))}</div>`
@@ -2527,7 +2527,7 @@ function renderResult(data) {
   const signals = r.signalDetails || [];
   const sigHtml = signals.length > 0
     ? signals.map(s => `<span class="decided-sig">${s}</span>`).join(' ')
-    : '<span style="color:var(--text-muted);font-size:10px">No spec signals matched</span>';
+    : '<span style="color:#3A4B61;font-size:14px">No spec signals matched</span>';
 
   const detectionBadge = r.detectionPath === 'spec-engine'
     ? `<span class="meta-badge badge-rule">Spec engine · score ${r.signalScore || 0}</span>`
@@ -2535,7 +2535,7 @@ function renderResult(data) {
     ? `<span class="meta-badge badge-ai">${r.detectionPath === 'vision-tiebreak' ? 'Vision tiebreak' : 'Vision AI (GPT-4o)'}</span>`
     : r.detectionPath === 'text-ai'
     ? `<span class="meta-badge badge-ai">Text AI + spec audit</span>`
-    : `<span class="meta-badge" style="background:#1a1a2e;color:var(--text-muted)">Rule engine fallback</span>`;
+    : `<span class="meta-badge" style="background:#E8F0FE;color:#3A4B61">Rule engine fallback</span>`;
 
   const auditLogRows = auditLog.map(a => `
     <div class="audit-row">
@@ -2548,7 +2548,7 @@ function renderResult(data) {
     <div class="decided-section">
       <div class="decided-toggle" id="decided-toggle">
         <span>How I decided</span>
-        <span class="toggle-arrow">›</span>
+        <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>
       <div class="decided-body" id="decided-body">
         <div class="decided-row">
@@ -2568,7 +2568,7 @@ function renderResult(data) {
           <div class="audit-log-section">
             <div class="audit-log-toggle" id="audit-log-toggle">
               <span>Audit checks (${auditLog.length})</span>
-              <span class="toggle-arrow">›</span>
+              <span class="toggle-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             </div>
             <div class="audit-log-body" id="audit-log-body">
               ${auditLogRows}
