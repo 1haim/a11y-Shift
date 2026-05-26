@@ -167,29 +167,29 @@
   .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0A2540; }
   .issues-count.has-high { color: #0A2540; }
   .issue-item {
-    display: flex; flex-direction: column; gap: 8px;
-    padding: 12px 14px; border-radius: var(--radius);
-    border: 1px solid #E2E8F0; margin-bottom: 8px;
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; border-radius: 8px;
+    border: 1px solid #CBD2E1; margin-bottom: 12px;
     background: #FFFFFF;
     font-size: 13px; line-height: 1.5;
   }
   .issue-item:last-child { margin-bottom: 0; }
-  .issue-HIGH   { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-MED    { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-LOW    { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-MANUAL { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-HIGH   { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MED    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-LOW    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #CBD2E1; }
   .issue-sev {
     display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 20px; width: fit-content;
-    font-size: 12px; font-weight: 600; letter-spacing: 0;
+    padding: 6px 12px; border-radius: 6px; width: fit-content;
+    font-size: 14px; font-weight: 500; letter-spacing: 0;
   }
-  .issue-HIGH   .issue-sev { background: #FFEAEA; color: #C0392B; }
-  .issue-MED    .issue-sev { background: #FFF3CD; color: #92400E; }
+  .issue-HIGH   .issue-sev { background: #fde8e9; color: #d8161f; }
+  .issue-MED    .issue-sev { background: #ffecb0; color: #765900; }
   .issue-LOW    .issue-sev { background: #E8F0FE; color: #1D4ED8; }
   .issue-MANUAL .issue-sev { background: #EDE9FE; color: #5B21B6; }
   .issue-body { min-width: 0; width: 100%; }
-  .issue-msg  { font-size: 14px; font-weight: 600; color: #0A2540; line-height: 1.4; }
-  .issue-wcag { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .issue-msg  { font-size: 15px; font-weight: 500; color: #0A2540; line-height: 1.25; }
+  .issue-wcag { font-size: 14px; font-weight: 400; color: #3A4B61; line-height: 1.5; margin-top: 0; }
 
   /* ── Suggestions ─────────────────────────────────────────────────── */
   .suggestions-section { padding: 10px 14px; }
@@ -268,24 +268,24 @@
   .btn-ask-opt.selected { background: #0d2033; border-color: var(--accent-blue); color: var(--accent-blue); }
 
   /* ── Apply ───────────────────────────────────────────────────────── */
-  .apply-row { display: flex; gap: 8px; margin-top: 12px; }
+  .apply-row { display: flex; gap: 24px; margin-top: 12px; }
   .btn-apply {
-    flex: 1; height: 36px; background: var(--surface2);
-    border: 1px solid var(--border2); border-radius: var(--radius);
-    color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    flex: 1; min-height: 40px; background: #FFFFFF;
+    border: 1.5px solid #CBD2E1; border-radius: 6px;
+    color: #3A4B61; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px;
   }
-  .btn-apply:hover { background: var(--border2); }
+  .btn-apply:hover { background: #F8FAFF; }
   .btn-apply.primary {
-    background: linear-gradient(135deg, #4da3ff 0%, #a78bfa 100%);
-    border-color: transparent; color: #fff;
+    background: #136EF8; border: none; color: #FFFFFF;
   }
-  .btn-apply.primary:hover { opacity: 0.88; }
+  .btn-apply.primary:hover { background: #0E5ADB; }
   .btn-apply:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-apply.blocked {
-    background: var(--chip-low) !important;
-    border-color: var(--accent-red) !important;
-    color: var(--accent-red) !important;
-    opacity: 1 !important;
+    background: #d8161f !important; border: none !important;
+    color: #FFFFFF !important; opacity: 1 !important;
   }
   .apply-result {
     padding: 10px 14px; border-radius: var(--radius);
@@ -531,20 +531,22 @@
     display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap;
   }
   .btn-autofix-direct {
-    padding: 6px 14px; font-size: 13px; font-weight: 600;
-    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
     background: #FFFFFF; color: #136EF8; letter-spacing: 0;
-    display: inline-flex; align-items: center; gap: 6px;
-    transition: background 0.12s;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
+    transition: background 0.12s; white-space: nowrap;
   }
   .btn-autofix-direct:hover { background: #EBF1F9; }
   .btn-autofix-direct:disabled { opacity: 0.4; cursor: wait; }
   .btn-autofix {
-    padding: 6px 14px; font-size: 13px; font-weight: 600;
-    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
     background: #FFFFFF; color: #136EF8; letter-spacing: 0;
-    display: inline-flex; align-items: center; gap: 6px;
-    transition: background 0.12s;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
+    transition: background 0.12s; white-space: nowrap;
   }
   .btn-autofix:hover { background: #EBF1F9; }
   .btn-autofix:disabled { opacity: 0.4; cursor: wait; }
@@ -612,24 +614,26 @@
   }
   .issue-pending .issue-sev { background: #3d3200; color: #f5c842; }
   .issue-pending-note { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
-  /* Build-with-AI / Re-scan → outlined blue like btn-autofix */
+  /* Build-with-AI / Re-scan → outlined blue, matches Auto Fix */
   .btn-focus-ai, .btn-rescan-ai {
-    padding: 6px 14px; font-size: 13px; font-weight: 600;
-    border-radius: 6px; cursor: pointer; border: 1.5px solid #136EF8;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
+    border-radius: 6px; cursor: pointer; border: 2px solid #136EF8;
     background: #FFFFFF; color: #136EF8; letter-spacing: 0;
-    display: inline-flex; align-items: center; gap: 6px;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; min-width: 64px; justify-content: center;
     transition: background 0.12s; white-space: nowrap;
   }
   .btn-focus-ai:hover, .btn-rescan-ai:hover { background: #EBF1F9; }
-  /* "I'll build it" / "Copy prompt again" → plain text link */
+  /* "I'll build it" / "Copy prompt again" → ghost, dark text */
   .btn-focus-pending, .btn-copy-prompt-again {
-    padding: 6px 4px; font-size: 13px; font-weight: 500;
+    padding: 8px 12px; font-size: 14px; font-weight: 500;
     border-radius: 6px; cursor: pointer; border: none;
-    background: transparent; color: #64748B; letter-spacing: 0;
+    background: transparent; color: #0A2540; letter-spacing: 0;
     display: inline-flex; align-items: center; gap: 4px;
+    min-height: 32px;
     transition: color 0.12s; white-space: nowrap;
   }
-  .btn-focus-pending:hover, .btn-copy-prompt-again:hover { color: #2B3E52; }
+  .btn-focus-pending:hover, .btn-copy-prompt-again:hover { color: #3A4B61; }
   .settings-radio-group { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 16px; }
   .settings-radio {
     display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-sm);
@@ -666,15 +670,15 @@
   }
   .fix-toast.open { display: block; }
   .issue-waiting-ai {
-    background: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
+    background: #FFFFFF !important; border: 1px solid #CBD2E1 !important;
   }
-  .issue-waiting-ai .issue-sev { background: #E8F0FE; color: #1D4ED8; }
+  .issue-waiting-ai .issue-sev { background: #e0eafe; color: #145aea; }
   .issue-waiting-ai-title { display: none; } /* replaced by note at bottom */
   .issue-waiting-ai-desc { font-size: 10px; color: #bfdbfe; line-height: 1.45; margin-bottom: 8px; }
   .issue-waiting-ai-note {
-    font-size: 12px; color: #64748B; display: flex; align-items: center; gap: 5px; margin-top: 4px;
+    font-size: 14px; font-weight: 400; color: #3A4B61;
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; line-height: 1.5;
   }
-  .issue-waiting-ai-note::before { content: "✦"; color: #136EF8; font-size: 11px; }
   .issue-resolved-strike .issue-msg { text-decoration: line-through; opacity: 0.55; }
   .issue-fix-status { font-size: 10px; margin-top: 4px; color: var(--text-dim); }
   .issue-fix-status.ok { color: #6ee7a0; }
@@ -701,10 +705,10 @@
   }
   .preview-toolbar-left {
     display: flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 600; color: #136EF8;
+    font-size: 17px; font-weight: 500; color: #3A4B61;
     letter-spacing: 0;
   }
-  .preview-collapse-icon { font-size: 9px; transition: transform 0.2s; color: #136EF8; }
+  .preview-collapse-icon { display: flex; align-items: center; transition: transform 0.2s; }
   .preview-bg-btns { display: flex; gap: 4px; }
   .btn-preview-bg {
     padding: 3px 9px; font-size: 10px; font-weight: 600; cursor: pointer;
@@ -917,14 +921,15 @@
   .btn-scan:hover:not(:disabled), .btn-inspect:hover { background: #0E5ADB; opacity: 1; }
   .btn-mini.primary { background: #136EF8; color: #fff; border-color: #136EF8; }
   .btn-mini.primary:hover { background: #0E5ADB; opacity: 1; }
-  .btn-apply.primary { background: #136EF8; }
+  .btn-apply.primary { background: #136EF8; border: none; color: #FFFFFF; }
   .btn-apply.primary:hover { background: #0E5ADB; opacity: 1; }
+  .btn-apply.blocked { background: #d8161f !important; border: none !important; color: #FFFFFF !important; }
 
   /* Issue item backgrounds — white cards per design system */
-  .issue-HIGH   { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-MED    { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-LOW    { background: #FFFFFF; border-color: #E2E8F0; }
-  .issue-MANUAL { background: #FFFFFF; border-color: #E2E8F0; }
+  .issue-HIGH   { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MED    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-LOW    { background: #FFFFFF; border-color: #CBD2E1; }
+  .issue-MANUAL { background: #FFFFFF; border-color: #CBD2E1; }
 
   /* Dev code section */
   .devcode-toggle         { color: #136EF8; }
@@ -954,8 +959,8 @@
   .issue-fixed .issue-msg::before { color: #0B7A52; }
 
   /* Focus AI / pending — per design system */
-  .btn-focus-ai, .btn-rescan-ai { background: #FFFFFF; border-color: #136EF8; color: #136EF8; }
-  .btn-focus-pending, .btn-copy-prompt-again { background: transparent; border: none; color: #64748B; }
+  .btn-focus-ai, .btn-rescan-ai { background: #FFFFFF; border: 2px solid #136EF8; color: #136EF8; }
+  .btn-focus-pending, .btn-copy-prompt-again { background: transparent; border: none; color: #0A2540; }
 
   /* AI consent */
   .ai-consent-overlay { background: rgba(3,18,57,0.45); }
@@ -1000,8 +1005,8 @@
   .fix-toast { background: #E6F9F0; border-color: #A7DFC8; color: #0B7A52; }
 
   /* Issue waiting AI — white card, blue badge */
-  .issue-waiting-ai            { background: #FFFFFF !important; border-color: #E2E8F0 !important; }
-  .issue-waiting-ai .issue-sev { background: #E8F0FE; color: #1D4ED8; }
+  .issue-waiting-ai            { background: #FFFFFF !important; border-color: #CBD2E1 !important; }
+  .issue-waiting-ai .issue-sev { background: #e0eafe; color: #145aea; }
   .issue-waiting-ai-title      { color: #136EF8; }
   .issue-waiting-ai-desc       { color: #4D6F96; }
 
@@ -1020,8 +1025,8 @@
   .badge-ai   { background: #EBF1F9; color: #136EF8; }
   .badge-rule { background: #E6F9F0; color: #0B7A52; }
 
-  /* Blocked apply */
-  .btn-apply.blocked { background: #FDE8E8 !important; border-color: #DC2626 !important; color: #DC2626 !important; }
+  /* Blocked apply — solid danger red, white text (Figma spec) */
+  .btn-apply.blocked { background: #d8161f !important; border: none !important; color: #FFFFFF !important; }
 
   /* Dashboard & inspector */
   .dashboard-row:hover { background: #EBF1F9; }
@@ -1052,8 +1057,8 @@
   .empty-state .icon { color: #BDD4EA; }
 
   /* Result card */
-  .result-card { border-color: #D6E8F5; box-shadow: 0 1px 4px rgba(3,18,57,0.06); }
-  .result-header { border-bottom-color: #D6E8F5; }
+  .result-card { background: #F8FAFF; border-color: #CBD2E1; box-shadow: 0 1px 4px rgba(3,18,57,0.06); }
+  .result-header { border-bottom-color: #CBD2E1; }
 
   /* Section label */
   .section-label { color: #0A2540; font-size: 16px; font-weight: 500; }
@@ -1210,7 +1215,7 @@
       <div class="preview-toolbar-left">
         <span class="preview-collapse-icon" id="preview-collapse-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 6L8 10L12 6" stroke="#136EF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 10L8 6L12 10" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
         <span>Preview</span>
@@ -1480,8 +1485,8 @@ const previewState = { collapsed: false, bgLight: true };
 
 function applyPreviewCollapsed() {
   $('preview-body').classList.toggle('collapsed', previewState.collapsed);
-  const chevronUp   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10L8 6L12 10" stroke="#136EF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const chevronDown = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6L8 10L12 6" stroke="#136EF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const chevronUp   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10L8 6L12 10" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const chevronDown = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6L8 10L12 6" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   $('preview-collapse-icon').innerHTML = previewState.collapsed ? chevronDown : chevronUp;
 }
 function applyPreviewBg() {
@@ -1817,7 +1822,7 @@ function renderAutoFixControl(issue, idx) {
         <button class="btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
         <button class="btn-copy-prompt-again" data-issue-idx="${idx}" data-strategy="prompt">Copy prompt again</button>
       </div>
-      <div class="issue-waiting-ai-note">Waiting for Figma AI fix</div>
+      <div class="issue-waiting-ai-note"><svg width="16" height="16" viewBox="0 0 16 16" fill="#136EF8" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>Waiting for Figma AI fix</div>
     </div>`;
   }
   if (issue.designerPending) {
@@ -1825,7 +1830,7 @@ function renderAutoFixControl(issue, idx) {
     return `
     <div class="issue-actions issue-message-only">
       <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">✦ Build with AI</button>
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Build with AI</button>
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
       ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
@@ -1836,7 +1841,7 @@ function renderAutoFixControl(issue, idx) {
     return `
     <div class="issue-actions issue-message-only">
       <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">✦ Build with AI</button>
+        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Build with AI</button>
         <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
       </div>
       ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
@@ -1863,7 +1868,7 @@ function renderAutoFixControl(issue, idx) {
     return `
     <div class="issue-actions">
       <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
-        ✦ Auto Fix
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix
       </button>
     </div>`;
   }
@@ -1871,7 +1876,7 @@ function renderAutoFixControl(issue, idx) {
   return `
     <div class="issue-actions">
       <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">
-        ✦ Auto Fix <span class="caret">▾</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix <span class="caret">▾</span>
       </button>
       <div class="autofix-menu" data-menu-idx="${idx}">
         ${isAiContent ? `
@@ -2464,7 +2469,17 @@ function renderResult(data) {
         </div>`).join('')}
       ${issues.map((i, idx) => `
         <div class="issue-item issue-${i.severity}${i.acknowledged ? ' issue-acknowledged' : ''}${i.designerPending ? ' issue-pending' : ''}${i.waitingForAi ? ' issue-waiting-ai' : ''}" data-issue-idx="${idx}" data-issue-code="${i.code}" data-issue-nodeid="${i.nodeId || ''}">
-          <span class="issue-sev">${i.waitingForAi ? '◎ Waiting' : (i.designerPending ? '△ Pending' : (i.severity === 'HIGH' ? '✕ High' : i.severity === 'MED' ? '△ Medium' : i.severity === 'LOW' ? '△ Low' : '○ Manual'))}</span>
+          <span class="issue-sev">${(()=>{
+            const _x = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><path d="M2.5 2.5L9.5 9.5M9.5 2.5L2.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+            const _tri = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><path d="M6 2L10.5 10H1.5L6 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+            const _ring = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0"><circle cx="6" cy="6" r="3.5" stroke="currentColor" stroke-width="1.2"/></svg>`;
+            if (i.waitingForAi)    return _ring  + ' Waiting';
+            if (i.designerPending) return _tri   + ' Pending';
+            if (i.severity==='HIGH')   return _x   + ' High';
+            if (i.severity==='MED')    return _tri + ' Medium';
+            if (i.severity==='LOW')    return _ring+ ' Low';
+            return _ring + ' Manual';
+          })()}</span>
           <div class="issue-body">
             ${i.waitingForAi ? '<div class="issue-waiting-ai-title">🤖 Waiting for Figma AI fix</div>' : ''}
             <div class="issue-title-row">
