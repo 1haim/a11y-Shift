@@ -134,60 +134,79 @@ function isHeadingStyledText(textNode) {
   return st.fontSize >= 16 && st.fontWeight >= 600;
 }
 
-// Walk subtree up to maxDepth; collect names, types, text hierarchy, chevrons.
-function deepChildScan(node, maxDepth) {
-  maxDepth = maxDepth !== undefined ? maxDepth : 3;
-  const allChildNames = [];
-  const allChildTypes = [];
-  const textHierarchy = [];
-  const leafTextNodes = [];
-  let hasChevrons = false;
-
-  function walk(n, depth) {
-    if (!n || depth > maxDepth) return;
-    if (!isNodeVisible(n)) return;
-
-    if (n.type === "TEXT") {
-      const chars = (n.characters || "").trim();
-      if (chars) {
-        leafTextNodes.push(chars);
-        const st = readTextStyle(n);
-        textHierarchy.push({
-          text: chars,
-          fontSize: st.fontSize,
-          fontWeight: st.fontWeight,
-          depth: depth,
-          name: n.name,
-        });
-      }
-      return;
-    }
-
-    if (!("children" in n)) return;
-    const limit = Math.min(n.children.length, 80);
-    for (let i = 0; i < limit; i++) {
-      const c = n.children[i];
-      const nm = c.name || "";
-      allChildNames.push(nm);
-      allChildTypes.push(c.type);
-      if (CHEVRON_NAME_RE.test(nm)) hasChevrons = true;
-      walk(c, depth + 1);
-    }
-  }
-
-  if ("children" in node) {
-    const topLimit = Math.min(node.children.length, 40);
-    for (let i = 0; i < topLimit; i++) walk(node.children[i], 1);
-  }
-
+function emptyDeepScan() {
   return {
-    allChildNames: allChildNames,
-    allChildTypes: allChildTypes,
-    repeatingPatterns: detectRepeatingPatterns(node, maxDepth),
-    textHierarchy: textHierarchy,
-    hasChevrons: hasChevrons,
-    leafTextNodes: leafTextNodes,
+    allChildNames: [],
+    allChildTypes: [],
+    repeatingPatterns: [],
+    textHierarchy: [],
+    hasChevrons: false,
+    leafTextNodes: [],
   };
+}
+
+// Walk subtree up to maxDepth; collect names, types, text hierarchy, chevrons.
+async function deepChildScan(node, maxDepth, currentDepth) {
+  maxDepth = maxDepth !== undefined ? maxDepth : 3;
+  currentDepth = currentDepth !== undefined ? currentDepth : 0;
+  if (!node) return emptyDeepScan();
+
+  try {
+    const allChildNames = [];
+    const allChildTypes = [];
+    const textHierarchy = [];
+    const leafTextNodes = [];
+    let hasChevrons = false;
+
+    async function walk(n, depth) {
+      if (!n || depth > maxDepth) return;
+      if (!isNodeVisible(n)) return;
+
+      if (n.type === "TEXT") {
+        const chars = (n.characters || "").trim();
+        if (chars) {
+          leafTextNodes.push(chars);
+          const st = readTextStyle(n);
+          textHierarchy.push({
+            text: chars,
+            fontSize: st.fontSize,
+            fontWeight: st.fontWeight,
+            depth: depth,
+            name: n.name,
+          });
+        }
+        return;
+      }
+
+      if (!("children" in n)) return;
+      const limit = Math.min(n.children.length, 80);
+      for (let i = 0; i < limit; i++) {
+        const c = n.children[i];
+        const nm = c.name || "";
+        allChildNames.push(nm);
+        allChildTypes.push(c.type);
+        if (CHEVRON_NAME_RE.test(nm)) hasChevrons = true;
+        await walk(c, depth + 1);
+      }
+    }
+
+    if ("children" in node) {
+      const topLimit = Math.min(node.children.length, 40);
+      for (let i = 0; i < topLimit; i++) await walk(node.children[i], currentDepth + 1);
+    }
+
+    return {
+      allChildNames: allChildNames,
+      allChildTypes: allChildTypes,
+      repeatingPatterns: detectRepeatingPatterns(node, maxDepth),
+      textHierarchy: textHierarchy,
+      hasChevrons: hasChevrons,
+      leafTextNodes: leafTextNodes,
+    };
+  } catch (e) {
+    console.warn("[deepChildScan] failed:", e && e.message ? e.message : String(e));
+    return emptyDeepScan();
+  }
 }
 
 function subtreeHasText(n, maxDepth) {
@@ -251,7 +270,7 @@ function countCoLocatedAccordionRows(node) {
     const child = node.children[i];
     if (!isNodeVisible(child)) continue;
     const box = child.absoluteBoundingBox;
-    if (!box || box.height < 40 || box.height > 80) continue;
+    if (!box || box.height < 36 || box.height > 120) continue;
     if (subtreeHasText(child, 4) && subtreeHasChevronName(child, 4)) rows++;
   }
   return rows;
@@ -267,6 +286,20 @@ function averageDirectChildWidth(node) {
     if (!isNodeVisible(c)) continue;
     const box = c.absoluteBoundingBox;
     if (box && box.width > 0) { sum += box.width; n++; }
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+function averageDirectChildHeight(node) {
+  if (!node || !("children" in node)) return 0;
+  let sum = 0;
+  let n = 0;
+  const lim = Math.min(node.children.length, 30);
+  for (let i = 0; i < lim; i++) {
+    const c = node.children[i];
+    if (!isNodeVisible(c)) continue;
+    const box = c.absoluteBoundingBox;
+    if (box && box.height > 0) { sum += box.height; n++; }
   }
   return n > 0 ? sum / n : 0;
 }
@@ -338,7 +371,7 @@ function nearbyHasMultiSelectCopy(ctx) {
 // ─── Context gathering ────────────────────────────────────────────────────────
 
 // allTextNodes: optional pre-collected page-level text nodes (for batch perf)
-function gatherContext(node, allTextNodes) {
+async function gatherContext(node, allTextNodes) {
   const parent = node.parent || null;
   const grandparent = parent ? parent.parent : null;
 
@@ -410,7 +443,7 @@ function gatherContext(node, allTextNodes) {
     }
   }
 
-  const deep = deepChildScan(node, 3);
+  const deep = await deepChildScan(node, 3, 0);
   const innerMerged = innerText.slice();
   for (let li = 0; li < deep.leafTextNodes.length; li++) {
     if (innerMerged.indexOf(deep.leafTextNodes[li]) < 0) innerMerged.push(deep.leafTextNodes[li]);
@@ -1596,7 +1629,18 @@ function scoreAccordionSignals(ctx, node) {
   if (ctx.accordionCoLocatedRows >= 2) {
     return {
       bonus: 8,
-      reasons: [ctx.accordionCoLocatedRows + " compound rows (text+chevron, 40–80px, vertical)"],
+      reasons: [ctx.accordionCoLocatedRows + " compound rows (text+chevron, vertical)"],
+    };
+  }
+
+  if (
+    ctx.hasChevrons &&
+    ctx.repeatingPatterns &&
+    ctx.repeatingPatterns.length >= 2
+  ) {
+    return {
+      bonus: 8,
+      reasons: ["chevron + " + ctx.repeatingPatterns.length + " repeating patterns (vertical)"],
     };
   }
 
@@ -1698,6 +1742,15 @@ function scoreSpec(spec, ctx, node) {
     const acc = scoreAccordionSignals(ctx, node);
     count += acc.bonus;
     for (let ri = 0; ri < acc.reasons.length; ri++) reasons.push(acc.reasons[ri]);
+  }
+
+  // Tablist: tall stacked rows are usually accordion, not horizontal tabs
+  if (spec.role === "tablist" && node) {
+    const avgRowH = averageDirectChildHeight(node);
+    if (avgRowH > 48) {
+      count = Math.max(0, count - 4);
+      reasons.push("tablist penalty: avg row height " + Math.round(avgRowH) + "px > 48");
+    }
   }
 
   // Checkbox group: repeating rows + multi-select instructional copy
@@ -1957,6 +2010,16 @@ function runRuleEngine(ctx) {
 // count < 2 → rule engine fallback (spec attached for audit if count === 1).
 
 function detectComponent(ctx, node) {
+  const dbgName = (ctx.nodeName || "").toLowerCase();
+  if (dbgName.indexOf("clickable") >= 0 || (ctx.childCount && ctx.childCount >= 3)) {
+    console.log(
+      "[classify] hasChevrons:", ctx.hasChevrons,
+      "repeatingPatterns:", ctx.repeatingPatterns ? ctx.repeatingPatterns.length : 0,
+      "allChildNames sample:", (ctx.allChildNames || []).slice(0, 5),
+      "accordionCoLocatedRows:", ctx.accordionCoLocatedRows
+    );
+  }
+
   const ranked = [];
 
   for (let i = 0; i < COMPONENT_SPECS.length; i++) {
@@ -3243,7 +3306,7 @@ async function auditCandidateIssueCount(candidate, typeKey) {
   const spec = COMPONENT_SPECS.find(function(s) { return s.role === typeKey; }) ||
     COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
   if (!spec) return 999;
-  const ctx = gatherContext(candidate);
+  const ctx = await gatherContext(candidate);
   const result = await auditNode(candidate, spec, ctx);
   return result.issues ? result.issues.length : 0;
 }
@@ -4140,7 +4203,7 @@ async function wrapNodeWithA11yLabel(node, labelText, layerName, ctx) {
 }
 
 async function placeLabelAbove(node, labelText, layerName) {
-  const ctx = gatherContext(node);
+  const ctx = await gatherContext(node);
   const wrapped = await wrapNodeWithA11yLabel(node, labelText, layerName, ctx);
   return wrapped.label || wrapped;
 }
@@ -4255,7 +4318,7 @@ async function fixNoGroupLabel(p) {
       if (ai && ai.length > 0 && ai.length <= 60) { labelText = ai; source = "ai"; }
     } catch (_e) { /* fall through to generic */ }
   }
-  const ctx = gatherContext(p.rootNode);
+  const ctx = await gatherContext(p.rootNode);
   const wrapped = await wrapNodeWithA11yLabel(p.rootNode, labelText, "label / group-label", ctx);
   const label = wrapped.label;
 
@@ -4295,7 +4358,7 @@ async function fixNoInputLabel(p) {
     labelText = baseName.charAt(0).toUpperCase() + baseName.slice(1);
   }
 
-  const ctx = gatherContext(p.rootNode);
+  const ctx = await gatherContext(p.rootNode);
   const wrapped = await wrapNodeWithA11yLabel(p.rootNode, labelText, "label / input-label", ctx);
   const label = wrapped.label;
   const ctx2      = ctx;
@@ -4455,7 +4518,7 @@ async function fixDialogNoHeading(p) {
     } catch (_e) {}
   }
 
-  const ctx = gatherContext(p.rootNode);
+  const ctx = await gatherContext(p.rootNode);
   const wrapped = await wrapNodeWithA11yLabel(p.rootNode, headingText, "heading / dialog-title", ctx);
   const heading = wrapped.label;
   await loadInter("Bold");
@@ -5006,7 +5069,7 @@ async function fixRadioLabels(p) {
     return { ok: false, code: p.issueCode, message: "Radio group not found." };
   }
   const groupName = root.name || "option group";
-  const ctx = gatherContext(root);
+  const ctx = await gatherContext(root);
   const nearbyText = (ctx.nearbyText || []).slice(0, 5).join(", ");
   let fixed = 0;
 
@@ -5199,7 +5262,7 @@ async function fixLowContrast(p) {
 
   const after = getTextContrastMetrics(node);
   const newRatio = after ? after.ratio.toFixed(2) : "?";
-  const ctx = gatherContext(p.rootNode || node);
+  const ctx = await gatherContext(p.rootNode || node);
   const resolved = reauditIsResolved(
     p.rootNode || node,
     ctx,
@@ -5890,7 +5953,7 @@ async function analyzeNodeAndPost(rootNode, options) {
   options = options || {};
   const previousIssues = options.previousIssues || [];
 
-  const ctx = gatherContext(rootNode);
+  const ctx = await gatherContext(rootNode);
   let detection = detectComponent(ctx, rootNode);
   ctx.competitorRole = detection.competitorRole || null;
 
@@ -6209,17 +6272,17 @@ async function classifyWithVision(rootNode, apiKey) {
 //   - allTextNodes pre-collected once by caller → no O(n×m) page.findAll per node
 //   - maxDepth caps descent → avoids traversing deeply nested design-system internals
 //   - Skip leaf node types that are never interactive components
-function collectScanCandidates(rootFrame, allTextNodes, maxDepth) {
+async function collectScanCandidates(rootFrame, allTextNodes, maxDepth) {
   maxDepth = maxDepth !== undefined ? maxDepth : 5;
   var candidates = [];
   var SKIP_TYPES = { TEXT: true, VECTOR: true, BOOLEAN_OPERATION: true, STAR: true, ELLIPSE: true, LINE: true, RECTANGLE: true };
 
-  function walk(node, depth) {
+  async function walk(node, depth) {
     if (!node) return;
     if (SKIP_TYPES[node.type]) return;
     if (depth > maxDepth) return;
 
-    var ctx = gatherContext(node, allTextNodes);
+    var ctx = await gatherContext(node, allTextNodes);
     var detection = detectComponent(ctx, node);
 
     if (detection.spec && detection.signalScore >= 2) {
@@ -6230,12 +6293,12 @@ function collectScanCandidates(rootFrame, allTextNodes, maxDepth) {
     if ("children" in node) {
       // Cap sibling scanning: don't scan more than 40 children at one level
       var limit = Math.min(node.children.length, 40);
-      for (var j = 0; j < limit; j++) walk(node.children[j], depth + 1);
+      for (var j = 0; j < limit; j++) await walk(node.children[j], depth + 1);
     }
   }
 
   if ("children" in rootFrame) {
-    for (var i = 0; i < rootFrame.children.length; i++) walk(rootFrame.children[i], 1);
+    for (var i = 0; i < rootFrame.children.length; i++) await walk(rootFrame.children[i], 1);
   }
   return candidates;
 }
@@ -6742,7 +6805,7 @@ figma.ui.onmessage = async (msg) => {
 
     // Collect candidates with depth limit (maxDepth=5) — synchronous but cheap because
     // we only score specs per node (no further traversals during collection phase).
-    const candidates = collectScanCandidates(frameNode, allTextNodes, 5);
+    const candidates = await collectScanCandidates(frameNode, allTextNodes, 5);
     const scanResults = [];
     let totalHigh = 0, totalMed = 0, totalLow = 0, totalManual = 0;
 
@@ -6837,7 +6900,7 @@ figma.ui.onmessage = async (msg) => {
       figma.ui.postMessage({ type: "PREVIEW_IMAGE", bytes: bytes });
     } catch (_e) { /* preview is optional */ }
 
-    const ctx          = gatherContext(rootNode);
+    const ctx          = await gatherContext(rootNode);
     let detection      = detectComponent(ctx, rootNode);
     ctx.competitorRole = detection.competitorRole || null;
 
