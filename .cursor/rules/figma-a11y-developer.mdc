@@ -18,6 +18,32 @@ you reason from known constraints.
 
 ---
 
+## 0. Published plugin vs Development — read this before every change
+
+The plugin behaves **stricter after publish** than when you run it from
+`Plugins → Development → Import manifest`. Code that “works locally” can
+**crash or silently return wrong data** in production. Always code and test as
+if the plugin is already published.
+
+| Topic | Development (local) | Published (production) |
+|-------|---------------------|-------------------------|
+| How it runs | `manifest.json` from disk; reload after edits | Same bundle served for plugin id `1641240485798800801`; users get updates on publish |
+| `figma.getNodeById(id)` | May appear to work in some builds | **Throws or breaks** — use **`await getNodeById(id)`** only (`getNodeByIdAsync`) |
+| `fetch()` | Only domains in `manifest.json` `networkAccess` | Same — requests to other hosts fail |
+| Figma REST (`figma.com/api/…`) | **Never valid** for plugins (not Plugin API) | Same — e.g. `/api/custom_tools/owned_by_user` will 403; do not add |
+| Figma AI integration | No server API for plugins | **Copy prompt to clipboard** → designer pastes in Figma AI (`⌘⌥I`); TODO only |
+| `documentAccess` | Must be `"dynamic-page"` in manifest for reliable reads | Required for published scans |
+| UI iframe | No `figma.*`, no `fetch` to OpenAI | Unchanged — all network from main thread |
+
+**Pre-publish checklist (run every time before publish):**
+1. `grep 'figma\.getNodeById\(' dist/code.js` → **0 matches**
+2. `grep 'figma\.com/api' dist/code.js ui.html` → **0 matches**
+3. `node --check dist/code.js`
+4. Reload in Figma → analyze a known frame (e.g. accordion `clickables`) → check console for `[classify]` logs
+5. Confirm `manifest.json`: correct `id`, `documentAccess`, `allowedDomains` = OpenAI only
+
+---
+
 ## 1. Figma Architecture — Non-Negotiables
 
 ### Two threads, strict separation
@@ -88,6 +114,49 @@ const node = await getNodeById(id)
 
 Before merge/publish: `grep 'figma\.getNodeById\(' dist/code.js` must return **zero** hits.
 Any function that calls `getNodeById` must be `async`; every caller must `await` it (propagate up to `figma.ui.onmessage`).
+
+**CRITICAL — async classification chain (`deepChildScan` regression)**
+
+`gatherContext` is **async** and must **`await deepChildScan`**. If any caller
+skips `await`, `hasChevrons` / `allChildNames` are empty → accordion loses to
+tablist and logs look “fine” but classification is wrong.
+
+```js
+// ✓ deepChildScan — recursive, for-loop + await (never forEach + async)
+async function deepChildScan(node, maxDepth = 3, depth = 0) {
+  if (depth >= maxDepth || !node) return emptyDeepScan();
+  const result = emptyDeepScan();
+  if (!("children" in node)) return result;
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i];
+    if (!isNodeVisible(child)) continue;
+    // ... collect names, chevrons ...
+    const sub = await deepChildScan(child, maxDepth, depth + 1);
+    mergeDeepScanResults(result, sub);
+  }
+  return result;
+}
+
+// ✗ broken — forEach does not wait for async callbacks
+node.children.forEach(async (child) => { await deepChildScan(child); });
+
+// ✓ gatherContext + analyze path
+const ctx = await gatherContext(rootNode);
+const detection = detectComponent(ctx, rootNode);
+```
+
+Callers that **must** use `await gatherContext(...)`: `analyzeNodeAndPost`,
+`ANALYZE_SELECTION`, `collectScanCandidates`, `auditCandidateIssueCount`, all
+autofix handlers that call `gatherContext`, `applyAllIssueFixes` path.
+
+**No Figma REST / no Figma AI HTTP API**
+
+```js
+// ✗ never — internal Figma endpoint, not Plugin API, not in manifest
+fetch("https://www.figma.com/api/custom_tools/owned_by_user")
+```
+
+Allowed network: **`https://api.openai.com` only** (see `manifest.json`).
 
 
 Node traversal — performance first
