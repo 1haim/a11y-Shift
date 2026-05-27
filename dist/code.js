@@ -4896,6 +4896,9 @@ async function fixDialogNoHeading(p) {
 
 // ─── fixNonComponentElement — semantic component builders (11 types) ─────────
 
+// One NON_COMPONENT fix per scanned root per plugin session (prevents duplicate ComponentSets).
+var processedNonComponentNodeIds = new Set();
+
 var NC_BRAND = { r: 0.2, g: 0.4, b: 1 };
 var NC_GRAY = { r: 0.7, g: 0.7, b: 0.7 };
 var NC_TEXT_DARK = { r: 0.1, g: 0.1, b: 0.1 };
@@ -5562,11 +5565,35 @@ function typeKeyFromSet(set) {
   return "button";
 }
 
+// Composite controls get one ComponentSet on the parent (PATH A), not per uniform child (PATH B).
+var NON_COMPONENT_COMPOSITE_TYPES = {
+  "star-rating": true,
+  "radio-group": true,
+  "tabs": true,
+  "slider": true,
+  "accordion": true,
+};
+
 async function fixNonComponentElement(node, componentType) {
   if (!node || !("name" in node)) return { success: false, reason: "invalid_node" };
   if (isA11yGeneratedLayer(node)) return { success: false, reason: "skipped_a11y_layer" };
-  if (node.type === "COMPONENT" || node.type === "INSTANCE" || node.type === "COMPONENT_SET") {
+
+  // Already a component or instance — nothing to do
+  if (node.type === "COMPONENT" || node.type === "INSTANCE") {
     return { success: false, reason: "already_component" };
+  }
+  if (node.type === "COMPONENT_SET") {
+    return { success: false, reason: "already_component" };
+  }
+
+  // Already inside a ComponentSet — it's a variant, skip it
+  if (node.parent && node.parent.type === "COMPONENT_SET") {
+    return { success: false, reason: "is_variant" };
+  }
+
+  // Already inside a Component — it's a child layer, skip it
+  if (node.parent && node.parent.type === "COMPONENT") {
+    return { success: false, reason: "inside_component" };
   }
 
   const parent = node.parent;
@@ -5575,17 +5602,26 @@ async function fixNonComponentElement(node, componentType) {
   const typeKey = normalizeMatrixTypeKey(componentType) || classifyNodeForFix(node) || "button";
 
   // PATH B — uniform children: componentize each child, not the parent
-  if (isUniformChildrenForFix(node)) {
+  // Skip for composite types (e.g. star-rating with 5 star layers → one set via PATH A).
+  if (isUniformChildrenForFix(node) && !NON_COMPONENT_COMPOSITE_TYPES[typeKey]) {
+    if (node.parent && node.parent.type === "COMPONENT_SET") {
+      return { success: false, reason: "is_variant" };
+    }
     const childResults = [];
     const kids = node.children.slice();
     for (let i = 0; i < kids.length; i++) {
       const child = kids[i];
       if (!isNodeVisible(child) || isA11yGeneratedLayer(child)) continue;
+      if (child.type === "COMPONENT" || child.type === "INSTANCE") continue;
+      if (child.parent && child.parent.type === "COMPONENT_SET") continue;
+      if (child.parent && child.parent.type === "COMPONENT") continue;
       const childType = classifyNodeForFix(child);
       if (childType === "unknown") continue;
       childResults.push(await fixNonComponentElement(child, childType));
     }
-    return { success: true, path: "B", childResults: childResults };
+    if (childResults.length > 0) {
+      return { success: true, path: "B", childResults: childResults };
+    }
   }
 
   // PATH C — complex structure → Figma AI prompt only (must match getNonComponentCapability)
@@ -5614,19 +5650,33 @@ async function fixNonComponentElement(node, componentType) {
 }
 
 async function fixNonComponentElementHandler(p) {
-  const node = p.node || p.rootNode;
-  if (!node) {
+  const scanRoot = p.rootNode || p.node;
+  if (!scanRoot) {
     return { ok: false, code: "NON_COMPONENT_ELEMENT", message: "Selection changed." };
   }
 
-  const typeKey = normalizeMatrixTypeKey(p.detectedRole || p.role || "") || classifyNodeForFix(node) || "button";
+  const scanRootId = scanRoot.id;
+  if (processedNonComponentNodeIds.has(scanRootId)) {
+    return {
+      ok: false,
+      code: "NON_COMPONENT_ELEMENT",
+      message: "This layer was already componentized in this session.",
+    };
+  }
+
+  const typeKey = normalizeMatrixTypeKey(p.detectedRole || p.role || "") ||
+    classifyNodeForFix(scanRoot) || "button";
 
   // Optional: link to existing library component first when user chose from picker
   if (p.linkAction || p.linkCandidateId) {
     return fixLinkToComponent(p);
   }
 
-  const result = await fixNonComponentElement(node, typeKey);
+  const result = await fixNonComponentElement(scanRoot, typeKey);
+
+  if (result.success && result.path === "A") {
+    processedNonComponentNodeIds.add(scanRootId);
+  }
 
   if (result.path === "C") {
     if (p.rootNode && p.rootNode.setPluginData) {
@@ -5656,7 +5706,7 @@ async function fixNonComponentElementHandler(p) {
       code: "NON_COMPONENT_ELEMENT",
       source: "generic",
       message: msg,
-      createdNodeId: result.instanceId || node.id,
+      createdNodeId: result.instanceId || scanRoot.id,
     };
   }
 
