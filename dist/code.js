@@ -10,10 +10,39 @@ async function getNodeById(id) {
   return await figma.getNodeByIdAsync(id);
 }
 
+// documentAccess: dynamic-page — sync mainComponent throws; always use async.
+async function getMainComponent(node) {
+  if (!node || node.type !== "INSTANCE") return null;
+  try {
+    return await node.getMainComponentAsync();
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Layers the plugin created (wrappers, tags, generated labels) — never audit or traverse.
+function isA11yGeneratedLayer(node) {
+  if (!node || !node.name) return false;
+  return node.name.indexOf("_a11y_") === 0;
+}
+
+function notifyScanSkipped(node) {
+  figma.ui.postMessage({
+    type: "SCAN_SKIPPED",
+    reason: "This layer was created by A11y Shift. Select the original component.",
+    nodeName: node ? node.name : "",
+  });
+}
+
+function emptyAuditResult() {
+  return { issues: [], auditLog: [] };
+}
+
 // ─── Visibility (skip hidden layers + hidden ancestors) ───────────────────────
 
 function isNodeVisible(node) {
   if (!node) return false;
+  if (isA11yGeneratedLayer(node)) return false;
   if (node.visible === false) return false;
   if (node.opacity !== undefined && node.opacity !== null && node.opacity <= 0) return false;
   let current = node.parent;
@@ -67,6 +96,7 @@ function getSemanticRoot(node) {
   while (cursor.parent && cursor.parent.type !== "PAGE") {
     const parent = cursor.parent;
     if (!("children" in parent)) break;
+    if (isA11yGeneratedLayer(parent)) break;
 
     const siblings = parent.children;
     const allSameType = siblings.length >= 2 && siblings.every((s) => s.type === cursor.type);
@@ -201,7 +231,7 @@ async function deepChildScan(node, maxDepth, depth) {
     const limit = Math.min(node.children.length, depth === 0 ? 40 : 80);
     for (let i = 0; i < limit; i++) {
       const child = node.children[i];
-      if (!isNodeVisible(child)) continue;
+      if (!isNodeVisible(child) || isA11yGeneratedLayer(child)) continue;
 
       const nm = child.name || "";
       result.allChildNames.push(nm);
@@ -247,6 +277,33 @@ function subtreeHasChevronName(n, maxDepth) {
   return false;
 }
 
+// Chevron on a direct row child is often nested (depth 2), not on the row layer name.
+function childSubtreeHasChevron(child, maxDepth) {
+  maxDepth = maxDepth !== undefined ? maxDepth : 2;
+  if (!child || !isNodeVisible(child)) return false;
+  if (CHEVRON_NAME_RE.test(child.name || "")) return true;
+  if (!("children" in child)) return false;
+  function walk(n, depth) {
+    if (!n || depth > maxDepth || !isNodeVisible(n)) return false;
+    if (CHEVRON_NAME_RE.test(n.name || "")) return true;
+    if (!("children" in n)) return false;
+    const lim = Math.min(n.children.length, 24);
+    for (let i = 0; i < lim; i++) {
+      if (walk(n.children[i], depth + 1)) return true;
+    }
+    return false;
+  }
+  const lim = Math.min(child.children.length, 24);
+  for (let i = 0; i < lim; i++) {
+    if (walk(child.children[i], 1)) return true;
+  }
+  return false;
+}
+
+function hasTextDescendant(child, maxDepth) {
+  return subtreeHasText(child, maxDepth !== undefined ? maxDepth : 2);
+}
+
 function getRootLayoutMode(node) {
   if (node && node.layoutMode && node.layoutMode !== "NONE") return node.layoutMode;
   if (node && "children" in node) {
@@ -278,18 +335,20 @@ function directChildrenLookVertical(node) {
   return true;
 }
 
-function countCoLocatedAccordionRows(node) {
-  if (!node || !("children" in node)) return 0;
-  let rows = 0;
+function getAccordionRowsWithChevron(node) {
+  if (!node || !("children" in node)) return [];
+  const rows = [];
   const lim = Math.min(node.children.length, 30);
   for (let i = 0; i < lim; i++) {
     const child = node.children[i];
     if (!isNodeVisible(child)) continue;
-    const box = child.absoluteBoundingBox;
-    if (!box || box.height < 36 || box.height > 120) continue;
-    if (subtreeHasText(child, 4) && subtreeHasChevronName(child, 4)) rows++;
+    if (hasTextDescendant(child, 2) && childSubtreeHasChevron(child, 2)) rows.push(child);
   }
   return rows;
+}
+
+function countCoLocatedAccordionRows(node) {
+  return getAccordionRowsWithChevron(node).length;
 }
 
 function averageDirectChildWidth(node) {
@@ -439,7 +498,7 @@ async function gatherContext(node, allTextNodes) {
   let componentProps = {};
   if (node.type === "INSTANCE") {
     variantProps = node.variantProperties || {};
-    var main = node.mainComponent;
+    var main = await getMainComponent(node);
     if (main) {
       var instDefs = (main.parent && main.parent.type === "COMPONENT_SET")
         ? main.parent.componentPropertyDefinitions
@@ -480,6 +539,8 @@ async function gatherContext(node, allTextNodes) {
     nearbyText: nearbyText,
     innerText: innerMerged,
   });
+  const stateVariantMap = await findStateVariantsAsync(node);
+  const componentSet = await componentSetForNodeAsync(node);
 
   return {
     parentName,
@@ -510,6 +571,8 @@ async function gatherContext(node, allTextNodes) {
     pillChildCount: layoutFields.pillChildCount,
     smallRepeatingRowCount: layoutFields.smallRepeatingRowCount,
     accordionMultiSelectCopy: multiSelectCopy,
+    stateVariantMap: stateVariantMap,
+    componentSet: componentSet,
   };
 }
 
@@ -748,45 +811,50 @@ function getEffectiveFill(node) {
 //   • We collect the full chain from the page root down to that innermost layer,
 //     then composite each layer's fill (via getNodeComposedFill) from bottom to top.
 //   • Canvas default is opaque white (Figma page background).
-function getEffectiveBackground(node) {
-  // Determine the innermost node whose fill counts as background.
-  const innermost = (node && node.type !== "TEXT") ? node : (node ? node.parent : null);
-
-  // Collect ancestor chain from root → innermost (prepend to keep order).
-  const chain = [];
-  let cursor = innermost;
-  while (cursor && cursor.type !== "PAGE" && cursor.type !== "DOCUMENT") {
-    if (isNodeVisible(cursor)) chain.unshift(cursor);
-    cursor = cursor.parent;
-  }
-
-  // Start from Figma canvas white and composite each layer on top.
-  let bgR = 1, bgG = 1, bgB = 1; // normalized 0–1
-
+function compositeBackgroundChain(chain) {
+  let bgR = 1, bgG = 1, bgB = 1;
   for (let i = 0; i < chain.length; i++) {
     const fill = getNodeComposedFill(chain[i]);
     if (!fill || fill.a < 0.005) continue;
-
     const a   = fill.a;
     const inv = 1 - a;
     if (a >= 0.995) {
-      // Fully opaque: this layer completely occludes everything behind it.
       bgR = fill.r; bgG = fill.g; bgB = fill.b;
     } else {
-      // Semi-transparent: alpha-blend over current background.
       bgR = fill.r * a + bgR * inv;
       bgG = fill.g * a + bgG * inv;
       bgB = fill.b * a + bgB * inv;
     }
   }
-
   return { r: Math.round(bgR * 255), g: Math.round(bgG * 255), b: Math.round(bgB * 255) };
+}
+
+function collectVisibleAncestorChain(startNode) {
+  const chain = [];
+  let cursor = startNode;
+  while (cursor && cursor.type !== "PAGE" && cursor.type !== "DOCUMENT") {
+    if (isNodeVisible(cursor)) chain.unshift(cursor);
+    cursor = cursor.parent;
+  }
+  return chain;
+}
+
+// Background visible *behind* a shape/icon — never includes the node itself (avoids #fff on #fff).
+function getBackgroundBehindNode(node) {
+  if (!node || !node.parent) return { r: 255, g: 255, b: 255 };
+  return compositeBackgroundChain(collectVisibleAncestorChain(node.parent));
+}
+
+function getEffectiveBackground(node) {
+  const innermost = (node && node.type !== "TEXT") ? node : (node ? node.parent : null);
+  if (!innermost) return { r: 255, g: 255, b: 255 };
+  return compositeBackgroundChain(collectVisibleAncestorChain(innermost));
 }
 
 // ─── State variant map ────────────────────────────────────────────────────────
 // Returns { stateName: ComponentNode } for the COMPONENT_SET containing node.
 
-function findStateVariants(node) {
+async function findStateVariantsAsync(node) {
   const variantMap = {};
   let set = null;
 
@@ -795,7 +863,7 @@ function findStateVariants(node) {
   } else if (node.type === "COMPONENT") {
     if (node.parent && node.parent.type === "COMPONENT_SET") set = node.parent;
   } else if (node.type === "INSTANCE") {
-    const mc = node.mainComponent;
+    const mc = await getMainComponent(node);
     if (mc && mc.parent && mc.parent.type === "COMPONENT_SET") set = mc.parent;
   }
 
@@ -834,6 +902,43 @@ function findStateVariants(node) {
     }
   }
 
+  return variantMap;
+}
+
+function findStateVariants(node, ctx) {
+  if (ctx && ctx.stateVariantMap) return ctx.stateVariantMap;
+  const variantMap = {};
+  let set = null;
+  if (node.type === "COMPONENT_SET") {
+    set = node;
+  } else if (node.type === "COMPONENT") {
+    if (node.parent && node.parent.type === "COMPONENT_SET") set = node.parent;
+  }
+  if (!set || !("children" in set)) return variantMap;
+  const STATE_PROP_KEYS = ["State", "state", "Status", "status"];
+  const STATE_NAME_PATTERNS = ["default", "hover", "focus", "active", "disabled", "loading",
+    "pressed", "checked", "unchecked", "expanded", "collapsed"];
+  for (let i = 0; i < set.children.length; i++) {
+    const child = set.children[i];
+    if (child.type !== "COMPONENT") continue;
+    let foundState = null;
+    if (child.variantProperties) {
+      for (let k = 0; k < STATE_PROP_KEYS.length; k++) {
+        const val = child.variantProperties[STATE_PROP_KEYS[k]];
+        if (val) { foundState = val.toLowerCase(); break; }
+      }
+    }
+    if (!foundState) {
+      const nameLower = child.name.toLowerCase();
+      for (let k = 0; k < STATE_NAME_PATTERNS.length; k++) {
+        if (nameLower.includes(STATE_NAME_PATTERNS[k])) {
+          foundState = STATE_NAME_PATTERNS[k];
+          break;
+        }
+      }
+    }
+    if (foundState && !variantMap[foundState]) variantMap[foundState] = child;
+  }
   return variantMap;
 }
 
@@ -1652,10 +1757,14 @@ function scoreAccordionSignals(ctx, node) {
     return { bonus: 0, reasons: ["accordion blocked: layout not vertical stack"] };
   }
 
-  if (ctx.accordionCoLocatedRows >= 2) {
+  const rowsWithChevron = getAccordionRowsWithChevron(node);
+  console.log("[accordion] rowsWithChevron:", rowsWithChevron.length,
+    "names:", rowsWithChevron.map(function(r) { return r.name; }));
+
+  if (rowsWithChevron.length >= 2) {
     return {
       bonus: 8,
-      reasons: [ctx.accordionCoLocatedRows + " compound rows (text+chevron, vertical)"],
+      reasons: [rowsWithChevron.length + " compound rows (text+chevron in subtree, vertical)"],
     };
   }
 
@@ -2127,17 +2236,17 @@ function stateIsPresent(required, foundStates) {
   return false;
 }
 
-function auditStateCoverage(node, spec) {
+function auditStateCoverage(node, spec, ctx) {
   const issues   = [];
-  const stateMap = findStateVariants(node);
+  const stateMap = findStateVariants(node, ctx);
   const found    = Object.keys(stateMap);
 
   for (let i = 0; i < spec.requiredStates.length; i++) {
     const required = spec.requiredStates[i];
     if (stateIsPresent(required, found)) continue;
-    if (required === "focus" && componentHasFocusVariants(node)) continue;
-    if ((required === "checked" || required === "unchecked") && componentHasCheckedOrStateVariants(node)) continue;
-    if ((required === "open" || required === "closed" || required === "expanded") && componentHasExpandedVariants(node)) continue;
+    if (required === "focus" && componentHasFocusVariants(node, ctx)) continue;
+    if ((required === "checked" || required === "unchecked") && componentHasCheckedOrStateVariants(node, ctx)) continue;
+    if ((required === "open" || required === "closed" || required === "expanded") && componentHasExpandedVariants(node, ctx)) continue;
 
     const isCritical = required === "focus" || required === "default";
     const severity   = isCritical ? "HIGH" : "MED";
@@ -2151,7 +2260,7 @@ function auditStateCoverage(node, spec) {
   return issues;
 }
 
-function auditTouchTarget(node) {
+function auditTouchTarget(node, spec, ctx) {
   const issues = [];
 
   // Resolve the node to measure:
@@ -2159,7 +2268,7 @@ function auditTouchTarget(node) {
   // - COMPONENT / INSTANCE / FRAME / GROUP → measure directly
   let target = node;
   if (node.type === "COMPONENT_SET" && node.children && node.children.length > 0) {
-    const stateMap = findStateVariants(node);
+    const stateMap = findStateVariants(node, ctx);
     target = stateMap["default"] || stateMap["rest"] || node.children[0];
   }
 
@@ -2189,9 +2298,9 @@ function auditTouchTarget(node) {
   return issues;
 }
 
-function auditFocusRing(node) {
+function auditFocusRing(node, spec, ctx) {
   const issues    = [];
-  const stateMap  = findStateVariants(node);
+  const stateMap  = findStateVariants(node, ctx);
   const focusNode = stateMap["focus"];
 
   // No focus variant → handled by stateCoverage; don't double-report
@@ -2277,14 +2386,14 @@ function auditFocusRing(node) {
   return issues;
 }
 
-function auditTextContrast(node) {
+function auditTextContrast(node, spec, ctx) {
   const issues = [];
 
   // For COMPONENT_SET scan the default variant only — scanning all variants would
   // report the same text N times. We also scan "error" if it exists (text may differ).
   const nodesToScan = [];
   if (node.type === "COMPONENT_SET" && node.children && node.children.length > 0) {
-    const stateMap = findStateVariants(node);
+    const stateMap = findStateVariants(node, ctx);
     const defaultNode = stateMap["default"] || stateMap["rest"] || node.children[0];
     nodesToScan.push(defaultNode);
     // Also scan error state — error messages are often low-contrast red text
@@ -2384,9 +2493,9 @@ function auditIconOnlyLabel(node, spec) {
   return issues;
 }
 
-function auditColorOnlyDisabled(node) {
+function auditColorOnlyDisabled(node, spec, ctx) {
   const issues   = [];
-  const stateMap = findStateVariants(node);
+  const stateMap = findStateVariants(node, ctx);
   const disabled = stateMap["disabled"];
   const defNode  = stateMap["default"];
 
@@ -2504,9 +2613,9 @@ function auditHasInputLabel(node, spec, ctx) {
   return issues;
 }
 
-function auditHasErrorState(node) {
+function auditHasErrorState(node, spec, ctx) {
   var issues = [];
-  var stateMap = findStateVariants(node);
+  var stateMap = findStateVariants(node, ctx);
   if (!stateMap["error"]) {
     issues.push(makeIssue("HIGH", "NO_ERROR_STATE", "3.3.1",
       "No 'error' state variant found — inputs must have a visible error state (WCAG 3.3.1)",
@@ -2522,8 +2631,8 @@ function auditHasErrorState(node) {
   return issues;
 }
 
-function auditHasIndeterminate(node) {
-  var stateMap = findStateVariants(node);
+function auditHasIndeterminate(node, spec, ctx) {
+  var stateMap = findStateVariants(node, ctx);
   if (!stateMap["indeterminate"]) {
     return [makeIssue("LOW", "NO_INDETERMINATE_STATE", "4.1.2",
       "Consider adding an indeterminate state for tri-state checkboxes (e.g. select-all) (WCAG 4.1.2)",
@@ -2802,17 +2911,22 @@ const COMPONENT_SPEC_MATRIX = {
 };
 
 var SHARED_A11Y_KEY_MAP = {
-  ariaRole:      "aria-role",
-  ariaLabel:     "aria-label",
-  ariaLevel:     "aria-level",
-  componentType: "component-type",
-  ariaChecked:   "aria-checked",
-  ariaExpanded:  "aria-expanded",
-  ariaModal:     "aria-modal",
-  ariaSelected:  "aria-selected",
-  ariaValuenow:  "aria-valuenow",
-  ariaValuemin:  "aria-valuemin",
-  ariaValuemax:  "aria-valuemax",
+  ariaRole:        "aria-role",
+  ariaLabel:       "aria-label",
+  ariaLabelledby:  "aria-labelledby",
+  ariaLevel:       "aria-level",
+  componentType:   "component-type",
+  ariaChecked:     "aria-checked",
+  ariaExpanded:    "aria-expanded",
+  ariaModal:       "aria-modal",
+  ariaSelected:    "aria-selected",
+  ariaValuenow:    "aria-valuenow",
+  ariaValuemin:    "aria-valuemin",
+  ariaValuemax:    "aria-valuemax",
+  wcagRef:         "wcag-ref",
+  issues:          "issues",
+  focusTrap:       "focus-trap",
+  keyboardPattern: "keyboard-pattern",
 };
 
 function getSharedA11y(node, key) {
@@ -2944,6 +3058,154 @@ async function writeA11yAnnotation(node, key, value, destination) {
   }
 }
 
+function persistCodegenHandoffFields(node, spec, issues) {
+  if (!node) return;
+  if (spec && spec.role) {
+    setSharedA11y(node, "component-type", spec.role);
+    try { node.setPluginData("a11y.v1.componentType", spec.role); } catch (_e) {}
+  }
+  if (spec && spec.ariaRole) {
+    setSharedA11y(node, "aria-role", spec.ariaRole);
+    try { node.setPluginData("a11y.v1.ariaRole", spec.ariaRole); } catch (_e) {}
+  }
+  if (spec && spec.wcagRefs && spec.wcagRefs.length) {
+    const wcagStr = spec.wcagRefs.join(",");
+    setSharedA11y(node, "wcag-ref", wcagStr);
+    try { node.setPluginData("a11y.v1.wcagRef", wcagStr); } catch (_e) {}
+  }
+  if (issues && issues.length) {
+    try {
+      const json = JSON.stringify(packIssuesForStorage(issues));
+      setSharedA11y(node, "issues", json);
+      node.setPluginData("a11y.v1.issues", json);
+    } catch (_e) {}
+  }
+}
+
+function readCodegenA11y(node, sharedKey, pluginKey) {
+  if (!node) return "";
+  let v = "";
+  try { v = node.getSharedPluginData("a11y", sharedKey) || ""; } catch (_e) {}
+  if (v) return v;
+  if (pluginKey) return getPluginA11y(node, pluginKey);
+  return "";
+}
+
+function buildCodegenResults(node) {
+  const results = [];
+  if (!node || !node.getSharedPluginData) return results;
+
+  const role       = readCodegenA11y(node, "aria-role", "ariaRole");
+  const label      = readCodegenA11y(node, "aria-label", "ariaLabel");
+  const labelledby = readCodegenA11y(node, "aria-labelledby", "ariaLabelledby");
+  const expanded   = readCodegenA11y(node, "aria-expanded", "ariaExpanded");
+  const checked    = readCodegenA11y(node, "aria-checked", "ariaChecked");
+  const selected   = readCodegenA11y(node, "aria-selected", "ariaSelected");
+  const modal      = readCodegenA11y(node, "aria-modal", "ariaModal");
+  const valuenow   = readCodegenA11y(node, "aria-valuenow", "ariaValuenow");
+  const valuemin   = readCodegenA11y(node, "aria-valuemin", "ariaValuemin");
+  const valuemax   = readCodegenA11y(node, "aria-valuemax", "ariaValuemax");
+  const focusTrap  = readCodegenA11y(node, "focus-trap", "focusTrap");
+  const keyboard   = readCodegenA11y(node, "keyboard-pattern", "keyboardPattern");
+  const compType   = readCodegenA11y(node, "component-type", "componentType");
+  const wcagRef    = readCodegenA11y(node, "wcag-ref", "wcagRef");
+  const issues     = readCodegenA11y(node, "issues", "issues");
+
+  const hasAttrs = role || label || labelledby || expanded || checked || selected ||
+    modal || valuenow || compType || keyboard || focusTrap;
+  if (!hasAttrs && !wcagRef && !issues) return results;
+
+  const attrs = [];
+  if (role)       attrs.push('role="' + role + '"');
+  if (label)      attrs.push('aria-label="' + label.replace(/"/g, "&quot;") + '"');
+  if (labelledby) attrs.push('aria-labelledby="' + labelledby + '"');
+  if (expanded)   attrs.push('aria-expanded="' + expanded + '"');
+  if (checked)    attrs.push('aria-checked="' + checked + '"');
+  if (selected)   attrs.push('aria-selected="' + selected + '"');
+  if (modal)      attrs.push('aria-modal="' + modal + '"');
+  if (valuenow)   attrs.push('aria-valuenow="' + valuenow + '"');
+  if (valuemin)   attrs.push('aria-valuemin="' + valuemin + '"');
+  if (valuemax)   attrs.push('aria-valuemax="' + valuemax + '"');
+
+  const nodeName = (node.name || "component").replace(/-->/g, "");
+
+  if (attrs.length) {
+    const htmlAttrs = attrs.join("\n  ");
+    results.push({
+      language: "HTML",
+      code: "<div\n  " + htmlAttrs + "\n>\n  <!-- " + nodeName + " -->\n</div>",
+      title: "Accessible Markup",
+    });
+
+    const jsxAttrs = attrs.map(function(a) {
+      const m = a.match(/^([\w-]+)="(.+)"$/);
+      if (!m) return a;
+      return m[1] + '={"' + m[2].replace(/&quot;/g, '"') + '"}';
+    }).join("\n  ");
+    results.push({
+      language: "JAVASCRIPT",
+      code: "<div\n  " + jsxAttrs + "\n>\n  {/* " + nodeName + " */}\n</div>",
+      title: "React Props",
+    });
+  }
+
+  if (compType && !role) {
+    results.push({
+      language: "PLAINTEXT",
+      code: "Component type: " + compType,
+      title: "Component Pattern",
+    });
+  }
+
+  if (keyboard) {
+    results.push({
+      language: "PLAINTEXT",
+      code: keyboard,
+      title: "Keyboard Behavior",
+    });
+  }
+
+  if (focusTrap === "true") {
+    results.push({
+      language: "PLAINTEXT",
+      code: "Focus must be trapped within this component while open.\n" +
+        "Implement using: focus-trap library, inert attribute on background, or manual tabindex management.\n" +
+        "Escape key must close the component.",
+      title: "Focus Management",
+    });
+  }
+
+  if (wcagRef) {
+    const refs = wcagRef.split(",").map(function(r) { return r.trim(); }).filter(Boolean);
+    const wcagLines = refs.map(function(r) {
+      return "WCAG " + r + ": https://www.w3.org/WAI/WCAG22/Understanding/";
+    });
+    results.push({
+      language: "PLAINTEXT",
+      code: wcagLines.join("\n"),
+      title: "WCAG References",
+    });
+  }
+
+  if (issues) {
+    try {
+      const parsed = JSON.parse(issues);
+      if (parsed.length > 0) {
+        const issueLines = parsed.map(function(i) {
+          return "[" + (i.severity || "?") + "] " + (i.code || "?") + ": " + (i.message || i.displayTitle || i.code || "");
+        }).join("\n");
+        results.push({
+          language: "PLAINTEXT",
+          code: "\u26a0\ufe0f Unresolved accessibility issues:\n" + issueLines,
+          title: "Open Issues",
+        });
+      }
+    } catch (_e) {}
+  }
+
+  return results;
+}
+
 function refreshDevModeAnnotations(node) {
   if (!node) return;
   try {
@@ -3070,19 +3332,27 @@ function componentNameMatchesType(componentName, typeKey) {
   return false;
 }
 
-function componentSetForNode(node) {
+async function componentSetForNodeAsync(node) {
   if (!node) return null;
   if (node.type === "COMPONENT_SET") return node;
   if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") return node.parent;
-  if (node.type === "INSTANCE" && node.mainComponent) {
-    const master = node.mainComponent;
-    if (master.parent && master.parent.type === "COMPONENT_SET") return master.parent;
+  if (node.type === "INSTANCE") {
+    const master = await getMainComponent(node);
+    if (master && master.parent && master.parent.type === "COMPONENT_SET") return master.parent;
   }
   return null;
 }
 
-function componentHasVariantStateAxes(node, axisKeywords) {
-  const set = componentSetForNode(node);
+function componentSetForNode(node, ctx) {
+  if (ctx && ctx.componentSet) return ctx.componentSet;
+  if (!node) return null;
+  if (node.type === "COMPONENT_SET") return node;
+  if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") return node.parent;
+  return null;
+}
+
+function componentHasVariantStateAxes(node, axisKeywords, ctx) {
+  const set = componentSetForNode(node, ctx);
   if (!set) return false;
 
   try {
@@ -3122,22 +3392,22 @@ function componentHasVariantStateAxes(node, axisKeywords) {
   return false;
 }
 
-function componentHasCheckedOrStateVariants(node) {
-  const sm = findStateVariants(node);
+function componentHasCheckedOrStateVariants(node, ctx) {
+  const sm = findStateVariants(node, ctx);
   if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"] || sm["selected"] || sm["active"]) return true;
-  return componentHasVariantStateAxes(node, ["check", "select", "state", "on", "off", "active", "selected"]);
+  return componentHasVariantStateAxes(node, ["check", "select", "state", "on", "off", "active", "selected"], ctx);
 }
 
-function componentHasFocusVariants(node) {
-  const sm = findStateVariants(node);
+function componentHasFocusVariants(node, ctx) {
+  const sm = findStateVariants(node, ctx);
   if (sm["focus"] || sm["focused"]) return true;
-  return componentHasVariantStateAxes(node, ["focus", "focused", "keyboard"]);
+  return componentHasVariantStateAxes(node, ["focus", "focused", "keyboard"], ctx);
 }
 
-function componentHasExpandedVariants(node) {
-  const sm = findStateVariants(node);
+function componentHasExpandedVariants(node, ctx) {
+  const sm = findStateVariants(node, ctx);
   if (sm["expanded"] || sm["collapsed"] || sm["open"] || sm["closed"]) return true;
-  return componentHasVariantStateAxes(node, ["expand", "open", "collapsed"]);
+  return componentHasVariantStateAxes(node, ["expand", "open", "collapsed"], ctx);
 }
 
 function appendNonComponentIssue(issues, node, spec, typeKey) {
@@ -3265,7 +3535,7 @@ async function findAccessibleComponentCandidates(typeKey, referenceNode) {
     const instances = page.findAll(function(n) { return n.type === "INSTANCE"; });
     for (let i = 0; i < instances.length; i++) {
       const inst = instances[i];
-      const master = inst.mainComponent;
+      const master = await getMainComponent(inst);
       if (!master) continue;
       if (componentNameMatchesType(master.name, typeKey)) {
         addCandidate(master, "instance", false);
@@ -3417,7 +3687,7 @@ function checkerPlaceholderNotOnlyLabel(node, ctx) {
 }
 
 function checkerRequiredStateIndicated(node, ctx) {
-  const stateMap = findStateVariants(node);
+  const stateMap = findStateVariants(node, ctx);
   const req = stateMap["required"] || stateMap["error"];
   const textBlob = (ctx.innerText || []).join(" ").toLowerCase();
   if (req || textBlob.indexOf("required") >= 0 || textBlob.indexOf("*") >= 0) return [];
@@ -3458,7 +3728,7 @@ function checkerAriaExpandedAnnotated(node, ctx, typeKey) {
       "Document aria-expanded on accordion root in Dev Mode handoff (setSharedPluginData)",
       node.id)];
   }
-  const stateMap = findStateVariants(node);
+  const stateMap = findStateVariants(node, ctx);
   const hasExp = stateMap["expanded"] || stateMap["collapsed"] || stateMap["open"] || stateMap["closed"];
   if (hasExp) return [];
   if (getSharedA11y(node, "ariaExpanded")) return [];
@@ -3541,7 +3811,7 @@ function getShapeContrastMetrics(shapeNode) {
   }
   const raw = rawFill || rawStroke;
   if (!raw || raw.a < 0.01) return null;
-  const bg = getEffectiveBackground(shapeNode);
+  const bg = getBackgroundBehindNode(shapeNode);
   const bgR01 = bg.r / 255;
   const bgG01 = bg.g / 255;
   const bgB01 = bg.b / 255;
@@ -3556,7 +3826,9 @@ function getShapeContrastMetrics(shapeNode) {
     pb = raw.b * a + bgB01 * inv;
   }
   const perceived = { r: Math.round(pr * 255), g: Math.round(pg * 255), b: Math.round(pb * 255) };
+  if (perceived.r === bg.r && perceived.g === bg.g && perceived.b === bg.b) return null;
   const ratio = contrastRatioForRgb255(perceived, bg);
+  if (ratio <= 1.0) return null;
   return {
     perceived: perceived,
     bg: bg,
@@ -3581,6 +3853,7 @@ function checkNonTextContrast(node, ctx) {
   for (let i = 0; i < candidates.length; i++) {
     const n = candidates[i];
     if (!n || n.type === "TEXT" || !isNodeVisible(n) || seen[n.id]) continue;
+    if ("children" in n && n.children && n.children.length > 0) continue;
     const metrics = getShapeContrastMetrics(n);
     if (!metrics || metrics.ratio >= 3.0) continue;
     seen[n.id] = true;
@@ -3609,7 +3882,7 @@ const SPEC_CHECKERS = {
   CONTRAST_TEXT: function(node, ctx) { return matrixIssuesFromAudit(auditTextContrast, node, { role: "button", requiredStates: [] }, ctx); },
   CONTRAST_NON_TEXT: function(node, ctx) { return checkNonTextContrast(node, ctx); },
   FOCUS_RING_VISIBLE: function(node, ctx) {
-    if (componentHasFocusVariants(node)) return [];
+    if (componentHasFocusVariants(node, ctx)) return [];
     return matrixIssuesFromAudit(auditFocusRing, node, { role: "button", requiredStates: ["focus"] }, ctx);
   },
   ROLE_BUTTON_ANNOTATED: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "button", "ROLE_BUTTON_MISSING"); },
@@ -3638,7 +3911,7 @@ const SPEC_CHECKERS = {
   },
   ARIA_CHECKED_ANNOTATED: function(node, ctx) {
     if (componentHasCheckedOrStateVariants(node)) return [];
-    const sm = findStateVariants(node);
+    const sm = findStateVariants(node, ctx);
     if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"]) return [];
     if (getSharedA11y(node, "ariaChecked")) return [];
     return [makeIssue("MED", "ARIA_CHECKED_MISSING", "4.1.2", "Document checked/unchecked (or on/off) states for assistive tech", node.id)];
@@ -3654,7 +3927,7 @@ const SPEC_CHECKERS = {
   ROLE_RADIO_ON_ITEMS: function(node, ctx) { return matrixIssuesFromAudit(auditEachRadioHasLabel, node, { role: "radio-group", requiredStates: [] }, ctx); },
   ROLE_COMBOBOX_OR_LISTBOX: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "combobox", "ROLE_COMBOBOX_MISSING"); },
   EXPANSION_STATE_ANNOTATED: function(node, ctx, typeKey) {
-    if (componentHasExpandedVariants(node)) return [];
+    if (componentHasExpandedVariants(node, ctx)) return [];
     return checkerAriaExpandedAnnotated(node, ctx, typeKey || "select");
   },
   CHEVRON_OR_EXPAND_INDICATOR: function(node, ctx, typeKey) {
@@ -3685,8 +3958,8 @@ const SPEC_CHECKERS = {
   ROLE_TABLIST_ON_CONTAINER: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "tablist", "ROLE_TABLIST_MISSING"); },
   ROLE_TAB_ON_ITEMS: function(node, ctx) { return checkerTabsStructure(node, ctx); },
   ARIA_SELECTED_ANNOTATED: function(node, ctx) {
-    if (componentHasVariantStateAxes(node, ["select", "selected", "active", "tab", "state"])) return [];
-    const sm = findStateVariants(node);
+    if (componentHasVariantStateAxes(node, ["select", "selected", "active", "tab", "state"], ctx)) return [];
+    const sm = findStateVariants(node, ctx);
     if (sm["selected"] || sm["active"] || sm["default"]) return [];
     if ("children" in node) {
       for (let i = 0; i < node.children.length; i++) {
@@ -3730,6 +4003,10 @@ async function runMatrixChecks(node, ctx, typeKey, spec) {
   const checks = COMPONENT_SPEC_MATRIX[typeKey];
   const issues = [];
   const auditLog = [];
+  if (isA11yGeneratedLayer(node)) {
+    notifyScanSkipped(node);
+    return emptyAuditResult();
+  }
   if (!checks || !checks.length) return { issues: issues, auditLog: auditLog };
   if (!isNodeVisible(node)) return { issues: issues, auditLog: auditLog };
 
@@ -3788,6 +4065,10 @@ const AUDIT_FUNCTIONS = {
 // auditLog entries: { name, status: "PASS"|"WARN"|"BLOCK"|"ERROR", count, wcagRefs? }
 
 async function auditNode(node, spec, ctx) {
+  if (isA11yGeneratedLayer(node)) {
+    notifyScanSkipped(node);
+    return emptyAuditResult();
+  }
   const typeKey = normalizeMatrixTypeKey(spec.role);
   if (typeKey && COMPONENT_SPEC_MATRIX[typeKey]) {
     const result = await runMatrixChecks(node, ctx, typeKey, spec);
@@ -3890,9 +4171,11 @@ async function resolveSuggestions(suggestions, rootNode) {
 // Creates an annotation frame beside the component containing a readable ARIA
 // summary. This is NOT a new component — it is purely a documentation artifact.
 
-function createDocFrame(rootNode, issues, ariaSchemaStr, componentType) {
+async function createDocFrame(rootNode, issues, ariaSchemaStr, componentType) {
   const box = rootNode.absoluteBoundingBox;
   if (!box) return null;
+
+  await ensureLabelFonts();
 
   const frame = figma.createFrame();
   frame.name  = "A11y_Doc_" + rootNode.name;
@@ -3911,7 +4194,7 @@ function createDocFrame(rootNode, issues, ariaSchemaStr, componentType) {
 
   function addText(content, size, weight, colorHex) {
     const t = figma.createText();
-    try { figma.loadFontAsync({ family: "Inter", style: weight >= 600 ? "Semi Bold" : "Regular" }); } catch (e) {}
+    t.fontName = { family: "Inter", style: weight >= 600 ? "Semi Bold" : "Regular" };
     t.characters = content;
     t.fontSize   = size;
     t.fills      = [{ type: "SOLID", color: colorHex }];
@@ -4034,20 +4317,27 @@ async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) 
   const resolved = await resolveSuggestions(filteredSugs, targetNode);
   let applied = 0, skipped = 0;
   const details = [];
+  let wroteDevMarkup = false;
+  let renamedLayer = false;
+  let addedLabel = false;
+
+  function pushDesignerDetail(line) {
+    if (details.indexOf(line) < 0) details.push(line);
+  }
 
   for (let si = 0; si < resolved.length; si++) {
     const sug = resolved[si];
     for (let ni = 0; ni < sug.resolvedIds.length; ni++) {
       const nodeId = sug.resolvedIds[ni];
       const node   = await getNodeById(nodeId);
-      if (!node) { skipped++; details.push("\u26A0 skipped: " + nodeId + " not found"); continue; }
+      if (!node) { skipped++; continue; }
 
       try {
         if (sug.type === "rename") {
-          const old = node.name;
           node.name = sug.value;
           applied++;
-          details.push("\u2713 \u201c" + old + "\u201d \u2192 \u201c" + sug.value + "\u201d");
+          renamedLayer = true;
+          pushDesignerDetail("\u2713 Layer renamed to " + sug.value);
         } else if (sug.type === "setPluginData") {
           const dataKey  = sug.key || "a11y.v1.componentType";
           node.setPluginData(dataKey, sug.value);
@@ -4058,16 +4348,31 @@ async function applyFixes(suggestions, rootNodeId, mode, annotationDestination) 
           });
           await writeA11yAnnotation(node, sharedKey, sug.value, dest);
           applied++;
-          details.push("\u2713 " + node.name + " [" + shortKey + "] \u2190 \"" + sug.value.slice(0, 40) + "\"");
+          if (/aria|componenttype|wcag|schema|states/i.test(dataKey)) {
+            wroteDevMarkup = true;
+          }
         }
       } catch (e) {
         skipped++;
-        details.push("\u2717 " + node.name + ": " + String(e));
       }
     }
   }
 
-  return { applied: applied, skipped: skipped, details: details, reviewIndicatorId: reviewIndicatorId };
+  if (wroteDevMarkup) {
+    pushDesignerDetail("\u2713 Accessibility markup written to Dev Mode");
+    pushDesignerDetail("Developers can see ARIA code by selecting this layer in Dev Mode \u2192 Code tab \u2192 A11y Shift");
+  }
+  if (renamedLayer && !wroteDevMarkup && details.length === 0) {
+    pushDesignerDetail("\u2713 Layer updated");
+  }
+
+  return {
+    applied: applied,
+    skipped: skipped,
+    details: details,
+    reviewIndicatorId: reviewIndicatorId,
+    devModeCodegen: wroteDevMarkup,
+  };
 }
 
 // ─── Auto-fix / self-healing ──────────────────────────────────────────────────
@@ -4128,13 +4433,47 @@ function collectOptionTexts(node) {
 }
 
 async function loadInter(style) {
-  // Inter is Figma's default font and is guaranteed available.
-  // Fall back to Regular if the requested style is missing.
-  try { await figma.loadFontAsync({ family: "Inter", style: style || "Regular" }); return { family: "Inter", style: style || "Regular" }; }
-  catch (_e) {
-    try { await figma.loadFontAsync({ family: "Inter", style: "Regular" }); return { family: "Inter", style: "Regular" }; }
-    catch (_e2) { return null; }
+  try {
+    await figma.loadFontAsync({ family: "Inter", style: style || "Regular" });
+    return { family: "Inter", style: style || "Regular" };
+  } catch (_e) {
+    try {
+      await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+      return { family: "Inter", style: "Regular" };
+    } catch (_e2) {
+      try {
+        await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
+        return { family: "Roboto", style: "Regular" };
+      } catch (_e3) {
+        return null;
+      }
+    }
   }
+}
+
+async function ensureLabelFonts() {
+  await loadInter("Regular");
+  await loadInter("Medium");
+}
+
+// Base name for wrappers/tags — COMPONENT_SET name, not variant instance name.
+async function getCleanComponentBaseName(node) {
+  if (!node) return "component";
+  let baseName = node.name || "component";
+
+  if (node.type === "INSTANCE") {
+    const master = await getMainComponent(node);
+    if (master) {
+      const set = master.parent && master.parent.type === "COMPONENT_SET" ? master.parent : null;
+      baseName = (set && set.name) ? set.name : master.name;
+    }
+  } else if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") {
+    baseName = node.parent.name;
+  }
+
+  let clean = String(baseName).split("=")[0].split("/")[0].trim();
+  if (clean.indexOf(",") >= 0) clean = clean.split(",")[0].trim();
+  return clean || "component";
 }
 
 function inferLabelStyleFromContext(ctx, referenceNode) {
@@ -4146,7 +4485,10 @@ function inferLabelStyleFromContext(ctx, referenceNode) {
       if (sib === referenceNode || sib.type !== "TEXT") continue;
       if ("fontSize" in sib && typeof sib.fontSize === "number") style.fontSize = sib.fontSize;
       if (sib.fills && sib.fills[0] && sib.fills[0].type === "SOLID") style.color = sib.fills[0].color;
-      if (sib.fontName && sib.fontName !== figma.mixed) style.fontName = sib.fontName;
+      if (sib.fontName && sib.fontName !== figma.mixed) {
+        const fam = String(sib.fontName.family || "").toLowerCase();
+        if (fam.indexOf("inter") >= 0 || fam.indexOf("roboto") >= 0) style.fontName = sib.fontName;
+      }
       return style;
     }
   }
@@ -4154,9 +4496,10 @@ function inferLabelStyleFromContext(ctx, referenceNode) {
 }
 
 async function createFloatingA11yLabel(node, labelText, layerName) {
-  await loadInter("Medium");
+  await ensureLabelFonts();
+  const fontName = await loadInter("Medium");
   const label = figma.createText();
-  try { label.fontName = { family: "Inter", style: "Medium" }; } catch (_e) {}
+  if (fontName) label.fontName = fontName;
   label.characters = labelText;
   label.fontSize = 14;
   label.fills = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.12 } }];
@@ -4186,7 +4529,8 @@ async function wrapNodeWithA11yLabel(node, labelText, layerName, ctx) {
   const absY = node.y;
 
   const wrapper = figma.createFrame();
-  wrapper.name = "_a11y_labeled_" + (node.name || "component");
+  const cleanName = await getCleanComponentBaseName(node);
+  wrapper.name = "_a11y_labeled_" + cleanName;
   wrapper.layoutMode = "VERTICAL";
   wrapper.itemSpacing = 4;
   wrapper.primaryAxisSizingMode = "AUTO";
@@ -4196,6 +4540,7 @@ async function wrapNodeWithA11yLabel(node, labelText, layerName, ctx) {
   wrapper.x = absX;
   wrapper.y = absY;
 
+  await ensureLabelFonts();
   const style = inferLabelStyleFromContext(ctx, node);
   const fontName = style.fontName || await loadInter("Medium");
   const label = figma.createText();
@@ -4319,6 +4664,7 @@ function buildClipboardPrompt(issueCode, node, rootNode) {
 // ── Per-issue handlers ──
 
 async function fixNoGroupLabel(p) {
+  await ensureLabelFonts();
   const options = collectOptionTexts(p.rootNode).join(", ").slice(0, 800);
   const roleHint = p.detectedRole || (p.rootNode && p.rootNode.getPluginData && p.rootNode.getPluginData("a11y.v1.componentType")) || "radio-group";
   let labelText = getDefaultHeadingText(roleHint);
@@ -4354,6 +4700,7 @@ async function fixNoGroupLabel(p) {
 }
 
 async function fixNoInputLabel(p) {
+  await ensureLabelFonts();
   let labelText = "Label";
   let source    = "generic";
   // Use the node name as a fallback hint (strip role prefixes)
@@ -4409,7 +4756,7 @@ async function fixIconButtonNoLabel(p) {
   }
 
   p.rootNode.setPluginData("a11y.v1.ariaLabel", labelText);
-  try { p.rootNode.setSharedPluginData("a11y", "ariaLabel", labelText); } catch (_e) {}
+  setSharedA11y(p.rootNode, "aria-label", labelText);
 
   return {
     ok:        true, // setPluginData always succeeds; the visual audit will still flag the missing text
@@ -4425,7 +4772,7 @@ async function fixMissingFocusState(p) {
   if (p.rootNode.type !== "COMPONENT_SET") {
     return { ok: false, code: "MISSING_STATE_FOCUS", message: "Focus variant requires a Component Set with variants." };
   }
-  const stateMap   = findStateVariants(p.rootNode);
+  const stateMap   = await findStateVariantsAsync(p.rootNode);
   const defaultVar = stateMap["default"] || stateMap["rest"] || p.rootNode.children[0];
   if (!defaultVar) return { ok: false, code: "MISSING_STATE_FOCUS", message: "Could not find a default variant to duplicate." };
 
@@ -4445,7 +4792,7 @@ async function fixMissingDisabledState(p) {
   if (p.rootNode.type !== "COMPONENT_SET") {
     return { ok: false, code: "MISSING_STATE_DISABLED", message: "Disabled variant requires a Component Set." };
   }
-  const stateMap   = findStateVariants(p.rootNode);
+  const stateMap   = await findStateVariantsAsync(p.rootNode);
   const defaultVar = stateMap["default"] || stateMap["rest"] || p.rootNode.children[0];
   if (!defaultVar) return { ok: false, code: "MISSING_STATE_DISABLED", message: "Could not find a default variant to duplicate." };
 
@@ -4510,7 +4857,7 @@ async function fixDialogNoClose(p) {
   closeBtn.name = "button / close";
   closeBtn.setPluginData("a11y.v1.ariaLabel",   "Close dialog");
   closeBtn.setPluginData("a11y.v1.componentType", "button");
-  try { closeBtn.setSharedPluginData("a11y", "ariaLabel", "Close dialog"); } catch (_e) {}
+  setSharedA11y(closeBtn, "aria-label", "Close dialog");
   if (p.rootNode.parent && "appendChild" in p.rootNode.parent) p.rootNode.parent.appendChild(closeBtn);
   else figma.currentPage.appendChild(closeBtn);
 
@@ -4546,6 +4893,780 @@ async function fixDialogNoHeading(p) {
   return { ok: true, code: "DIALOG_NO_HEADING", source: source, labelText: headingText, createdNodeId: heading.id,
            message: "Added heading \u201C" + headingText + "\u201D in labeled wrapper" };
 }
+
+// ─── fixNonComponentElement — semantic component builders (11 types) ─────────
+
+var NC_BRAND = { r: 0.2, g: 0.4, b: 1 };
+var NC_GRAY = { r: 0.7, g: 0.7, b: 0.7 };
+var NC_TEXT_DARK = { r: 0.1, g: 0.1, b: 0.1 };
+var NC_ERROR = { r: 0.8, g: 0.1, b: 0.1 };
+var NC_MASTER_OFFSET_X = 4000;
+
+var COMPONENT_SEMANTIC_DESC = {
+  button:      "Role: button\nStates: Default | Hover | Focus | Disabled\nHTML element: <button type=\"button\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/button/",
+  textField:   "Role: textbox\nStates: Default | Hover | Focus | Disabled | Error\nRequired: True | False\nHTML element: <input type=\"text\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/textbox/",
+  checkbox:    "Role: checkbox\nStates: Default | Hover | Focus | Disabled\nChecked: True | False\nHTML element: <input type=\"checkbox\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/",
+  "radio-group":"Role: radiogroup > radio\nStates: Default | Hover | Focus | Disabled\nSelected: True | False\nHTML element: <fieldset><legend> + <input type=\"radio\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/radio/",
+  select:      "Role: combobox > listbox > option\nStates: Default | Hover | Focus | Disabled\nOpen: True | False\nHTML element: <select> or custom combobox\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/combobox/",
+  modal:       "Role: dialog\nStates: Default\nHTML element: <dialog> or role=\"dialog\"\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/",
+  tabs:        "Role: tablist > tab + tabpanel\nStates: Default | Hover | Focus | Disabled\nSelected: True | False\nHTML element: role=\"tablist\" / role=\"tab\" / role=\"tabpanel\"\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/",
+  slider:      "Role: slider\nStates: Default | Hover | Focus | Disabled\nARIA attributes: aria-valuemin, aria-valuemax, aria-valuenow\nHTML element: <input type=\"range\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/slider/",
+  "star-rating":"Role: radiogroup > radio (one per star)\nStates: Default | Hover | Focus | Disabled\nValue: 1 | 2 | 3 | 4 | 5\nHTML element: role=\"radiogroup\" + role=\"radio\" per star\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/radio/",
+  toggle:      "Role: switch\nStates: Default | Hover | Focus | Disabled\nChecked: True | False\nHTML element: <button role=\"switch\" aria-checked=\"true|false\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/switch/",
+  accordion:   "Role: button (trigger) + region (panel)\nStates: Default | Hover | Focus | Disabled\nExpanded: True | False\nHTML element: <button aria-expanded> + <div role=\"region\">\nARIA pattern: https://www.w3.org/WAI/ARIA/apg/patterns/accordion/",
+};
+
+var COMPONENT_VARIANTS = {
+  button:        ["State=Default", "State=Hover", "State=Focus", "State=Disabled"],
+  textField:     ["State=Default", "State=Hover", "State=Focus", "State=Disabled", "State=Error"],
+  checkbox:      ["State=Default,Checked=False", "State=Default,Checked=True", "State=Focus,Checked=False", "State=Focus,Checked=True", "State=Disabled,Checked=False"],
+  "radio-group": ["State=Default,Selected=False", "State=Default,Selected=True", "State=Focus,Selected=False", "State=Focus,Selected=True", "State=Disabled,Selected=False"],
+  select:        ["State=Default,Open=False", "State=Focus,Open=False", "State=Default,Open=True", "State=Disabled,Open=False"],
+  modal:         ["State=Default"],
+  tabs:          ["State=Default,Selected=True", "State=Default,Selected=False", "State=Focus,Selected=True", "State=Disabled,Selected=False"],
+  slider:        ["State=Default", "State=Hover", "State=Focus", "State=Disabled"],
+  "star-rating": ["State=Default,Value=1", "State=Default,Value=2", "State=Default,Value=3", "State=Default,Value=4", "State=Default,Value=5", "State=Focus,Value=3", "State=Disabled,Value=3"],
+  toggle:        ["State=Default,Checked=False", "State=Default,Checked=True", "State=Focus,Checked=False", "State=Focus,Checked=True", "State=Disabled,Checked=False"],
+  accordion:     ["State=Default,Expanded=False", "State=Default,Expanded=True", "State=Focus,Expanded=False", "State=Focus,Expanded=True", "State=Disabled,Expanded=False"],
+};
+
+function ncSolid(color, opacity) {
+  return [{ type: "SOLID", color: color, opacity: opacity !== undefined ? opacity : 1 }];
+}
+
+function ncFocusShadow() {
+  return [{
+    type: "DROP_SHADOW",
+    color: { r: NC_BRAND.r, g: NC_BRAND.g, b: NC_BRAND.b, a: 0.4 },
+    offset: { x: 0, y: 0 },
+    radius: 4,
+    spread: 2,
+    visible: true,
+    blendMode: "NORMAL",
+  }];
+}
+
+function extractLabelText(node) {
+  if (!node) return null;
+  if (node.type === "TEXT") {
+    const c = (node.characters || "").trim();
+    return c || null;
+  }
+  if ("children" in node) {
+    for (let i = 0; i < node.children.length; i++) {
+      const t = extractLabelText(node.children[i]);
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+function ncNodeSize(node) {
+  const w = (node && node.width) || 120;
+  const h = (node && node.height) || 44;
+  const box = node && node.absoluteBoundingBox;
+  return {
+    width:  box ? box.width  : w,
+    height: box ? box.height : h,
+    x:      box ? box.x      : (node.x || 0),
+    y:      box ? box.y      : (node.y || 0),
+  };
+}
+
+function ncMasterXY(node) {
+  const t = node.absoluteTransform;
+  const x = (t && t[0]) ? t[0][2] + NC_MASTER_OFFSET_X : (node.x || 0) + NC_MASTER_OFFSET_X;
+  const y = (t && t[1]) ? t[1][2] : (node.y || 0);
+  return { x: x, y: y };
+}
+
+async function ncCreateText(name, characters, style, size, color, opacity) {
+  const font = await loadInter(style || "Regular");
+  const t = figma.createText();
+  t.name = name;
+  if (font) t.fontName = font;
+  t.fontSize = size || 14;
+  t.characters = characters || "";
+  t.fills = ncSolid(color || NC_TEXT_DARK, opacity);
+  return t;
+}
+
+async function ncHiddenLabel(characters) {
+  const t = await ncCreateText("visually-hidden-label", characters, "Regular", 1, NC_TEXT_DARK, 1);
+  try { t.resize(1, 1); } catch (_e) {}
+  return t;
+}
+
+function ncFrame(name, opts) {
+  opts = opts || {};
+  const f = figma.createFrame();
+  f.name = name;
+  if (opts.layoutMode) f.layoutMode = opts.layoutMode;
+  if (opts.itemSpacing !== undefined) f.itemSpacing = opts.itemSpacing;
+  if (opts.paddingTop !== undefined) f.paddingTop = opts.paddingTop;
+  if (opts.paddingBottom !== undefined) f.paddingBottom = opts.paddingBottom;
+  if (opts.paddingLeft !== undefined) f.paddingLeft = opts.paddingLeft;
+  if (opts.paddingRight !== undefined) f.paddingRight = opts.paddingRight;
+  if (opts.primaryAxisAlignItems) f.primaryAxisAlignItems = opts.primaryAxisAlignItems;
+  if (opts.counterAxisAlignItems) f.counterAxisAlignItems = opts.counterAxisAlignItems;
+  if (opts.cornerRadius !== undefined) f.cornerRadius = opts.cornerRadius;
+  if (opts.fills !== undefined) f.fills = opts.fills;
+  if (opts.strokes) { f.strokes = opts.strokes; f.strokeWeight = opts.strokeWeight || 1; f.strokeAlign = opts.strokeAlign || "INSIDE"; }
+  if (opts.effects) f.effects = opts.effects;
+  if (opts.opacity !== undefined) f.opacity = opts.opacity;
+  if (opts.resizeW && opts.resizeH) f.resize(opts.resizeW, opts.resizeH);
+  if (opts.layoutGrow) f.layoutGrow = 1;
+  return f;
+}
+
+function classifyNodeForFix(node) {
+  if (!node || !("name" in node)) return "unknown";
+  const fromRole = normalizeMatrixTypeKey(node.getPluginData && node.getPluginData("a11y.v1.componentType"));
+  if (fromRole) return fromRole;
+  const fromName = normalizeMatrixTypeKey(node.name || "");
+  if (fromName) return fromName;
+  const n = (node.name || "").toLowerCase();
+  if (n.indexOf("accordion") >= 0 || n.indexOf("faq") >= 0) return "accordion";
+  if (n.indexOf("tab") >= 0) return "tabs";
+  if (n.indexOf("slider") >= 0 || n.indexOf("range") >= 0) return "slider";
+  if (n.indexOf("star") >= 0 || n.indexOf("rating") >= 0) return "star-rating";
+  if (n.indexOf("checkbox") >= 0 || n.indexOf("check") >= 0) return "checkbox";
+  if (n.indexOf("radio") >= 0) return "radio-group";
+  if (n.indexOf("select") >= 0 || n.indexOf("dropdown") >= 0) return "select";
+  if (n.indexOf("modal") >= 0 || n.indexOf("dialog") >= 0) return "modal";
+  if (n.indexOf("input") >= 0 || n.indexOf("field") >= 0) return "textField";
+  if (n.indexOf("switch") >= 0 || n.indexOf("toggle") >= 0) return "toggle";
+  return "button";
+}
+
+function isUniformChildrenForFix(node) {
+  if (!("children" in node) || node.children.length < 2) return false;
+  let firstType = null;
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i];
+    if (!isNodeVisible(child) || isA11yGeneratedLayer(child)) continue;
+    const t = classifyNodeForFix(child);
+    if (t === "unknown") return false;
+    if (!firstType) firstType = t;
+    else if (t !== firstType) return false;
+  }
+  return !!firstType;
+}
+
+function classifyNode(node) {
+  return classifyNodeForFix(node);
+}
+
+function isUniformChildren(node) {
+  return isUniformChildrenForFix(node);
+}
+
+function getNonComponentCapability(node) {
+  if (!node || !("name" in node)) return "FIGMA_AI";
+  if (node.type === "COMPONENT" || node.type === "INSTANCE" || node.type === "COMPONENT_SET") {
+    return "AUTO";
+  }
+  if (isUniformChildren(node)) return "AUTO";
+  if (!("children" in node) || visibleChildCount(node) <= 3) return "AUTO";
+  return "FIGMA_AI";
+}
+
+function isMixedChildrenForFix(node) {
+  if (!("children" in node)) return false;
+  const seen = {};
+  let count = 0;
+  for (let i = 0; i < node.children.length; i++) {
+    const child = node.children[i];
+    if (!isNodeVisible(child) || isA11yGeneratedLayer(child)) continue;
+    const t = classifyNodeForFix(child);
+    if (!seen[t]) { seen[t] = true; count++; }
+  }
+  return count > 1;
+}
+
+function visibleChildCount(node) {
+  if (!("children" in node)) return 0;
+  let n = 0;
+  for (let i = 0; i < node.children.length; i++) {
+    const c = node.children[i];
+    if (isNodeVisible(c) && !isA11yGeneratedLayer(c)) n++;
+  }
+  return n;
+}
+
+async function buildButtonComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isHover = variantName.indexOf("Hover") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Button";
+
+  const comp = ncFrame("button-root", {
+    layoutMode: "HORIZONTAL",
+    itemSpacing: 8,
+    paddingTop: 12, paddingBottom: 12, paddingLeft: 24, paddingRight: 24,
+    primaryAxisAlignItems: "CENTER", counterAxisAlignItems: "CENTER",
+    cornerRadius: 8,
+    fills: node.fills && node.fills.length ? JSON.parse(JSON.stringify(node.fills)) : ncSolid(NC_BRAND),
+    resizeW: sz.width, resizeH: Math.max(sz.height, 44),
+  });
+  comp.name = variantName;
+
+  if (isFocus) {
+    comp.strokes = ncSolid(NC_BRAND);
+    comp.strokeWeight = 2;
+    comp.strokeAlign = "OUTSIDE";
+  }
+  if (isDisabled) comp.opacity = 0.38;
+
+  const label = await ncCreateText("label", labelText, "Medium", 14, { r: 1, g: 1, b: 1 }, isDisabled ? 0.38 : 1);
+  comp.appendChild(label);
+
+  const hasVisibleText = labelText.length > 0;
+  if (!hasVisibleText) {
+    const icon = ncFrame("icon", { resizeW: 16, resizeH: 16, fills: [] });
+    comp.insertChild(0, icon);
+    comp.appendChild(await ncHiddenLabel("Button"));
+  }
+
+  if (isHover && !isDisabled) {
+    const fills = comp.fills;
+    if (fills && fills[0] && fills[0].type === "SOLID") {
+      const c = fills[0].color;
+      comp.fills = ncSolid({ r: c.r * 0.9, g: c.g * 0.9, b: c.b * 0.9 });
+    }
+  }
+  return comp;
+}
+
+async function buildTextFieldComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isError = variantName.indexOf("Error") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Label";
+
+  const comp = ncFrame("textfield-root", {
+    layoutMode: "VERTICAL", itemSpacing: 4, fills: [],
+    resizeW: sz.width || 280, resizeH: 80,
+  });
+  comp.name = variantName;
+  comp.counterAxisSizingMode = "FIXED";
+
+  comp.appendChild(await ncCreateText("label", labelText, "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+
+  const borderColor = isError ? NC_ERROR : (isFocus ? NC_BRAND : NC_GRAY);
+  const wrapper = ncFrame("input-wrapper", {
+    layoutMode: "HORIZONTAL", resizeW: sz.width || 280, resizeH: 44, cornerRadius: 8,
+    fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(borderColor), strokeWeight: isFocus ? 2 : 1, strokeAlign: "INSIDE",
+    paddingLeft: 12, paddingRight: 12,
+    counterAxisAlignItems: "CENTER",
+  });
+  const input = ncFrame("input", { fills: [], layoutGrow: true, resizeW: 100, resizeH: 24 });
+  wrapper.appendChild(input);
+  comp.appendChild(wrapper);
+
+  if (isError) {
+    comp.appendChild(await ncCreateText("error-text", "Error message", "Regular", 12, NC_ERROR, 1));
+  } else {
+    comp.appendChild(await ncCreateText("hint-text", "Hint text", "Regular", 12, NC_GRAY, isDisabled ? 0.38 : 1));
+  }
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildCheckboxComponent(node, variantName) {
+  await ensureLabelFonts();
+  const isChecked = variantName.indexOf("Checked=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Checkbox label";
+
+  const comp = ncFrame("checkbox-root", {
+    layoutMode: "HORIZONTAL", itemSpacing: 8, counterAxisAlignItems: "CENTER", fills: [],
+  });
+  comp.name = variantName;
+
+  const box = ncFrame("checkbox-box", {
+    resizeW: 20, resizeH: 20, cornerRadius: 4,
+    fills: isChecked ? ncSolid(NC_BRAND) : ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(isChecked ? NC_BRAND : NC_GRAY), strokeWeight: 2, strokeAlign: "INSIDE",
+  });
+  if (isFocus) box.effects = ncFocusShadow();
+  if (isChecked) {
+    const mark = ncFrame("checkmark-icon", { resizeW: 12, resizeH: 12, fills: ncSolid({ r: 1, g: 1, b: 1 }) });
+    box.appendChild(mark);
+  }
+  comp.appendChild(box);
+  comp.appendChild(await ncCreateText("label", labelText, "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildToggleComponent(node, variantName) {
+  await ensureLabelFonts();
+  const isChecked = variantName.indexOf("Checked=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Toggle label";
+
+  const comp = ncFrame("toggle-root", {
+    layoutMode: "HORIZONTAL", itemSpacing: 8, counterAxisAlignItems: "CENTER", fills: [],
+  });
+  comp.name = variantName;
+
+  const track = ncFrame("track", {
+    resizeW: 44, resizeH: 24, cornerRadius: 12,
+    fills: ncSolid(isChecked ? NC_BRAND : NC_GRAY),
+  });
+  if (isFocus) { track.strokes = ncSolid(NC_BRAND); track.strokeWeight = 2; track.strokeAlign = "OUTSIDE"; }
+  const thumb = ncFrame("thumb", { resizeW: 20, resizeH: 20, cornerRadius: 10, fills: ncSolid({ r: 1, g: 1, b: 1 }) });
+  thumb.x = isChecked ? 22 : 2;
+  thumb.y = 2;
+  track.appendChild(thumb);
+  comp.appendChild(track);
+  comp.appendChild(await ncCreateText("label", labelText, "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildAccordionComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isExpanded = variantName.indexOf("Expanded=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Accordion item";
+
+  const comp = ncFrame("accordion-root", {
+    layoutMode: "VERTICAL", itemSpacing: 0, fills: [], resizeW: sz.width || 400, resizeH: 120,
+  });
+  comp.name = variantName;
+
+  const trigger = ncFrame("trigger", {
+    layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER",
+    paddingLeft: 16, paddingRight: 16, paddingTop: 14, paddingBottom: 14,
+    fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(isFocus ? NC_BRAND : { r: 0.9, g: 0.9, b: 0.9 }), strokeWeight: isFocus ? 2 : 1, strokeAlign: "INSIDE",
+    resizeW: sz.width || 400, resizeH: 52,
+  });
+  const itemLabel = await ncCreateText("item-label", labelText, "Medium", 14, NC_TEXT_DARK, 1);
+  itemLabel.layoutGrow = 1;
+  trigger.appendChild(itemLabel);
+  const chevron = ncFrame("chevron-icon", { resizeW: 24, resizeH: 24, fills: [] });
+  chevron.rotation = isExpanded ? 180 : 0;
+  trigger.appendChild(chevron);
+  comp.appendChild(trigger);
+
+  const panel = ncFrame("panel", {
+    layoutMode: "VERTICAL", paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 12,
+    fills: ncSolid({ r: 0.97, g: 0.97, b: 0.97 }), resizeW: sz.width || 400, resizeH: 40,
+  });
+  panel.visible = isExpanded;
+  panel.appendChild(await ncCreateText("content", "Panel content", "Regular", 14, { r: 0.3, g: 0.3, b: 0.3 }, 1));
+  comp.appendChild(panel);
+
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildRadioGroupComponent(node, variantName) {
+  await ensureLabelFonts();
+  const isSelected = variantName.indexOf("Selected=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const groupLabel = extractLabelText(node) || "Choose one";
+
+  const comp = ncFrame("radiogroup-root", { layoutMode: "VERTICAL", itemSpacing: 8, fills: [] });
+  comp.name = variantName;
+  comp.appendChild(await ncCreateText("group-label", groupLabel, "Medium", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+
+  const item = ncFrame("radio-item", { layoutMode: "HORIZONTAL", itemSpacing: 8, counterAxisAlignItems: "CENTER", fills: [] });
+  const dot = ncFrame("radio-dot", {
+    resizeW: 20, resizeH: 20, cornerRadius: 100,
+    fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(isSelected ? NC_BRAND : NC_GRAY), strokeWeight: 2, strokeAlign: "INSIDE",
+  });
+  if (isFocus) dot.effects = ncFocusShadow();
+  if (isSelected) {
+    const inner = ncFrame("inner-dot", { resizeW: 10, resizeH: 10, cornerRadius: 100, fills: ncSolid(NC_BRAND) });
+    inner.x = 5; inner.y = 5;
+    dot.appendChild(inner);
+  }
+  item.appendChild(dot);
+  item.appendChild(await ncCreateText("label", "Option", "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  comp.appendChild(item);
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildSelectComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isOpen = variantName.indexOf("Open=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Label";
+
+  const comp = ncFrame("select-root", { layoutMode: "VERTICAL", itemSpacing: 4, fills: [], resizeW: sz.width || 280, resizeH: 120 });
+  comp.name = variantName;
+  comp.appendChild(await ncCreateText("label", labelText, "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+
+  const trigger = ncFrame("trigger", {
+    layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER",
+    paddingLeft: 12, paddingRight: 12, resizeW: sz.width || 280, resizeH: 44, cornerRadius: 8,
+    fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(isFocus ? NC_BRAND : NC_GRAY), strokeWeight: isFocus ? 2 : 1, strokeAlign: "INSIDE",
+  });
+  const val = await ncCreateText("selected-value", "Select…", "Regular", 14, NC_TEXT_DARK, 1);
+  val.layoutGrow = 1;
+  trigger.appendChild(val);
+  trigger.appendChild(ncFrame("chevron-icon", { resizeW: 16, resizeH: 16, fills: [] }));
+  comp.appendChild(trigger);
+
+  const list = ncFrame("options-list", {
+    layoutMode: "VERTICAL", paddingTop: 4, paddingBottom: 4, cornerRadius: 8,
+    strokes: ncSolid(NC_GRAY), strokeWeight: 1, strokeAlign: "INSIDE", fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    resizeW: sz.width || 280, resizeH: 44,
+  });
+  list.visible = isOpen;
+  const opt = ncFrame("option", { layoutMode: "HORIZONTAL", paddingLeft: 12, paddingRight: 12, resizeW: sz.width || 280, resizeH: 36, fills: [] });
+  opt.appendChild(await ncCreateText("option-label", "Option", "Regular", 14, NC_TEXT_DARK, 1));
+  list.appendChild(opt);
+  comp.appendChild(list);
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildModalComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const titleText = extractLabelText(node) || "Dialog title";
+
+  const comp = ncFrame("modal-root", {
+    layoutMode: "VERTICAL", cornerRadius: 12, paddingTop: 32, paddingBottom: 32, paddingLeft: 32, paddingRight: 32,
+    fills: ncSolid({ r: 1, g: 1, b: 1 }), resizeW: sz.width || 400, resizeH: sz.height || 280,
+  });
+  comp.name = variantName;
+
+  const surface = ncFrame("dialog-surface", { layoutMode: "VERTICAL", itemSpacing: 16, fills: [] });
+  const header = ncFrame("header", { layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN", counterAxisAlignItems: "CENTER", fills: [] });
+  header.appendChild(await ncCreateText("title", titleText, "Medium", 18, NC_TEXT_DARK, 1));
+  const closeBtn = ncFrame("close-button", { resizeW: 32, resizeH: 32, cornerRadius: 6, fills: [] });
+  closeBtn.appendChild(ncFrame("icon", { resizeW: 16, resizeH: 16, fills: [] }));
+  closeBtn.appendChild(await ncHiddenLabel("Close dialog"));
+  header.appendChild(closeBtn);
+  surface.appendChild(header);
+  const body = ncFrame("body", { layoutMode: "VERTICAL", itemSpacing: 12, fills: [] });
+  body.appendChild(ncFrame("content", { resizeW: 200, resizeH: 80, fills: [] }));
+  surface.appendChild(body);
+  const footer = ncFrame("footer", { layoutMode: "HORIZONTAL", itemSpacing: 12, fills: [] });
+  footer.appendChild(ncFrame("cancel-button", { resizeW: 80, resizeH: 36, cornerRadius: 8, fills: ncSolid(NC_GRAY) }));
+  footer.appendChild(ncFrame("confirm-button", { resizeW: 80, resizeH: 36, cornerRadius: 8, fills: ncSolid(NC_BRAND) }));
+  surface.appendChild(footer);
+  comp.appendChild(surface);
+  return comp;
+}
+
+async function buildTabsComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isSelected = variantName.indexOf("Selected=True") >= 0;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+
+  const comp = ncFrame("tabs-root", { layoutMode: "VERTICAL", fills: [], resizeW: sz.width || 400, resizeH: 200 });
+  comp.name = variantName;
+
+  const tabList = ncFrame("tab-list", { layoutMode: "HORIZONTAL", itemSpacing: 0, fills: [] });
+  const tab = ncFrame("tab", {
+    layoutMode: "VERTICAL", counterAxisAlignItems: "CENTER",
+    paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 12, fills: [],
+  });
+  tab.appendChild(await ncCreateText("tab-label", "Tab", "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  const indicator = ncFrame("active-indicator", { resizeW: 60, resizeH: 2, fills: ncSolid(NC_BRAND) });
+  indicator.visible = isSelected;
+  tab.appendChild(indicator);
+  if (isFocus) tab.effects = ncFocusShadow();
+  tabList.appendChild(tab);
+  comp.appendChild(tabList);
+  const panel = ncFrame("tab-panel", { layoutMode: "VERTICAL", paddingTop: 16, paddingBottom: 16, fills: [] });
+  panel.appendChild(ncFrame("content", { resizeW: 200, resizeH: 80, fills: [] }));
+  comp.appendChild(panel);
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildSliderComponent(node, variantName) {
+  await ensureLabelFonts();
+  const sz = ncNodeSize(node);
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+  const labelText = extractLabelText(node) || "Volume";
+
+  const comp = ncFrame("slider-root", { layoutMode: "VERTICAL", itemSpacing: 8, fills: [], resizeW: sz.width || 280, resizeH: 60 });
+  comp.name = variantName;
+
+  const labelRow = ncFrame("label-row", { layoutMode: "HORIZONTAL", primaryAxisAlignItems: "SPACE_BETWEEN", fills: [] });
+  labelRow.appendChild(await ncCreateText("label", labelText, "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  labelRow.appendChild(await ncCreateText("value-display", "50%", "Regular", 14, NC_TEXT_DARK, isDisabled ? 0.38 : 1));
+  comp.appendChild(labelRow);
+
+  const trackWrap = ncFrame("track-wrapper", { resizeW: sz.width || 280, resizeH: 20, fills: [] });
+  trackWrap.layoutMode = "NONE";
+  const track = ncFrame("track", { resizeW: sz.width || 280, resizeH: 4, cornerRadius: 2, fills: ncSolid({ r: 0.88, g: 0.88, b: 0.88 }) });
+  track.y = 8;
+  const fill = ncFrame("fill", { resizeW: (sz.width || 280) * 0.5, resizeH: 4, cornerRadius: 2, fills: ncSolid(NC_BRAND) });
+  fill.y = 8;
+  const thumb = ncFrame("thumb", {
+    resizeW: 20, resizeH: 20, cornerRadius: 100, fills: ncSolid({ r: 1, g: 1, b: 1 }),
+    strokes: ncSolid(NC_BRAND), strokeWeight: 2, strokeAlign: "INSIDE",
+  });
+  thumb.x = (sz.width || 280) * 0.5 - 10;
+  thumb.y = 0;
+  if (isFocus) thumb.effects = ncFocusShadow();
+  trackWrap.appendChild(track);
+  trackWrap.appendChild(fill);
+  trackWrap.appendChild(thumb);
+  comp.appendChild(trackWrap);
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildStarRatingComponent(node, variantName) {
+  await ensureLabelFonts();
+  const valueMatch = variantName.match(/Value=(\d)/);
+  const value = valueMatch ? parseInt(valueMatch[1], 10) : 3;
+  const isFocus = variantName.indexOf("Focus") >= 0;
+  const isDisabled = variantName.indexOf("Disabled") >= 0;
+
+  const comp = ncFrame("rating-root", { layoutMode: "HORIZONTAL", itemSpacing: 4, fills: [] });
+  comp.name = variantName;
+
+  for (let s = 1; s <= 5; s++) {
+    const starFrame = ncFrame("star-" + s, { layoutMode: "VERTICAL", fills: [] });
+    const filled = s <= value;
+    starFrame.appendChild(ncFrame("star-icon", {
+      resizeW: 24, resizeH: 24,
+      fills: ncSolid(filled ? NC_BRAND : { r: 0.88, g: 0.88, b: 0.88 }),
+    }));
+    starFrame.appendChild(await ncHiddenLabel(s + (s === 1 ? " star" : " stars")));
+    comp.appendChild(starFrame);
+  }
+  comp.appendChild(await ncHiddenLabel("Rating: " + value + " out of 5"));
+  if (isFocus) comp.effects = ncFocusShadow();
+  if (isDisabled) comp.opacity = 0.38;
+  return comp;
+}
+
+async function buildComponentVariant(node, componentType, variantName) {
+  switch (componentType) {
+    case "button":       return buildButtonComponent(node, variantName);
+    case "textField":    return buildTextFieldComponent(node, variantName);
+    case "checkbox":     return buildCheckboxComponent(node, variantName);
+    case "toggle":       return buildToggleComponent(node, variantName);
+    case "accordion":    return buildAccordionComponent(node, variantName);
+    case "radio-group":  return buildRadioGroupComponent(node, variantName);
+    case "select":       return buildSelectComponent(node, variantName);
+    case "modal":        return buildModalComponent(node, variantName);
+    case "tabs":         return buildTabsComponent(node, variantName);
+    case "slider":       return buildSliderComponent(node, variantName);
+    case "star-rating":  return buildStarRatingComponent(node, variantName);
+    default:             return buildButtonComponent(node, variantName);
+  }
+}
+
+async function buildComponentSet(node, componentType) {
+  const typeKey = normalizeMatrixTypeKey(componentType) || "button";
+  const baseName = await getCleanComponentBaseName(node);
+  const variants = COMPONENT_VARIANTS[typeKey] || COMPONENT_VARIANTS.button;
+  const master = ncMasterXY(node);
+  const sz = ncNodeSize(node);
+
+  const components = [];
+  for (let vi = 0; vi < variants.length; vi++) {
+    const comp = await buildComponentVariant(node, typeKey, variants[vi]);
+    comp.x = master.x + vi * (sz.width + 40);
+    comp.y = master.y;
+    figma.currentPage.appendChild(comp);
+    components.push(comp);
+  }
+
+  const componentSet = figma.combineAsVariants(components, figma.currentPage);
+  componentSet.name = baseName;
+  componentSet.description = COMPONENT_SEMANTIC_DESC[typeKey] || COMPONENT_SEMANTIC_DESC.button;
+  return componentSet;
+}
+
+function buildNonComponentPathCPrompt(node, componentType) {
+  const typeKey = normalizeMatrixTypeKey(componentType) || "button";
+  const childIds = [];
+  if ("children" in node) {
+    for (let i = 0; i < node.children.length && i < 12; i++) {
+      const c = node.children[i];
+      if (!isNodeVisible(c)) continue;
+      childIds.push('"' + (c.name || "layer") + '" (id: ' + c.id + ", type: " + c.type + ")");
+    }
+  }
+  const variants = (COMPONENT_VARIANTS[typeKey] || []).join(", ");
+  return (
+    'Convert node "' + (node.name || "layer") + '" (id: ' + node.id + ", type: " + node.type + ") into a Figma component set.\n" +
+    "Component type: " + typeKey + "\n" +
+    "Required variants: " + variants + "\n" +
+    "Children to preserve as slots: " + (childIds.join(", ") || "none") + "\n" +
+    (COMPONENT_SEMANTIC_DESC[typeKey] || "") + "\n" +
+    "Place the ComponentSet at x+4000 from the node's position. Replace the original with a Default-state instance at the same x, y, width, height. " +
+    "Use semantic layer names (label, input, trigger, panel, etc.). Focus ring 2px #3366FF. Disabled opacity 0.38."
+  );
+}
+
+async function replaceNodeWithDefaultInstance(node, componentSet, componentType) {
+  const parent = node.parent;
+  if (!parent || !("insertChild" in parent)) {
+    return { success: false, reason: "no_parent" };
+  }
+  const nodeIndex = parent.children.indexOf(node);
+  let defaultComp = null;
+  for (let i = 0; i < componentSet.children.length; i++) {
+    const c = componentSet.children[i];
+    if (c.name.indexOf("Default") >= 0) { defaultComp = c; break; }
+  }
+  if (!defaultComp) defaultComp = componentSet.children[0];
+
+  const instance = defaultComp.createInstance();
+  instance.x = node.x;
+  instance.y = node.y;
+  try {
+    if ("resize" in instance && node.width && node.height) {
+      instance.resize(node.width, node.height);
+    }
+  } catch (_e) {}
+
+  const role = componentType || typeKeyFromSet(componentSet);
+  instance.setSharedPluginData("a11y", "role", role);
+  instance.setSharedPluginData("a11y", "componentized", "true");
+  instance.setSharedPluginData("a11y", "componentSetId", componentSet.id);
+
+  parent.insertChild(nodeIndex, instance);
+  node.remove();
+  return { success: true, instanceId: instance.id, componentSetId: componentSet.id };
+}
+
+function typeKeyFromSet(set) {
+  const d = set.description || "";
+  if (d.indexOf("textbox") >= 0) return "textField";
+  if (d.indexOf("checkbox") >= 0) return "checkbox";
+  return "button";
+}
+
+async function fixNonComponentElement(node, componentType) {
+  if (!node || !("name" in node)) return { success: false, reason: "invalid_node" };
+  if (isA11yGeneratedLayer(node)) return { success: false, reason: "skipped_a11y_layer" };
+  if (node.type === "COMPONENT" || node.type === "INSTANCE" || node.type === "COMPONENT_SET") {
+    return { success: false, reason: "already_component" };
+  }
+
+  const parent = node.parent;
+  if (!parent || !("insertChild" in parent)) return { success: false, reason: "no_parent" };
+
+  const typeKey = normalizeMatrixTypeKey(componentType) || classifyNodeForFix(node) || "button";
+
+  // PATH B — uniform children: componentize each child, not the parent
+  if (isUniformChildrenForFix(node)) {
+    const childResults = [];
+    const kids = node.children.slice();
+    for (let i = 0; i < kids.length; i++) {
+      const child = kids[i];
+      if (!isNodeVisible(child) || isA11yGeneratedLayer(child)) continue;
+      const childType = classifyNodeForFix(child);
+      if (childType === "unknown") continue;
+      childResults.push(await fixNonComponentElement(child, childType));
+    }
+    return { success: true, path: "B", childResults: childResults };
+  }
+
+  // PATH C — complex structure → Figma AI prompt only (must match getNonComponentCapability)
+  if (getNonComponentCapability(node) === "FIGMA_AI") {
+    return {
+      success: false,
+      path: "C",
+      figmaAiPrompt: buildNonComponentPathCPrompt(node, typeKey),
+    };
+  }
+
+  // PATH A — leaf or simple: build component set off-canvas, swap instance in place
+  try {
+    const componentSet = await buildComponentSet(node, typeKey);
+    const swapped = await replaceNodeWithDefaultInstance(node, componentSet, typeKey);
+    if (!swapped.success) return Object.assign({ path: "A" }, swapped);
+    return {
+      success: true,
+      path: "A",
+      componentSetId: swapped.componentSetId,
+      instanceId: swapped.instanceId,
+    };
+  } catch (err) {
+    return { success: false, path: "A", error: String(err) };
+  }
+}
+
+async function fixNonComponentElementHandler(p) {
+  const node = p.node || p.rootNode;
+  if (!node) {
+    return { ok: false, code: "NON_COMPONENT_ELEMENT", message: "Selection changed." };
+  }
+
+  const typeKey = normalizeMatrixTypeKey(p.detectedRole || p.role || "") || classifyNodeForFix(node) || "button";
+
+  // Optional: link to existing library component first when user chose from picker
+  if (p.linkAction || p.linkCandidateId) {
+    return fixLinkToComponent(p);
+  }
+
+  const result = await fixNonComponentElement(node, typeKey);
+
+  if (result.path === "C") {
+    if (p.rootNode && p.rootNode.setPluginData) {
+      p.rootNode.setPluginData("a11y-waiting-ai", JSON.stringify({
+        issueCode: "NON_COMPONENT_ELEMENT",
+        markedAt:  Date.now(),
+        prompt:    result.figmaAiPrompt,
+      }));
+    }
+    return {
+      ok: true,
+      code: "NON_COMPONENT_ELEMENT",
+      source: "prompt",
+      promptForClipboard: result.figmaAiPrompt,
+      waitingForAi: true,
+      message: "Complex structure — copy the prompt into Figma AI (⌘⌥I), apply, then Re-scan.",
+    };
+  }
+
+  if (result.success) {
+    figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
+    const msg = result.path === "B"
+      ? "Componentized " + (result.childResults ? result.childResults.length : 0) + " child layer(s)."
+      : "Created component set and replaced layer with Default instance. Cmd+Z to undo.";
+    return {
+      ok: true,
+      code: "NON_COMPONENT_ELEMENT",
+      source: "generic",
+      message: msg,
+      createdNodeId: result.instanceId || node.id,
+    };
+  }
+
+  return {
+    ok: false,
+    code: "NON_COMPONENT_ELEMENT",
+    message: result.error || result.reason || "Could not componentize this layer.",
+  };
+}
+
 
 async function fixLinkToComponent(p) {
   const originalNode = p.node || p.rootNode;
@@ -5049,7 +6170,12 @@ async function fixStarAriaLabels(p) {
   setSharedA11y(root, "aria-label", "Star rating");
 
   figma.ui.postMessage({ type: "REFRESH_SUMMARY_BANNER" });
-  return { ok: true, code: p.issueCode, source: "annotation", message: "Applied aria-label to each star. Cmd+Z to undo." };
+  return {
+    ok: true,
+    code: p.issueCode,
+    source: "annotation",
+    message: "Applied ARIA to each star — visible in Dev Mode Code tab. Cmd+Z to undo.",
+  };
 }
 
 async function fixRequiredIndicator(p) {
@@ -5299,10 +6425,256 @@ async function fixLowContrast(p) {
   };
 }
 
+// ─── Issue capability: AUTO | FIGMA_AI | DESIGNER (drives UI — no false Auto-fix) ─
+var ISSUE_CAPABILITY = {
+  NO_GROUP_LABEL: "AUTO",
+  NO_INPUT_LABEL: "AUTO",
+  ICON_BUTTON_NO_LABEL: "AUTO",
+  MISSING_FOCUS_RING: "AUTO",
+  MISSING_STATE_FOCUS: "AUTO",
+  MISSING_STATE_DISABLED: "AUTO",
+  TOUCH_TARGET_SMALL: "AUTO",
+  DIALOG_NO_CLOSE: "AUTO",
+  DIALOG_NO_HEADING: "AUTO",
+  ACCORDION_NO_HEADING: "AUTO",
+  CONTRAST_TEXT_FAIL: "AUTO",
+  CONTRAST_FAIL: "AUTO",
+  LOW_CONTRAST: "AUTO",
+  NON_TEXT_CONTRAST_FAIL: "AUTO",
+  ROLE_BUTTON_MISSING: "AUTO",
+  ROLE_TEXTBOX_MISSING: "AUTO",
+  ROLE_CHECKBOX_MISSING: "AUTO",
+  ARIA_CHECKED_MISSING: "AUTO",
+  ROLE_RADIOGROUP_MISSING: "AUTO",
+  ROLE_COMBOBOX_MISSING: "AUTO",
+  ARIA_EXPANDED_MISSING: "AUTO",
+  ROLE_DIALOG_MISSING: "AUTO",
+  ARIA_MODAL_MISSING: "AUTO",
+  ROLE_TABLIST_MISSING: "AUTO",
+  ARIA_SELECTED_MISSING: "AUTO",
+  TABS_NO_TAB_ITEMS: "AUTO",
+  TABS_NO_TABPANEL: "AUTO",
+  ROLE_SLIDER_MISSING: "AUTO",
+  SLIDER_ARIA_VALUE_MISSING: "AUTO",
+  RATING_ROLE_MISSING: "FIGMA_AI",
+  ROLE_SWITCH_MISSING: "AUTO",
+  ACCORDION_PANEL_REGION: "AUTO",
+  ACCORDION_HEADER_NOT_BUTTON: "AUTO",
+  FOCUS_TRAP_VERIFY: "AUTO",
+  STAR_MISSING_ARIA_LABEL: "AUTO",
+  REQUIRED_NOT_INDICATED: "AUTO",
+  COLOR_ONLY_DISABLED: "AUTO",
+  COMBOBOX_NO_CHEVRON: "FIGMA_AI",
+  ERROR_COLOR_ONLY_VERIFY: "FIGMA_AI",
+  RADIO_NO_LABEL: "FIGMA_AI",
+  RATING_VALUE_NOT_COMMUNICATED: "FIGMA_AI",
+  SLIDER_VALUE_NOT_VISIBLE: "FIGMA_AI",
+  CHEVRON_OR_EXPAND_INDICATOR: "FIGMA_AI",
+  EACH_RADIO_HAS_LABEL: "FIGMA_AI",
+  VALUE_VISIBLE: "FIGMA_AI",
+  CURRENT_VALUE_COMMUNICATED: "FIGMA_AI",
+  ERROR_TEXT_NOT_COLOR_ONLY: "FIGMA_AI",
+  STATE_COVERAGE_CORE: "DESIGNER",
+  STATE_COVERAGE_INPUT: "DESIGNER",
+  STATE_COVERAGE_CHECKBOX: "DESIGNER",
+  STATE_COVERAGE_SELECT: "DESIGNER",
+  STATE_COVERAGE_SLIDER: "DESIGNER",
+  STATE_COVERAGE_TOGGLE: "DESIGNER",
+  FOCUS_RING_VISIBLE: "DESIGNER",
+  PLACEHOLDER_NOT_ONLY_LABEL: "DESIGNER",
+  TOUCH_TARGET_CRITICAL: "DESIGNER",
+  NO_ERROR_STATE: "DESIGNER",
+  NO_INDETERMINATE_STATE: "DESIGNER",
+  ACCORDION_BUTTON_CONTAINS_HEADING: "DESIGNER",
+  CHIP_REMOVE_NO_LABEL: "DESIGNER",
+  SLIDER_PARTS_MISSING: "DESIGNER",
+  FOCUS_RING_CONTRAST_FAIL: "DESIGNER",
+  FOCUS_RING_CONTRAST_UNKNOWN: "DESIGNER",
+};
+
+var ISSUE_DESIGNER_CAPABILITY_MESSAGES = {
+  FOCUS_RING_VISIBLE: "Add a Focus variant on the component set with a visible 2px outline (WCAG 2.4.11).",
+  FOCUS_RING_CONTRAST_FAIL: "Adjust the focus ring color to meet 3:1 contrast against adjacent colors.",
+  FOCUS_RING_CONTRAST_UNKNOWN: "Verify the focus indicator contrast manually (WCAG 1.4.11).",
+  PLACEHOLDER_NOT_ONLY_LABEL: "Add a visible label — placeholder text alone is not sufficient.",
+  TOUCH_TARGET_CRITICAL: "Resize or add spacing so the tap target is at least 24×24px (44×44 recommended).",
+  NO_ERROR_STATE: "Create an Error variant on the input component with visible error text.",
+  NO_INDETERMINATE_STATE: "Add an indeterminate variant if this supports tri-state selection.",
+  ACCORDION_BUTTON_CONTAINS_HEADING: "Restructure: heading wraps the trigger (heading > button), not button > heading.",
+  CHIP_REMOVE_NO_LABEL: "Add an accessible name for the remove control (visible text or aria-label).",
+  SLIDER_PARTS_MISSING: "Include track, thumb, and value elements in the slider design.",
+  ERROR_COLOR_ONLY_VERIFY: "Add error text and an icon — do not rely on color alone (requires visual review).",
+};
+
+var FIGMA_AI_PROMPTS = {
+  NON_COMPONENT_ELEMENT: function(node) {
+    return (
+      "Convert the layer named \"" + (node.name || "layer") + "\" (node ID: " + node.id + ") into a proper Figma component.\n" +
+      "Requirements:\n" +
+      "- Wrap it in a Component (not just a Frame)\n" +
+      "- Add these states as variants: Default, Hover, Focus, Disabled\n" +
+      "- Focus state must have a 2px solid outline with 3:1 contrast against adjacent colors\n" +
+      "- Preserve all existing visual design exactly\n" +
+      "- Place the new component in the same position, remove the original layer"
+    );
+  },
+  COMBOBOX_NO_CHEVRON: function(node) {
+    return (
+      "Add a chevron/expand indicator to the layer \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Add a ▾ or › icon to the right side of each interactive row\n" +
+      "- The icon must be aria-hidden (decorative only)\n" +
+      "- Match the existing visual style (color, size proportional to text)\n" +
+      "- Do not change the layout of existing content"
+    );
+  },
+  RADIO_NO_LABEL: function(node) {
+    return (
+      "Add visible text labels to all radio options in \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Each radio option that lacks a visible text label needs one added\n" +
+      "- Labels should be short (2–4 words), descriptive, and match the design context\n" +
+      "- Place labels to the right of each radio circle\n" +
+      "- Match the existing typography style"
+    );
+  },
+  RATING_ROLE_MISSING: function(node) {
+    return (
+      "Add accessible role and structure to the star rating in \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Wrap stars in a group with role=\"radiogroup\"\n" +
+      "- Add a visible label above the group (e.g. \"Rate this item\")\n" +
+      "- Each star should communicate its value visually and semantically"
+    );
+  },
+  ERROR_COLOR_ONLY_VERIFY: function(node) {
+    return (
+      "Add a text error message to the field \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Add a visible error text below the input (e.g. \"Error: This field is required\")\n" +
+      "- Color: #D00000, font size 12px\n" +
+      "- Add a ⚠ or ✕ icon before the text\n" +
+      "- The error must be communicated in text, not color alone"
+    );
+  },
+  MISSING_STATE_FOCUS: function(node) {
+    return (
+      "Add a Focus state variant to the component \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements per WCAG 2.4.11:\n" +
+      "- Add a new variant with property State=Focus\n" +
+      "- Focus ring: 2px solid outline, 2px offset\n" +
+      "- Ring color must achieve 3:1 contrast against adjacent colors\n" +
+      "- Do not change the default appearance"
+    );
+  },
+  MISSING_FOCUS_RING: function(node) {
+    return FIGMA_AI_PROMPTS.MISSING_STATE_FOCUS(node);
+  },
+  RATING_VALUE_NOT_COMMUNICATED: function(node) {
+    return (
+      "Communicate the current star rating value in \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Show which star is selected (filled vs outline)\n" +
+      "- Add a visible label or text showing the rating value if needed"
+    );
+  },
+  SLIDER_VALUE_NOT_VISIBLE: function(node) {
+    return (
+      "Make the current slider value visible in \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Add a text label showing the current value (e.g. \"50%\")\n" +
+      "- Position it near the thumb or below the track\n" +
+      "- Match existing typography"
+    );
+  },
+  STAR_MISSING_ARIA_LABEL: function(node) {
+    return (
+      "Add descriptive labels to each star in \"" + (node.name || "layer") + "\" (node ID: " + node.id + ").\n" +
+      "Requirements:\n" +
+      "- Each star needs a clear name (e.g. \"1 star\", \"2 stars\")\n" +
+      "- Preserve the visual design"
+    );
+  },
+  CHEVRON_OR_EXPAND_INDICATOR: function(node) {
+    return FIGMA_AI_PROMPTS.COMBOBOX_NO_CHEVRON(node);
+  },
+  EACH_RADIO_HAS_LABEL: function(node) {
+    return FIGMA_AI_PROMPTS.RADIO_NO_LABEL(node);
+  },
+  VALUE_VISIBLE: function(node) {
+    return FIGMA_AI_PROMPTS.SLIDER_VALUE_NOT_VISIBLE(node);
+  },
+  CURRENT_VALUE_COMMUNICATED: function(node) {
+    return FIGMA_AI_PROMPTS.RATING_VALUE_NOT_COMMUNICATED(node);
+  },
+  ERROR_TEXT_NOT_COLOR_ONLY: function(node) {
+    return FIGMA_AI_PROMPTS.ERROR_COLOR_ONLY_VERIFY(node);
+  },
+};
+
+function buildGenericFigmaAiPrompt(node, issueCode, issueMessage) {
+  const name = (node && node.name) || "layer";
+  const id = (node && node.id) || "";
+  return (
+    "Fix accessibility issue on layer \"" + name + "\" (node ID: " + id + ").\n" +
+    "Issue: " + (issueMessage || issueCode) + "\n" +
+    "WCAG requirement: " + issueCode + "\n" +
+    "Please apply the minimal change needed to resolve this issue while preserving the existing design."
+  );
+}
+
+function buildFigmaAiPromptForIssue(issue, node, rootNode) {
+  const target = node || rootNode;
+  if (!target) {
+    return buildGenericFigmaAiPrompt({ id: issue.nodeId || "", name: "layer" }, issue.code, issue.message);
+  }
+  const fn = FIGMA_AI_PROMPTS[issue.code];
+  if (fn) return fn(target);
+  if (isFocusStateIssue(issue)) return buildFocusStateComponentPrompt(target, rootNode || target);
+  return buildGenericFigmaAiPrompt(target, issue.code, issue.message);
+}
+
+function getDesignerCapabilityMessage(issueCode) {
+  if (ISSUE_DESIGNER_CAPABILITY_MESSAGES[issueCode]) return ISSUE_DESIGNER_CAPABILITY_MESSAGES[issueCode];
+  if (/^MISSING_STATE_/.test(issueCode)) {
+    return "Add a \"" + issueCode.replace("MISSING_STATE_", "").toLowerCase() + "\" variant to the component set.";
+  }
+  return "This change needs a design decision — the plugin cannot apply it automatically.";
+}
+
+function getIssueCapability(issueCode, ctx) {
+  ctx = ctx || {};
+
+  if (issueCode === "NON_COMPONENT_ELEMENT") {
+    const node = ctx.targetNode || ctx.rootNode || null;
+    return getNonComponentCapability(node);
+  }
+
+  let cap = ISSUE_CAPABILITY[issueCode];
+
+  if (cap === "AUTO" && (issueCode === "MISSING_STATE_FOCUS" || issueCode === "MISSING_FOCUS_RING")) {
+    const root = ctx.rootNode;
+    if (root && root.type !== "COMPONENT_SET" && root.type !== "COMPONENT") {
+      cap = "FIGMA_AI";
+    }
+  }
+
+  if (!cap) {
+    if (/^MISSING_STATE_/.test(issueCode) &&
+        issueCode !== "MISSING_STATE_FOCUS" &&
+        issueCode !== "MISSING_STATE_DISABLED") {
+      return "DESIGNER";
+    }
+    if (AUTO_FIX_HANDLERS && AUTO_FIX_HANDLERS.hasOwnProperty(issueCode)) return "AUTO";
+    return "DESIGNER";
+  }
+  return cap;
+}
+
 // Issue codes the engine emits → handler. Codes without a handler fall through
 // to acknowledge-only UI (no Auto-fix button).
 var ISSUE_FIX_META = {
-  COLOR_ONLY_DISABLED:     { fixKind: "message_only", designerMessage: "Add a text label or icon to distinguish on/off state beyond color alone." },
+  COLOR_ONLY_DISABLED:     { fixKind: "annotation" },
   RADIO_NO_LABEL:          { fixKind: "ai_content" },
   ERROR_COLOR_ONLY_VERIFY: { fixKind: "ai_content" },
   ROLE_BUTTON_MISSING:       { fixKind: "annotation" },
@@ -5340,28 +6712,46 @@ async function enrichIssueFixMeta(issues, rootNode) {
     const targetNode = await getIssueTargetNode(issues[qi], rootNode);
     const pending = readDesignerPending(targetNode);
     const waitingAi = readWaitingForAi(rootNode);
+    const capability = getIssueCapability(code, { rootNode: rootNode, targetNode: targetNode });
+
+    issues[qi].capability = capability;
+
     if (waitingAi && waitingAi.issueCode === code) {
       issues[qi].waitingForAi = true;
       issues[qi].waitingSince = waitingAi.markedAt;
       issues[qi].waitingPrompt = waitingAi.prompt || "";
       issues[qi].autoFixable = false;
-      if (isFocusStateIssue(issues[qi])) issues[qi].fixKind = "focus_state";
     }
     if (pending && pending.issueCode === code) {
       issues[qi].designerPending = true;
       issues[qi].pendingSince = pending.markedAt;
       issues[qi].pendingMessage = pending.message || "";
       issues[qi].autoFixable = false;
-      if (isFocusStateIssue(issues[qi])) issues[qi].fixKind = "focus_state";
     }
-    if (isFocusStateIssue(issues[qi]) && !issues[qi].designerPending && !issues[qi].waitingForAi) {
-      issues[qi].fixKind = "focus_state";
-      issues[qi].autoFixable = false;
-    } else if (!issues[qi].designerPending && !issues[qi].waitingForAi) {
-      issues[qi].autoFixable = AUTO_FIX_HANDLERS.hasOwnProperty(code) && meta.fixKind !== "message_only";
-      issues[qi].fixKind = meta.fixKind || (issues[qi].autoFixable ? "visual" : null);
+
+    if (!issues[qi].designerPending && !issues[qi].waitingForAi) {
+      if (capability === "AUTO") {
+        issues[qi].autoFixable = true;
+        issues[qi].fixKind = meta.fixKind || "visual";
+      } else if (capability === "FIGMA_AI") {
+        issues[qi].autoFixable = false;
+        issues[qi].fixKind = "figma_ai";
+        issues[qi].figmaAiPrompt = buildFigmaAiPromptForIssue(issues[qi], targetNode, rootNode);
+      } else {
+        issues[qi].autoFixable = false;
+        issues[qi].fixKind = "designer_only";
+        if (!issues[qi].designerMessage) {
+          issues[qi].designerMessage = meta.designerMessage || getDesignerCapabilityMessage(code);
+        }
+      }
     }
-    if (meta.designerMessage) issues[qi].designerMessage = meta.designerMessage;
+
+    if (capability === "FIGMA_AI" && !issues[qi].figmaAiPrompt) {
+      issues[qi].figmaAiPrompt = buildFigmaAiPromptForIssue(issues[qi], targetNode, rootNode);
+    }
+    if (meta.designerMessage && capability === "DESIGNER") {
+      issues[qi].designerMessage = meta.designerMessage;
+    }
     if (ackMap[code]) issues[qi].acknowledged = true;
   }
 }
@@ -5378,7 +6768,7 @@ const AUTO_FIX_HANDLERS = {
   "DIALOG_NO_HEADING":      fixDialogNoHeading,
   "ACCORDION_NO_HEADING":        fixAccordionNoHeadingAnnotation,
   "ACCORDION_HEADER_NOT_BUTTON": fixAccordionHeaderButtons,
-  "NON_COMPONENT_ELEMENT":     fixLinkToComponent,
+  "NON_COMPONENT_ELEMENT":     fixNonComponentElementHandler,
   "CONTRAST_TEXT_FAIL":     fixLowContrast,
   "LOW_CONTRAST":           fixLowContrast,
   "CONTRAST_FAIL":          fixLowContrast,
@@ -5892,8 +7282,11 @@ async function applyAllIssueFixes(rootNode, issues, opts) {
   const fixable = [];
   for (let i = 0; i < (issues || []).length; i++) {
     const iss = issues[i];
+    const issCap = iss.capability ||
+      getIssueCapability(iss.code, { rootNode: rootNode, targetNode: rootNode });
+    if (issCap !== "AUTO") continue;
     if (!AUTO_FIX_HANDLERS[iss.code]) continue;
-    if (iss.fixKind === "focus_state" || iss.fixKind === "message_only") continue;
+    if (iss.fixKind === "message_only" || iss.fixKind === "figma_ai" || iss.fixKind === "designer_only") continue;
     if (iss.designerPending || iss.waitingForAi) continue;
     if (iss.acknowledged || iss.fixed) continue;
     if (iss.severity === "MANUAL") continue;
@@ -5969,6 +7362,13 @@ async function analyzeNodeAndPost(rootNode, options) {
   options = options || {};
   const previousIssues = options.previousIssues || [];
 
+  if (isA11yGeneratedLayer(rootNode)) {
+    notifyScanSkipped(rootNode);
+    return;
+  }
+
+  if (!options.skipSnapshot) await saveA11ySnapshot(rootNode);
+
   const ctx = await gatherContext(rootNode);
   let detection = detectComponent(ctx, rootNode);
   ctx.competitorRole = detection.competitorRole || null;
@@ -6007,6 +7407,7 @@ async function analyzeNodeAndPost(rootNode, options) {
   }
 
   refreshDevModeAnnotations(rootNode);
+  persistCodegenHandoffFields(rootNode, detection.spec, issues);
 
   const waitingState = readWaitingForAi(rootNode);
   if (waitingState) {
@@ -6053,6 +7454,16 @@ async function analyzeNodeAndPost(rootNode, options) {
     resolvedIssues: resolvedIssues,
   };
 
+  try {
+    const bytes = await exportPreviewNode(rootNode);
+    figma.ui.postMessage({
+      type:      "UPDATE_PREVIEW",
+      ok:        true,
+      nodeId:    rootNode.id,
+      imageData: figma.base64Encode(bytes),
+    });
+  } catch (_e) {}
+
   figma.ui.postMessage({
     type:                 "ANALYSIS_RESULTS",
     nodeId:               rootNode.id,
@@ -6074,16 +7485,13 @@ async function autoFixIssue(params) {
   }
 
   if (params.strategy === "prompt") {
-    let prompt;
-    if (isFocusStateIssue({ code: params.issueCode, message: params.message || "" })) {
-      prompt = buildFocusStateComponentPrompt(node, rootNode);
-    } else if (params.issueCode === "NON_COMPONENT_ELEMENT") {
-      const typeKey = normalizeMatrixTypeKey(params.detectedRole || "button");
-      const spec = COMPONENT_SPECS.find(function(s) { return normalizeMatrixTypeKey(s.role) === typeKey; });
-      const ariaRole = (spec && spec.ariaRole) || typeKey;
-      prompt = buildComponentLinkAIPrompt(node || rootNode, typeKey, ariaRole);
-    } else {
-      prompt = buildClipboardPrompt(params.issueCode, node, rootNode);
+    let prompt = params.figmaAiPrompt || "";
+    if (!prompt) {
+      prompt = buildFigmaAiPromptForIssue(
+        { code: params.issueCode, message: params.message || "" },
+        node,
+        rootNode
+      );
     }
     if (rootNode && rootNode.setPluginData) {
       rootNode.setPluginData("a11y-waiting-ai", JSON.stringify({
@@ -6099,6 +7507,15 @@ async function autoFixIssue(params) {
       promptForClipboard: prompt,
       waitingForAi:       true,
       message:            "Prompt copied — paste into Figma AI assistant",
+    };
+  }
+
+  const fixTarget = node || rootNode;
+  if (getIssueCapability(params.issueCode, { rootNode: rootNode, targetNode: fixTarget }) !== "AUTO") {
+    return {
+      ok:      false,
+      code:    params.issueCode,
+      message: "This issue cannot be fixed automatically by the plugin.",
     };
   }
 
@@ -6295,6 +7712,7 @@ async function collectScanCandidates(rootFrame, allTextNodes, maxDepth) {
 
   async function walk(node, depth) {
     if (!node) return;
+    if (isA11yGeneratedLayer(node)) return;
     if (SKIP_TYPES[node.type]) return;
     if (depth > maxDepth) return;
 
@@ -6328,6 +7746,134 @@ async function collectScanCandidates(rootFrame, allTextNodes, maxDepth) {
 const INDEX_KEY      = "a11y.componentIndex";
 const INDEX_MAX_ROWS = 200;
 const LAST_SCAN_KEY  = "a11y.v1.lastScan";
+const SNAPSHOT_KEY   = "a11y-snapshot";
+
+const A11Y_PLUGIN_DATA_KEYS = [
+  "a11y.v1.componentType", "a11y.v1.ariaRole", "a11y.v1.ariaLabel",
+  "a11y.v1.ariaLevel", "a11y.v1.states", "a11y.v1.wcagRef",
+  "a11y.v1.issues", "a11y.v1.ariaSchema", "a11y.generated",
+  "a11y.labelFor", "a11y-waiting-ai", LAST_SCAN_KEY,
+];
+
+function collectPluginDataSnapshot(node) {
+  const pluginData = {};
+  for (let i = 0; i < A11Y_PLUGIN_DATA_KEYS.length; i++) {
+    const k = A11Y_PLUGIN_DATA_KEYS[i];
+    try {
+      const v = node.getPluginData(k);
+      if (v) pluginData[k] = v;
+    } catch (_e) {}
+  }
+  return pluginData;
+}
+
+function collectSharedA11ySnapshot(node) {
+  const shared = {};
+  if (!node.getSharedPluginData) return shared;
+  for (const pk in SHARED_A11Y_KEY_MAP) {
+    if (!SHARED_A11Y_KEY_MAP.hasOwnProperty(pk)) continue;
+    const sk = SHARED_A11Y_KEY_MAP[pk];
+    try {
+      const v = node.getSharedPluginData("a11y", sk);
+      if (v) shared[sk] = v;
+    } catch (_e) {}
+  }
+  try {
+    const ls = node.getSharedPluginData("a11y", "lastScan");
+    if (ls) shared.lastScan = ls;
+  } catch (_e) {}
+  return shared;
+}
+
+async function saveA11ySnapshot(node) {
+  if (!node || !node.setPluginData) return;
+  let annotations = [];
+  try {
+    if (node.annotations && node.annotations.length) {
+      annotations = JSON.parse(JSON.stringify(node.annotations));
+    }
+  } catch (_e) {}
+  const childrenState = ("children" in node && node.children)
+    ? node.children.map(function(c) { return { id: c.id, name: c.name, visible: c.visible }; })
+    : [];
+  const snap = {
+    name: node.name,
+    visible: node.visible,
+    pluginData: collectPluginDataSnapshot(node),
+    sharedPluginData: collectSharedA11ySnapshot(node),
+    annotations: annotations,
+    childrenState: childrenState,
+  };
+  try { node.setPluginData(SNAPSHOT_KEY, JSON.stringify(snap)); } catch (_e) {}
+}
+
+async function restoreA11ySnapshot(node) {
+  if (!node || !node.getPluginData) return { ok: false, message: "No snapshot available" };
+  const raw = node.getPluginData(SNAPSHOT_KEY);
+  if (!raw) return { ok: false, message: "No snapshot available" };
+  let snap;
+  try { snap = JSON.parse(raw); } catch (_e) {
+    return { ok: false, message: "Snapshot could not be read" };
+  }
+
+  node.name = snap.name;
+  if (snap.visible !== undefined) node.visible = snap.visible;
+
+  const keysToClear = {};
+  let ki;
+  for (ki = 0; ki < A11Y_PLUGIN_DATA_KEYS.length; ki++) keysToClear[A11Y_PLUGIN_DATA_KEYS[ki]] = true;
+  const pdKeys = snap.pluginData || {};
+  for (const k in pdKeys) { if (pdKeys.hasOwnProperty(k)) keysToClear[k] = true; }
+  for (const k in keysToClear) {
+    try { node.setPluginData(k, ""); } catch (_e) {}
+  }
+  for (const k in pdKeys) {
+    if (!pdKeys.hasOwnProperty(k)) continue;
+    try { node.setPluginData(k, pdKeys[k]); } catch (_e) {}
+  }
+
+  if (node.setSharedPluginData) {
+    for (const pk in SHARED_A11Y_KEY_MAP) {
+      if (!SHARED_A11Y_KEY_MAP.hasOwnProperty(pk)) continue;
+      try { node.setSharedPluginData("a11y", SHARED_A11Y_KEY_MAP[pk], ""); } catch (_e) {}
+    }
+    const sd = snap.sharedPluginData || {};
+    for (const sk in sd) {
+      if (!sd.hasOwnProperty(sk)) continue;
+      try { node.setSharedPluginData("a11y", sk, sd[sk]); } catch (_e) {}
+    }
+  }
+
+  if (snap.annotations && node.setAnnotations) {
+    try { node.setAnnotations(snap.annotations); } catch (_e) {}
+  }
+
+  const parent = node.parent;
+  if (parent && "children" in parent) {
+    const toRemove = [];
+    for (let i = 0; i < parent.children.length; i++) {
+      const c = parent.children[i];
+      if ((c.name || "").indexOf("_a11y_") >= 0) toRemove.push(c);
+    }
+    for (let j = 0; j < toRemove.length; j++) {
+      try { toRemove[j].remove(); } catch (_e) {}
+    }
+  }
+
+  return { ok: true };
+}
+
+async function exportPreviewNode(node) {
+  const box = node && node.absoluteBoundingBox;
+  let scale = 1;
+  if (box && box.width > 0 && box.height > 0) {
+    scale = Math.min(320 / box.height, 580 / box.width, 1);
+  }
+  return await node.exportAsync({
+    format: "PNG",
+    constraint: { type: "SCALE", value: scale },
+  });
+}
 
 async function loadComponentIndex() {
   const stored = await figma.clientStorage.getAsync(INDEX_KEY);
@@ -6424,21 +7970,32 @@ async function removeFromIndex(nodeId) {
   }
 }
 
-// ── Selection change → push stored snapshot to UI when available ──
-// We only fire when there is exactly one node selected AND it has a stored scan,
-// so the analyze flow's empty/loading states are never overwritten by surprise.
-figma.on("selectionchange", function() {
+// ── Selection change → keep preview in sync with canvas selection ──
+figma.on("selectionchange", async function() {
   const sel = figma.currentPage.selection;
-  if (sel.length !== 1) return;
-  const stored = readStoredScan(sel[0]);
-  if (!stored) return;
+  if (sel.length === 0) {
+    figma.ui.postMessage({ type: "SELECTION_CLEARED" });
+    return;
+  }
+  const raw = sel[0];
+  const root = getSemanticRoot(raw);
   figma.ui.postMessage({
-    type:     "STORED_STATE_AVAILABLE",
-    nodeId:   sel[0].id,
-    nodeName: sel[0].name,
-    nodeType: sel[0].type,
-    snapshot: stored,
+    type:     "SELECTION_CHANGED",
+    nodeId:   root.id,
+    nodeName: root.name,
+    nodeType: root.type,
   });
+  try {
+    const bytes = await exportPreviewNode(root);
+    figma.ui.postMessage({
+      type:      "UPDATE_PREVIEW",
+      ok:        true,
+      nodeId:    root.id,
+      imageData: figma.base64Encode(bytes),
+    });
+  } catch (_e) {
+    figma.ui.postMessage({ type: "UPDATE_PREVIEW", ok: false, nodeId: root.id });
+  }
 });
 
 async function scrollToNode(nodeId) {
@@ -6482,10 +8039,7 @@ figma.ui.onmessage = async (msg) => {
       return;
     }
     try {
-      const bytes = await node.exportAsync({
-        format: "PNG",
-        constraint: { type: "SCALE", value: 0.5 },
-      });
+      const bytes = await exportPreviewNode(node);
       figma.ui.postMessage({
         type:      "UPDATE_PREVIEW",
         ok:        true,
@@ -6495,6 +8049,27 @@ figma.ui.onmessage = async (msg) => {
     } catch (_e) {
       figma.ui.postMessage({ type: "UPDATE_PREVIEW", ok: false, nodeId: targetId });
     }
+    return;
+  }
+
+  if (msg.type === "RESET_LAYER") {
+    const targetId = msg.rootNodeId || msg.nodeId;
+    const node = await getNodeById(targetId);
+    if (!node) {
+      figma.ui.postMessage({ type: "RESET_RESULT", ok: false, message: "Layer not found" });
+      figma.notify("Layer not found");
+      return;
+    }
+    const result = await restoreA11ySnapshot(node);
+    if (!result.ok) {
+      figma.notify(result.message);
+      figma.ui.postMessage({ type: "RESET_RESULT", ok: false, message: result.message });
+      return;
+    }
+    figma.commitUndo();
+    figma.notify("Reset complete — all plugin changes removed");
+    await analyzeNodeAndPost(node, { skipSnapshot: true });
+    figma.ui.postMessage({ type: "RESET_RESULT", ok: true });
     return;
   }
 
@@ -6660,6 +8235,7 @@ figma.ui.onmessage = async (msg) => {
       linkCandidateId:       msg.linkCandidateId,
       skipCandidateIds:      msg.skipCandidateIds,
       message:               msg.message,
+      figmaAiPrompt:         msg.figmaAiPrompt,
     });
     if (rootNode && result.ok && msg.strategy !== "prompt" && !result.needsComponentLinkChoice) {
       await analyzeNodeAndPost(rootNode, { afterFix: true, previousIssues: previousIssues });
@@ -6900,20 +8476,40 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
-  if (msg.type === "ANALYZE_SELECTION") {
-    const selection = figma.currentPage.selection;
-    if (selection.length === 0) {
-      figma.ui.postMessage({ type: "ERROR", message: "No layer selected. Select a component first." });
+  if (msg.type === "ANALYZE_SELECTION" || msg.type === "RESCAN_NODE") {
+    let rootNode;
+    if (msg.type === "RESCAN_NODE") {
+      const target = await getNodeById(msg.nodeId);
+      if (!target) {
+        figma.ui.postMessage({ type: "ERROR", message: "Layer not found." });
+        return;
+      }
+      try { figma.currentPage.selection = [target]; } catch (_e) { /* read-only */ }
+      rootNode = getSemanticRoot(target);
+    } else {
+      const selection = figma.currentPage.selection;
+      if (selection.length === 0) {
+        figma.ui.postMessage({ type: "ERROR", message: "No layer selected. Select a component first." });
+        return;
+      }
+      rootNode = getSemanticRoot(selection[0]);
+    }
+
+    if (isA11yGeneratedLayer(rootNode)) {
+      notifyScanSkipped(rootNode);
       return;
     }
 
-    const rawNode   = selection[0];
-    const rootNode  = getSemanticRoot(rawNode);
+    await saveA11ySnapshot(rootNode);
 
-    // Export a 2× PNG preview — non-blocking; a failure here must not abort analysis
     try {
-      const bytes = await rootNode.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: 2 } });
-      figma.ui.postMessage({ type: "PREVIEW_IMAGE", bytes: bytes });
+      const bytes = await exportPreviewNode(rootNode);
+      figma.ui.postMessage({
+        type:      "UPDATE_PREVIEW",
+        ok:        true,
+        nodeId:    rootNode.id,
+        imageData: figma.base64Encode(bytes),
+      });
     } catch (_e) { /* preview is optional */ }
 
     const ctx          = await gatherContext(rootNode);
@@ -6957,6 +8553,9 @@ figma.ui.onmessage = async (msg) => {
       ctx.componentType = (detection.role || (detection.spec && detection.spec.role) || ctx.nodeType);
       await enrichIssuesWithTitlesAndExplanations(issues, rootNode, ctx, apiKeyForTitles);
     }
+
+    refreshDevModeAnnotations(rootNode);
+    persistCodegenHandoffFields(rootNode, detection.spec, issues);
 
     // Phase B: generate spec-aware suggestions (rename + plugin data)
     // For non-spec components the rule engine's suggestions are used as before.
@@ -7092,5 +8691,14 @@ figma.ui.onmessage = async (msg) => {
     }
   }
 };
+
+// ─── Dev Mode Codegen — ARIA handoff in Code tab ─────────────────────────────
+if (typeof figma.codegen !== "undefined" && figma.codegen && figma.codegen.on) {
+  figma.codegen.on("generate", async function(event) {
+    const node = event && event.node;
+    if (!node) return [];
+    return buildCodegenResults(node);
+  });
+}
 
 exposeDebugApi();

@@ -1,101 +1,71 @@
 ---
-description: Figma plugin developer persona — accessibility, performance, semantics
+description: A11y Shift Figma plugin — architecture, WCAG auditing, autofix, and semantic component rules
 globs: ["**/*.js", "**/*.ts", "**/*.html", "**/manifest.json"]
 alwaysApply: true
 ---
 
-# Figma A11y Plugin Developer — Rules & Persona
+# Figma A11y Plugin Developer
 
-You are a senior Figma plugin engineer with deep expertise in:
-- Figma Plugin API internals (same level as engineers who built Figma AI)
-- WCAG 2.2 AA + ARIA APG patterns
-- Figma file semantics and design system architecture
-- Plugin performance and sandboxing constraints
+You are a senior Figma plugin engineer responsible for **A11y Shift** — a WCAG 2.2 AA + ARIA APG auditing and guided-fix plugin for designers.
 
-You write code as if you are responsible for a plugin used by thousands of
-designers daily. Every decision is deliberate. You never guess at API behavior —
-you reason from known constraints.
+- **Main thread:** `dist/code.js` (Figma sandbox, Plugin API, `fetch`)
+- **UI thread:** `ui.html` (DOM only; communicates via `postMessage`)
+- **Manifest:** `manifest.json` — plugin id `1641240485798800801`, `documentAccess: "dynamic-page"`, `capabilities: ["codegen"]`
+- **Counts and inventories** (checks, handlers, issue codes): always read from `dist/code.js` — do not hardcode numbers in docs or comments; they go stale.
+
+Write code as if thousands of designers use it daily. Never guess API behavior — reason from known constraints and verify against the codebase.
 
 ---
 
-## 0. Published plugin vs Development — read this before every change
+## 0. Published vs development
 
-The plugin behaves **stricter after publish** than when you run it from
-`Plugins → Development → Import manifest`. Code that “works locally” can
-**crash or silently return wrong data** in production. Always code and test as
-if the plugin is already published.
+The plugin is **stricter after publish** than in `Plugins → Development → Import manifest`. Code that works locally can crash or return wrong data in production. Always implement and test as if published.
 
-| Topic | Development (local) | Published (production) |
-|-------|---------------------|-------------------------|
-| How it runs | `manifest.json` from disk; reload after edits | Same bundle served for plugin id `1641240485798800801`; users get updates on publish |
-| `figma.getNodeById(id)` | May appear to work in some builds | **Throws or breaks** — use **`await getNodeById(id)`** only (`getNodeByIdAsync`) |
-| `fetch()` | Only domains in `manifest.json` `networkAccess` | Same — requests to other hosts fail |
-| Figma REST (`figma.com/api/…`) | **Never valid** for plugins (not Plugin API) | Same — e.g. `/api/custom_tools/owned_by_user` will 403; do not add |
-| Figma AI integration | No server API for plugins | **Copy prompt to clipboard** → designer pastes in Figma AI (`⌘⌥I`); TODO only |
-| `documentAccess` | Must be `"dynamic-page"` in manifest for reliable reads | Required for published scans |
-| UI iframe | No `figma.*`, no `fetch` to OpenAI | Unchanged — all network from main thread |
+| Topic | Rule |
+|-------|------|
+| Node lookup | **Never** `figma.getNodeById(id)`. Use `await getNodeById(id)` → `figma.getNodeByIdAsync` only. |
+| Main component | **Never** `node.mainComponent`. Use `await node.getMainComponentAsync()`. |
+| Fonts | **Always** `await figma.loadFontAsync(...)` before setting `fontName` or `characters` on TEXT. Default: Inter. Never Arial. |
+| Network | OpenAI only (`manifest.json` `networkAccess`). No `figma.com/api/*` (not Plugin API). |
+| Figma AI | No HTTP API for plugins. **Copy prompt → designer pastes in Figma AI** (`⌘⌥I` / `Ctrl+Alt+I`). |
+| UI iframe | No `figma.*`, no `fetch` to external APIs, no `figma.clientStorage`. |
+| Dev Mode | `figma.codegen.on("generate")` reads `getSharedPluginData("a11y", …)`; requires `capabilities: ["codegen"]`. |
 
-**Pre-publish checklist (run every time before publish):**
+### Pre-publish checklist
+
 1. `grep 'figma\.getNodeById\(' dist/code.js` → **0 matches**
-2. `grep 'figma\.com/api' dist/code.js ui.html` → **0 matches**
-3. `node --check dist/code.js`
-4. Reload in Figma → analyze a known frame (e.g. accordion `clickables`) → check console for `[classify]` logs
-5. Confirm `manifest.json`: correct `id`, `documentAccess`, `allowedDomains` = OpenAI only
+2. `grep '\.mainComponent[^A]' dist/code.js` → **0 matches**
+3. Every `loadFontAsync` in `dist/code.js` is **`await`**ed before text mutation
+4. `grep 'figma\.com/api' dist/code.js ui.html` → **0 matches**
+5. `node --check dist/code.js`
+6. Reload in Figma → analyze a known frame (e.g. accordion) → check `[classify]` / `[accordion]` logs
+7. `manifest.json`: correct `id`, `documentAccess`, `codegen` capability, OpenAI domain only
+8. Dev Mode: scanned layer → **Code** tab → **A11y Shift** snippets appear
 
 ---
 
-## 1. Figma Architecture — Non-Negotiables
+## 1. Two-thread architecture
 
-### Two threads, strict separation
-- `dist/code.js` = main thread (Figma sandbox). Has Plugin API + fetch access.
-  No DOM. No window. No localStorage.
-- `ui.html` = UI iframe. Has DOM. NO direct Figma API access. NO fetch to
-  external APIs (CORS will block). NO figma.clientStorage.
-- Communication: ONLY via postMessage in both directions. Never try to
-  share objects or closures across threads.
+### What runs where
 
-### What runs where — always verify
-| Operation | Thread | Reason |
-|-----------|--------|--------|
-| node.name = "..." | main | Plugin API |
-| fetch("https://api.openai.com") | main | networkAccess |
-| figma.clientStorage | main | Plugin API only |
-| figma.getNodeByIdAsync() | main | Plugin API only — **never** sync getNodeById |
-| document.getElementById() | UI | DOM only |
-| React / Vue rendering | UI | DOM only |
-| localStorage / sessionStorage | UI | DOM only (not persisted across plugin sessions) |
+| Operation | Thread |
+|-----------|--------|
+| `node.name`, mutations, `fetch`, `figma.clientStorage` | main (`dist/code.js`) |
+| `figma.getNodeByIdAsync`, `getMainComponentAsync`, `loadFontAsync`, `figma.codegen` | main |
+| `document.getElementById`, rendering, `sessionStorage` (session-only) | UI (`ui.html`) |
 
 ### Never do this
+
 ```js
-// ❌ fetch from UI iframe — CORS error every time
-fetch("https://api.openai.com/v1/chat/completions", ...)
+// ❌ UI iframe — CORS / ReferenceError
+fetch("https://api.openai.com/...")
+figma.currentPage.selection
 
-// ❌ access figma from UI
-figma.currentPage.selection  // ReferenceError in iframe
+// ❌ postMessage — nodes are not structured-cloneable
+figma.ui.postMessage({ node: someSceneNode })
+```
 
-// ❌ pass non-serializable objects over postMessage
-figma.ui.postMessage({ node: figma.currentPage.selection[0] })
-// nodes are not cloneable — pass only plain data
-
----
-
-
-
-2. Plugin API — Patterns and Pitfalls
-
-
-Always await async operations
-
-// ✓ correct
-const key = await figma.clientStorage.getAsync("api-key")
-await figma.loadFontAsync({ family: "Inter", style: "Regular" })
-
-// ✗ wrong — silent failure, no error thrown
-figma.clientStorage.getAsync("api-key").then(...)  // fire-and-forget bug
-
-**CRITICAL — published plugins: `figma.getNodeById` throws at runtime**
-
-Use async lookup only. In `dist/code.js` use the shared helper:
+### Node lookup helper (main thread)
 
 ```js
 async function getNodeById(id) {
@@ -104,489 +74,316 @@ async function getNodeById(id) {
 }
 ```
 
-```js
-// ✗ CRASHES in production — sync API removed/broken for published plugins
-const node = figma.getNodeById(id)
+Every caller of `getNodeById` must be `async` and `await` it (propagate through `figma.ui.onmessage`).
 
-// ✓ correct — caller must be async and await
-const node = await getNodeById(id)
-```
+### Async classification chain
 
-Before merge/publish: `grep 'figma\.getNodeById\(' dist/code.js` must return **zero** hits.
-Any function that calls `getNodeById` must be `async`; every caller must `await` it (propagate up to `figma.ui.onmessage`).
-
-**CRITICAL — async classification chain (`deepChildScan` regression)**
-
-`gatherContext` is **async** and must **`await deepChildScan`**. If any caller
-skips `await`, `hasChevrons` / `allChildNames` are empty → accordion loses to
-tablist and logs look “fine” but classification is wrong.
+`gatherContext` is **async** and must **`await deepChildScan`**. Skipping `await` empties chevron/sibling signals → accordion misclassified as tablist.
 
 ```js
-// ✓ deepChildScan — recursive, for-loop + await (never forEach + async)
-async function deepChildScan(node, maxDepth = 3, depth = 0) {
-  if (depth >= maxDepth || !node) return emptyDeepScan();
-  const result = emptyDeepScan();
-  if (!("children" in node)) return result;
-  for (let i = 0; i < node.children.length; i++) {
-    const child = node.children[i];
-    if (!isNodeVisible(child)) continue;
-    // ... collect names, chevrons ...
-    const sub = await deepChildScan(child, maxDepth, depth + 1);
-    mergeDeepScanResults(result, sub);
-  }
-  return result;
+// ✓ for-loop + await — never forEach(async ...)
+for (let i = 0; i < node.children.length; i++) {
+  const sub = await deepChildScan(child, maxDepth, depth + 1);
+  mergeDeepScanResults(result, sub);
 }
 
-// ✗ broken — forEach does not wait for async callbacks
-node.children.forEach(async (child) => { await deepChildScan(child); });
-
-// ✓ gatherContext + analyze path
 const ctx = await gatherContext(rootNode);
 const detection = detectComponent(ctx, rootNode);
 ```
 
-Callers that **must** use `await gatherContext(...)`: `analyzeNodeAndPost`,
-`ANALYZE_SELECTION`, `collectScanCandidates`, `auditCandidateIssueCount`, all
-autofix handlers that call `gatherContext`, `applyAllIssueFixes` path.
+Callers that must `await gatherContext`: `analyzeNodeAndPost`, `ANALYZE_SELECTION`, `RESCAN_NODE`, `collectScanCandidates`, autofix paths that need context.
 
-**No Figma REST / no Figma AI HTTP API**
+**`deepChildScan` default `maxDepth` is 3** (see `dist/code.js`). Performance guidance elsewhere may say 5 for generic traversal — do not contradict the implemented default without changing code.
+
+---
+
+## 2. Plugin API patterns
+
+### Traversal — performance
 
 ```js
-// ✗ never — internal Figma endpoint, not Plugin API, not in manifest
-fetch("https://www.figma.com/api/custom_tools/owned_by_user")
-```
-
-Allowed network: **`https://api.openai.com` only** (see `manifest.json`).
-
-
-Node traversal — performance first
-
-// ✗ slow — traverses entire document
-figma.currentPage.findAll(n => n.type === "TEXT")
-
-// ✓ fast — use findAllWithCriteria when filtering by type
-frame.findAllWithCriteria({ types: ["TEXT", "INSTANCE"] })
-
-// ✓ always limit depth on large frames
-function findWithDepth(node, predicate, maxDepth = 4, depth = 0) {
-  if (depth > maxDepth) return []
-  const results = []
-
-
-Avoid blocking the main thread
-
-// ✓ yield between expensive operations
-for (const node of largeNodeList) {
-  processNode(node)
-  await new Promise(r => setTimeout(r, 0))  // let Figma breathe
-}
-
-
-absoluteBoundingBox — handle nulls
-
-// absoluteBoundingBox is null for nodes inside collapsed components
-// and for nodes not yet rendered
-const box = node.absoluteBoundingBox
-if (!box) return  // always guard
-
-
-setPluginData vs setSharedPluginData
-
-// setPluginData — only readable by THIS plugin
-node.setPluginData("a11y.role", "button")
-
-// setSharedPluginData — readable by any plugin + Figma REST API
-// use this for data developers need to access externally
-node.setSharedPluginData("a11y", "role", "button")
-node.setSharedPluginData("a11y", "ariaLabel", "Submit form")
-
-
-variantProperties vs componentPropertyDefinitions
-
-// variantProperties — current instance's selected variants
-// only available on INSTANCE nodes
-if (node.type === "INSTANCE") {
-  const variants = node.variantProperties  // { "State": "hover", "Size": "md" }
-}
-
-// componentPropertyDefinitions — the component's defined properties
-// available on COMPONENT nodes
-if (node.type === "COMPONENT") {
-  const defs = node.componentPropertyDefinitions
-
-
----
-
-
-
-3. Figma File Semantics
-
-
-Layer naming convention (ARIA APG aligned)
-
-role / identifier [aria-notes]
-Examples:
-
-button / submit [aria-label="Submit form"]
-input / email [type=email, required, aria-describedby=email-error]
-dialog / confirm-delete [aria-modal=true, aria-labelledby=dialog-title]
-radio-group / payment [role=radiogroup]
-radio / credit-card [aria-checked=false]
-accordion-item / faq-1
-  heading / faq-1-title [aria-level=3]
-    button / faq-1-trigger [aria-expanded=false, aria-controls=faq-1-panel]
-  panel / faq-1-panel [role=region, hidden]
-
-
-Auto-layout = semantic structure
-Auto-layout direction must reflect reading order and DOM order
-Vertical AL = block-level elements (form fields, accordion items, list items)
-Horizontal AL = inline elements (button group, tabs, breadcrumb)
-Nested AL depth should mirror HTML nesting depth
-NEVER use absolute positioning for semantically ordered content
-
-
-Component variants = ARIA states
-| Figma variant property | ARIA equivalent |
-|------------------------|-----------------|
-| State=default | (no attribute) |
-| State=hover | (visual only, no ARIA change) |
-| State=focus | :focus-visible |
-| State=active | aria-pressed=true (toggles) |
-| State=disabled | aria-disabled=true |
-| State=error | aria-invalid=true |
-| State=loading | aria-busy=true |
-| Checked=true | aria-checked=true |
-| Expanded=true | aria-expanded=true |
-| Selected=true | aria-selected=true |
-
-
-
-Semantic root detection
-When a user selects a single star in a star-rating group, analyze the
-SEMANTIC ROOT, not the selected node:
-
-
-function getSemanticRoot(node) {
-  let cursor = node
-  while (cursor.parent && cursor.parent.type !== "PAGE") {
-    const parent = cursor.parent
-    if (!("children" in parent)) break
-    const siblings = parent.children
-    const allSameType = siblings.length >= 2 &&
-      siblings.every(s => s.type === cursor.type)
-    const semanticParent = ["group","radio","star","rating","check",
-      "tab","toggle","segment","toolbar","menu","list"]
-
-
----
-
-
-
-4. Accessibility — Core Principles
-
-
-WCAG 2.2 AA — the non-negotiables
-Every audit must check these. No exceptions.
-
-
-
-| Criterion | Requirement | Severity if failed |
-|-----------|-------------|-------------------|
-| 1.4.3 | Text contrast ≥ 4.5:1 (normal), 3:1 (large) | BLOCKER |
-| 1.4.11 | UI component contrast ≥ 3:1 (borders, icons, focus rings) | BLOCKER |
-| 1.4.1 | No info conveyed by color alone | BLOCKER |
-| 2.4.7 | Focus visible (focus ring exists and is visible) | BLOCKER |
-| 2.5.3 | Label in name (button text matches accessible name) | BLOCKER |
-| 2.5.8 | Touch target ≥ 24×24px (44×44 recommended) | BLOCKER |
-| 3.3.2 | Labels or instructions for inputs | BLOCKER |
-| 4.1.2 | Name, role, value for all UI components | BLOCKER |
-| 1.3.1 | Info and relationships conveyed in structure | HIGH |
-| 2.4.6 | Headings and labels descriptive | HIGH |
-
-
-
-ARIA APG — structural rules per component
-
-
-Button
-
-role=button or native <button>
-Icon-only: aria-label required (no exceptions)
-Link-style button: use role=link, not role=button
-Toggle: aria-pressed=true/false
-aria-label must match or contain visible label text (2.5.3)
-
-
-Radio group
-
-role=radiogroup on container with aria-labelledby pointing to group label
-Each option: role=radio + aria-checked
-Star rating: each star needs aria-label="N stars" (not just a visual)
-Keyboard: arrow keys move between options (document in annotation)
-
-
-Checkbox
-
-Tri-state: aria-checked="mixed" for indeterminate
-Group: role=group, not role=radiogroup
-Each checkbox: aria-labelledby pointing to its label
-
-
-Accordion
-
-Structure: heading[aria-level] > button[aria-expanded, aria-controls]
-NOT button > heading (this is the most common mistake)
-Panel: role=region, aria-labelledby=trigger-id
-aria-level must match document hierarchy (ask the designer)
-
-
-Dialog
-
-role=dialog, aria-modal=true
-aria-labelledby pointing to visible heading inside dialog
-Destructive action: role=alertdialog
-Must have close mechanism (button with aria-label="Close")
-Focus annotation: opens → first focusable element; closes → trigger
-
-
-Combobox
-
-role=combobox, aria-expanded, aria-haspopup=listbox
-Listbox: role=listbox, each option role=option + aria-selected
-Chevron icon: aria-hidden=true always
-If no type-to-search: annotate as select pattern instead
-
-
-Text input
-
-label element is required. Placeholder is NOT a label substitute.
-error message: role=alert or aria-live=polite, connected via aria-describedby
-required: aria-required=true + visual indicator (not asterisk alone)
-
-
-Checkbox in multi-select context
-
-Container: role=group with aria-labelledby
-Select-all: if present, aria-controls listing all checkbox IDs
-
-
-What you CANNOT detect programmatically (be honest about this)
-Whether an error state is "color only" (requires human visual review)
-Reading order when using absolute positioning + z-index
-Whether focus ring contrast is sufficient without computing actual colors
-Whether a decorative image is truly decorative
-Motion/animation impact (prefers-reduced-motion)
-
-
-When a check requires human judgment, report it as:
-
-{ severity: "MANUAL", message: "Verify this manually: ...", wcag: "1.4.1" }
-
-
----
-
-
-
-5. Performance Rules
-
-
-Never do on large files
-
-// ✗ walks every node in the document
+// ✗ document-wide
 figma.currentPage.findAll(...)
 
-// ✓ scope to the relevant container
-frame.findAllWithCriteria({ types: ["INSTANCE", "TEXT"] })
+// ✓ scoped
+frame.findAllWithCriteria({ types: ["TEXT", "INSTANCE"] })
+```
 
+Yield on large batches: `await new Promise(r => setTimeout(r, 0))` every ~20 nodes.
 
-Batch scan — always chunk
+### Guards
 
-async function batchScan(nodes) {
-  const results = []
-  for (let i = 0; i < nodes.length; i++) {
-    results.push(scanNode(nodes[i]))
-    if (i % 20 === 0) {
-      figma.notify(`Scanning... ${i}/${nodes.length}`, { timeout: 500 })
-      await new Promise(r => setTimeout(r, 0))  // yield
-    }
-  }
-  return results
+- `absoluteBoundingBox` may be **null** (collapsed components) — always check
+- `isNodeVisible(node)` — skip hidden subtrees (not in a11y tree)
+- `isA11yGeneratedLayer(node)` — skip plugin-created layers (see §8)
 
+### Plugin data
 
-Limit traversal depth
-Default max depth: 5 levels
-For spatial text search: scan only same page, not all pages
-For sibling detection: limit to 20 siblings max
+```js
+node.setPluginData("a11y.role", "button")           // this plugin only
+node.setSharedPluginData("a11y", "role", "button") // Dev Mode + other plugins
+```
 
+Use shared keys consistently for codegen (`persistCodegenHandoffFields` in code). Prefer kebab-case attribute names in handoff where the codegen layer expects them.
 
-AI calls — minimize cost
-Rule engine handles HIGH confidence cases (target: ≥ 85% of selections)
-Only MED/LOW go to AI
-Pass only text data to AI — no screenshots unless absolutely necessary
-Use gpt-4o-mini as default, not gpt-4o
-Cache AI results in pluginData — don't re-call for same node if unchanged
+### Undo
 
+Batch canvas mutations: `figma.commitUndo()` once per user-initiated apply (single undo step). Individual **Fix automatically** clicks also commit undo in `autoFixIssue`.
 
 ---
 
+## 3. Figma file semantics
 
+### Layer naming (ARIA-aligned)
 
-6. Code Quality Rules
+```
+button / submit [aria-label="Submit form"]
+input / email [type=email, required]
+dialog / confirm-delete [aria-modal=true]
+radio-group / payment [role=radiogroup]
+accordion-item / faq-1
+  heading / faq-1-title [aria-level=3]
+  button / faq-1-trigger [aria-expanded=false]
+  panel / faq-1-panel [role=region]
+```
 
+Semantic layer names for plugin-created structure: `label`, `input`, `trigger`, `panel`, `tab-list`, `tab`, `tab-panel`, `close-button`, `visually-hidden-label`, etc. See `docs/fix-non-component-element-briefing.md` for full builders.
 
-Never hardcode node IDs
+### Auto-layout = structure
 
-// ✗ will break on any other file
-await getNodeById("1833:121")  // still wrong — hardcoded ID
+- **Vertical** AL → block-level (fields, accordion items, form stacks)
+- **Horizontal** AL → inline (checkbox+label, button groups, tabs)
+- Child order = reading order = tab order: `label → control → hint → error`
+- Do not use absolute positioning for semantically ordered interactive content
 
-// ✓ always resolve dynamically from selection
-const root = getSemanticRoot(figma.currentPage.selection[0])
+### Variants = ARIA states
 
+| Variant property | ARIA / CSS |
+|------------------|------------|
+| State=Focus | `:focus-visible` / focus ring |
+| State=Disabled | `aria-disabled` |
+| State=Error | `aria-invalid` |
+| Checked / Selected / Expanded | `aria-checked` / `aria-selected` / `aria-expanded` |
 
-Resolve semantic slugs to real IDs before mutating
+### Semantic root
 
-// AI returns { nodeId: "rating-star" } — not a real Figma ID
-// Always run resolveSuggestions() before applyFixes()
-const resolved = resolveSuggestions(suggestions, rootNode)
-
-
-Guard every node access
-
-const node = await getNodeById(id)
-if (!node) { /* handle gracefully, don't throw */ return }
-if (!("name" in node)) { /* not a SceneNode */ return }
-
-
-ASK before mutating
-NEVER rename layers, set plugin data, or create nodes without user confirmation
-For HIGH confidence: show suggestions, wait for "Apply Fixes" click
-For MED confidence: show ASK question first, then suggestions
-Batch scan: queue all ASK questions, don't open multiple dialogs
-
-
-postMessage contract — typed messages only
-
-// Always use typed message objects
-type PluginMessage =
-  | { type: "ANALYZE_SELECTION" }
-  | { type: "APPLY_FIXES"; suggestions: Suggestion[]; rootNodeId: string }
-  | { type: "SAVE_API_KEY"; key: string }
-  | { type: "ASK_ANSWER"; questionId: string; answer: string; rootNodeId: string }
-
+When the user selects one star, radio, or tab, analyze **`getSemanticRoot(selection)`**, not the leaf. Stop at `_a11y_*` generated parents. Implementation: `dist/code.js`.
 
 ---
 
+## 4. Accessibility principles
 
+### WCAG 2.2 AA — always audit
 
-7. Dev Mode Integration
+| Criterion | Requirement | Typical severity |
+|-----------|-------------|------------------|
+| 1.4.3 | Text contrast ≥ 4.5:1 (3:1 large) | HIGH |
+| 1.4.11 | Non-text UI contrast ≥ 3:1 | HIGH |
+| 1.4.1 | Not color-only | HIGH / MANUAL |
+| 2.4.7 | Focus visible | HIGH |
+| 2.5.3 | Label in name | HIGH |
+| 2.5.8 | Touch target ≥ 24×24 (44×44 recommended) | HIGH |
+| 3.3.2 | Input labels | HIGH |
+| 4.1.2 | Name, role, value | HIGH |
 
+Report human-only judgment as `{ severity: "MANUAL", message: "Verify manually: …" }`.
 
-When in Dev Mode, the plugin behaves differently
-No "Apply Fixes" (read-only context for developers)
-Show only: role, aria attributes, issues, WCAG references
-Display copy-pasteable ARIA attribute list (not HTML)
+### ARIA APG — structural highlights
 
-
-What developers need (not HTML snippets)
-
-// ✓ technology-agnostic ARIA data
-{
-  "role": "button",
-  "aria-label": "Submit form",
-  "aria-disabled": false,
-  "states": {
-    "focus": { "aria-describedby": "tooltip-id" },
-    "loading": { "aria-busy": true, "aria-label": "Submitting..." }
-  },
-  "wcag": ["1.4.3", "2.5.5", "2.4.7"],
-
-
-Shared plugin data — always write for dev access
-
-node.setSharedPluginData("a11y", "role", "button")
-node.setSharedPluginData("a11y", "ariaLabel", "Submit form")
-node.setSharedPluginData("a11y", "issues", JSON.stringify(issues))
-
+- **Accordion:** `heading` → `button[aria-expanded]` → `region` panel. Never `button` wrapping `heading`.
+- **Dialog:** `role=dialog`, `aria-modal`, labelled heading, close control with accessible name.
+- **Combobox:** chevron decorative (`aria-hidden`); listbox + options when open.
+- **Icon-only controls:** require accessible name (`aria-label` or visible hidden label).
+- **Star rating:** `radiogroup`; each star named (e.g. "2 stars").
 
 ---
 
+## 5. Fix model — capability and user consent
 
+### No silent canvas mutation
 
-8. What to Always Ask the Designer
+**All file changes require an explicit designer action:**
 
+- Per issue: **Fix automatically** (AUTO capability only)
+- Batch: **Apply Fixes…** / **Fix all anyway**
+- Figma AI path: **Fix with Figma AI** → copy prompt → designer applies in Figma AI → **Re-scan**
 
-Before applying any fix, ask:
+Do not rename layers, create nodes, or write plugin data without that click (except Dev Mode read-only views).
 
-"What heading level (h1–h6) should this accordion use in context?"
-"Is this button navigating somewhere (link) or triggering an action (button)?"
-"Is this dialog confirming a destructive action? (determines alertdialog vs dialog)"
-"Does this accordion allow multiple items open simultaneously?"
-"Is this chip removable, selectable, or display-only?"
-"What is the error message text for this input field?"
-"Does this icon button have a tooltip that serves as its accessible name?"
+### Issue capability (`ISSUE_CAPABILITY` in `dist/code.js`)
 
+Every issue is classified before UI render (`enrichIssueFixMeta`):
 
-Never assume. Always confirm ambiguity before writing plugin data.
+| Capability | UI | Main thread |
+|------------|-----|-------------|
+| **AUTO** | ✨ Fix automatically | `AUTO_FIX_HANDLERS` |
+| **FIGMA_AI** | ✦ Fix with Figma AI + copy prompt + waiting state | Prompt only; no auto canvas change |
+| **DESIGNER** | Explanation + ✓ Mark as reviewed | No handler |
+
+Fallback in `getIssueCapability`: map → dynamic rules (e.g. `MISSING_STATE_FOCUS` → FIGMA_AI when root is not `COMPONENT` / `COMPONENT_SET`) → handler exists → AUTO → else DESIGNER.
+
+**Do not show "Fix automatically" for FIGMA_AI or DESIGNER issues.**
+
+`applyAllIssueFixes` runs only issues where `getIssueCapability(...) === "AUTO"`.
+
+### Self-healing (soft)
+
+When an issue is detected:
+
+1. Prefer AUTO fix **after user clicks** (or generic fallback in that flow)
+2. FIGMA_AI: targeted prompt (`FIGMA_AI_PROMPTS` + `buildFigmaAiPromptForIssue`)
+3. DESIGNER: explain why the plugin cannot decide (contrast color, heading level, destructive `alertdialog`, etc.)
+
+Never block the whole plugin — escalate per issue. Re-audit after a successful AUTO fix when possible.
+
+### Issue codes vs matrix check IDs
+
+The engine emits **issue codes** (e.g. `ROLE_BUTTON_MISSING`, `MISSING_STATE_FOCUS`). Matrix audit logs may use different check IDs (e.g. `ROLE_BUTTON_ANNOTATED`). Annotation handlers map between them — see `AUTO_FIX_HANDLERS` and `makeAnnotationFixHandler` in code.
+
+### ON_OFF / color-only
+
+- Matrix check: `ON_OFF_STATE_NOT_COLOR_ONLY`
+- Emitted issue: typically `COLOR_ONLY_DISABLED`
+- Capability: **AUTO** — `fixOnOffStateAnnotate` (annotation / plugin data, not a color redesign)
 
 ---
 
-## 9. Self-Healing — Never Fail When You Can Fix
+## 6. NON_COMPONENT_ELEMENT — three paths
 
-The plugin must NEVER show a blocker and stop. Every detected issue
-must first attempt a self-repair before asking the designer.
+When an interactive node is a Frame/Group instead of a Component/Instance:
 
-### Resolution priority order (apply in this sequence):
-1. Fix automatically with AI-generated content (max 1000 chars I/O)
-2. Fix automatically with a safe generic fallback
-3. Ask the designer to choose between options
-4. Only escalate to MANUAL if none of the above is possible
+```
+NON_COMPONENT_ELEMENT on node
+│
+├── PATH A — AUTO (leaf / simple)
+│   Plugin creates component + variants off-canvas, swaps instance in place
+│
+├── PATH B — AUTO (uniform children)
+│   Loop children; componentize each leaf/simple child (same PATH A logic per child)
+│
+└── PATH C — FIGMA_AI (complex: mixed form, dialog, etc.)
+    Targeted prompt with exact nodeId, child ids, role, required variants
+    UI capability = FIGMA_AI; designer runs Figma AI manually
+```
 
-### Per-issue self-repair map:
+**UI rule:** Only **PATH C** uses the Figma AI button. PATH A/B run through plugin handlers (`fixLinkToComponent` / future `fixNonComponentElement` builders — see `docs/fix-non-component-element-briefing.md`) when the user chooses **Fix automatically** or linking flow, not a generic "convert to component" prompt.
 
-| Issue code          | Auto-fix strategy |
-|---------------------|-------------------|
-| NO_GROUP_LABEL      | AI-generate label from option texts → create text layer above component |
-| NO_INPUT_LABEL      | AI-generate label from input name/placeholder → create text layer above |
-| NO_ARIA_LABEL       | AI-generate from node name + context → write to pluginData only |
-| MISSING_ERROR_STATE | Create error variant copy with red border + "Error" text layer |
-| MISSING_FOCUS_STATE | Duplicate default state + add 2px #4DA3FF outline stroke |
-| MISSING_DISABLED    | Duplicate default state + set opacity to 40% |
-| NO_CLOSE_BUTTON     | Add icon button "✕" to dialog header corner |
-| NO_HEADING          | AI-generate heading text from dialog/accordion content |
-| MISSING_PLACEHOLDER | Generic: "Enter [field name] here" |
-| TOUCH_TARGET_SMALL  | Wrap node in auto-layout frame, set min width/height to 44px |
+PATH C prompts **must** include: `nodeId`, `nodeName`, current structure, required variants (Default/Hover/Focus/Disabled…), ARIA role, and child `nodeId`s to preserve.
 
-### AI text generation rules:
-- Input cap: 800 chars (option labels + component name + context)
-- Output cap: 100 chars (UI labels are short)
-- Model: gpt-4o-mini only (cost)
-- Prompt template:
-  "You write short ARIA labels for UI components.
-   Component: [type]. Options/content: [text list].
-   Write a [3-6 word] label. Return label text only."
-- Always fallback to generic if AI fails or no API key
+PATH A/B creation rules:
 
-### After auto-fix:
-- Re-run the audit on the fixed node
-- If issue resolved → remove from issue list, show ✅ "Auto-fixed"
-- If still failing → escalate to designer with the specific question
+- Build master **off canvas** (e.g. `x + 4000`) — do not clutter the artboard
+- `figma.combineAsVariants` for state sets; set `.description` with Role / States / HTML / APG URL
+- Replace original with **Default** instance; tag `setSharedPluginData("a11y", …)`
+- Inter fonts only; `await loadFontAsync` before text
 
-### What counts as "truly needs designer":
-- Contrast ratio fail (requires color change decision)
-- Wrong heading level (requires information architecture decision)
-- Icon button with no text context (AI cannot guess intent)
-- Destructive action confirmation (role=alertdialog decision)
+Current linking fallback (`fixLinkToComponent`): search existing components → link instance → if none, fall back to PATH C prompt.
 
-## Plan Maintenance Protocol
+---
 
-After completing any task:
-1. Open `AGENT_PLAN.md`
-2. Find the relevant section (or create one under "Completed Work")
-3. Add a bullet with: **what was done**, **why it was done that way**, and **any gotchas discovered**
-4. Move the item from "Pending Work" to "Completed Work" if it was listed there
-5. If a new architectural decision was made, add it to the relevant section under "What NOT to Change"
+## 7. Key implementation references (`dist/code.js`)
 
-Format for completed items:
-- ✅ [feature/fix name] — [one-line description of what was done and why]
-  - Gotcha: [anything a future developer must know]
+| Concern | Function / symbol |
+|---------|-------------------|
+| Skip generated layers | `isA11yGeneratedLayer` — names starting with `_a11y_` |
+| Clean wrapper names | `getCleanComponentBaseName` |
+| Contrast adjustment | `fixLowContrast` / `fixNonTextContrast`; binary search HSL; `getBackgroundBehindNode` from **parent**; skip ratio ≤ 1.0 |
+| Accordion signals | `scoreAccordionSignals`, `getAccordionRowsWithChevron`, chevron depth ≤ 2 |
+| Capability + prompts | `ISSUE_CAPABILITY`, `FIGMA_AI_PROMPTS`, `getIssueCapability`, `enrichIssueFixMeta` |
+| Preview export | `exportPreviewNode` |
+| Codegen | `buildCodegenResults`, `persistCodegenHandoffFields` |
+| Reset | `saveA11ySnapshot` / `restoreA11ySnapshot` |
+
+---
+
+## 8. UI thread (`ui.html`)
+
+### Selection state (do not regress)
+
+```js
+selectionState = {
+  lastScannedNodeId,
+  lastScannedResults,
+  currentSelection,
+}
+```
+
+| State | Preview | Results |
+|-------|---------|---------|
+| No selection, no scan | "Select a layer to begin" | Empty |
+| No selection, has last scan | Placeholder | Last results + badge "Showing last scan · [name]" + Re-scan |
+| Selection, not scanned | Layer preview image | Last scan (if any) with badge, else empty |
+| Selection = last scanned | Preview image | Live results |
+| Scan in progress | Preview + loading | Loading (clear cache at scan start via `beginNewScan`) |
+
+- **No** duplicate "Select a layer" in the results panel
+- **No** "Scan this layer" button — use header **Start Analysis**
+- Deselect **does not** clear `lastScannedResults`
+- **Re-scan** → `RESCAN_NODE` (selects node on canvas, runs analysis)
+
+### Designer-facing copy
+
+- Use `CHECK_DISPLAY_NAMES` — never raw matrix IDs in issue cards
+- Hide dev-only ARIA dumps from designer view; show in Dev Mode / codegen
+- Issue actions driven by `issue.capability` only
+
+### postMessage types (extend in code when adding features)
+
+`ANALYZE_SELECTION`, `RESCAN_NODE`, `AUTO_FIX_ISSUE`, `APPLY_FIXES`, `APPLY_WITH_MODE`, `SAVE_API_KEY`, `ASK_ANSWER`, `EXPORT_PREVIEW`, `SELECTION_CHANGED`, `SELECTION_CLEARED`, `ANALYSIS_RESULTS`, …
+
+---
+
+## 9. Dev Mode
+
+When `editorType === 'dev'`:
+
+- Read-only for fixes — no Apply Fixes on canvas
+- Show role, ARIA attributes, issues, WCAG references
+- Technology-agnostic handoff (not HTML snippets in designer audit)
+- Code tab via `figma.codegen` + shared plugin data namespace `a11y`
+
+---
+
+## 10. AI usage
+
+- Default model: **gpt-4o-mini** (settings in UI)
+- Rule engine first; AI for MED/LOW classification and label generation when API key present
+- Input cap ~800 chars context; short label output (~100 chars max for generated labels)
+- Cache in pluginData where implemented — avoid repeat calls for unchanged nodes
+- Vision only when tiebreak / unknown role requires it (`AI_LOADING` phases)
+
+---
+
+## 11. Accordion classification (avoid false positives)
+
+Treat as accordion only when **all** hold:
+
+1. Chevron/expand indicator co-located with row text (subtree depth ≤ 2 per row)
+2. Outer layout **VERTICAL**
+3. No strong counter-signals: horizontal-only bar, pill chips, tab-bar naming
+
+Log `[accordion] rowsWithChevron` when debugging. Counter-signals zero out accordion score.
+
+---
+
+## 12. What to ask the designer (before ambiguous fixes)
+
+- Heading level for accordion/dialog in context
+- Button vs link behavior
+- `alertdialog` vs `dialog` for destructive flows
+- Accordion single vs multiple expand
+- Chip: removable / selectable / display-only
+- Error message copy for inputs
+- Icon-only: is tooltip the accessible name?
+
+Queue ASK questions; do not open multiple modals at once.
+
+---
+
+## 13. Maintenance
+
+**Plan history and completed work:** document only in `AGENT_PLAN.md` at repo root — not in this rules file.
+
+**Implementation briefings:** `docs/fix-non-component-element-briefing.md` for component-creation detail beyond this file.
+
+When changing behavior, update this file only if the **rule** changed — not for every shipped feature.

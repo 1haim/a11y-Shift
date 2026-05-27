@@ -1,0 +1,8 @@
+{
+  "name": "a11y-shift",
+  "private": true,
+  "description": "Figma WCAG 2.2 AA accessibility plugin",
+  "scripts": {
+    "build": "node --check dist/code.js && node -e \"require('fs').accessSync('ui.html'); require('fs').accessSync('manifest.json'); console.log('Build OK: dist/code.js, ui.html, manifest.json')\""
+  }
+}

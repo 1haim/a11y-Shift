@@ -5,6 +5,12 @@
   "documentAccess": "dynamic-page",
   "main": "dist/code.js",
   "ui": "ui.html",
+  "capabilities": ["codegen"],
+  "codegenLanguages": [
+    { "label": "HTML", "value": "HTML" },
+    { "label": "React", "value": "JAVASCRIPT" },
+    { "label": "Notes", "value": "PLAINTEXT" }
+  ],
   "editorType": ["figma", "dev"],
   "networkAccess": {
     "allowedDomains": ["https://api.openai.com"]

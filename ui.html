@@ -548,6 +548,15 @@
   .btn-mini.primary { background: #136EF8; color: #fff; border-color: #136EF8; }
   .btn-mini.primary:hover { background: #0E5ADB; }
 
+  /* Last-scan status when canvas selection differs from displayed results */
+  .last-scan-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 12px; margin: 0 0 10px;
+    background: #EEF1F5; border-radius: 8px;
+    font-size: 12px; font-weight: 500; color: #5A6B7D;
+  }
+  .last-scan-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* ── Components dashboard tab ──────────────────────────────────── */
   .dashboard-area { padding: 14px 16px; }
   .dashboard-header {
@@ -903,11 +912,15 @@
     overflow: hidden;
   }
   .preview-inner img {
-    max-width: 100%; max-height: 100%;
+    max-width: 580px; max-height: 320px;
+    width: auto; height: auto;
     object-fit: contain;
     display: block;
     transition: opacity 150ms ease;
   }
+  .check-row-clickable { cursor: pointer; border-radius: 6px; padding: 4px 6px; margin: 0 -6px; }
+  .check-row-clickable:hover { background: var(--surface2); }
+  .human-reasoning { font-size: 12px; color: var(--text-dim); line-height: 1.65; white-space: pre-wrap; }
   .preview-placeholder {
     color: #2B3E52; font-size: 14px; font-weight: 500;
     display: flex; flex-direction: column; align-items: center; gap: 14px;
@@ -1612,6 +1625,7 @@
       </div>
       <div class="preview-bg-btns">
         <button class="btn-preview-bg" id="btn-scroll-to-component" title="Scroll to component" disabled>⊙</button>
+        <button class="btn-preview-bg" id="btn-reset-layer" title="Undo all plugin changes to this layer">↺</button>
         <button class="btn-preview-bg active" id="btn-bg-light" title="Light background">☀ Light</button>
         <button class="btn-preview-bg"        id="btn-bg-dark"  title="Dark background">☾ Dark</button>
       </div>
@@ -1624,7 +1638,7 @@
               <path d="M4 3L4 20L9 15L12 21L14 20L11 14L18 14L4 3Z" fill="#2B3E52" stroke="#2B3E52" stroke-width="0.5" stroke-linejoin="round"/>
             </svg>
           </span>
-          <span>Select a component and run analysis</span>
+          <span>Select a layer to begin</span>
         </div>
       </div>
     </div>
@@ -1793,10 +1807,270 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+const CHECK_DISPLAY_NAMES = {
+  IS_FIGMA_COMPONENT: 'Must be a Figma component',
+  NON_COMPONENT_ELEMENT: 'Convert to Figma component',
+  HAS_ACCESSIBLE_NAME: 'Has a clear accessible name',
+  HAS_LABEL: 'Has a visible label',
+  GROUP_HAS_LABEL: 'Group has a descriptive label',
+  NO_GROUP_LABEL: 'Missing group label',
+  HAS_HEADING: 'Has an identifying heading',
+  ROLE_BUTTON_ANNOTATED: 'Marked as interactive button',
+  ROLE_TEXTBOX_ANNOTATED: 'Marked as text input',
+  ROLE_CHECKBOX_ANNOTATED: 'Marked as checkbox',
+  ROLE_RADIOGROUP_ON_CONTAINER: 'Group marked as radio group',
+  ROLE_RADIO_ON_ITEMS: 'Each option marked as radio button',
+  ROLE_COMBOBOX_OR_LISTBOX: 'Marked as dropdown/combobox',
+  ROLE_DIALOG_ANNOTATED: 'Marked as dialog/modal',
+  ROLE_TABLIST_ON_CONTAINER: 'Tab bar marked as tab list',
+  ROLE_TAB_ON_ITEMS: 'Each tab marked as tab',
+  ROLE_TABPANEL_ON_PANEL: 'Content area marked as tab panel',
+  ROLE_SLIDER_ANNOTATED: 'Marked as slider control',
+  ROLE_GROUP_OR_IMG: 'Rating group has correct role',
+  ROLE_SWITCH_ANNOTATED: 'Marked as on/off switch',
+  ARIA_CHECKED_ANNOTATED: 'Selection state is communicated',
+  ARIA_CHECKED_MISSING: 'Missing selection state',
+  ARIA_SELECTED_ANNOTATED: 'Active/selected state is marked',
+  ARIA_EXPANDED_ANNOTATED: 'Open/closed state is marked',
+  EXPANSION_STATE_ANNOTATED: 'Expanded state is communicated',
+  ARIA_VALUE_NOW_MIN_MAX: 'Current value range is declared',
+  FOCUS_RING_VISIBLE: 'Has visible keyboard focus style',
+  MISSING_FOCUS_RING: 'Missing keyboard focus indicator',
+  MISSING_STATE_FOCUS: 'Missing focused state variant',
+  MISSING_STATE_DISABLED: 'Missing disabled state variant',
+  TOUCH_TARGET_44: 'Tap area is large enough (44px)',
+  TOUCH_TARGET_24_WITH_SPACING: 'Tap area meets minimum size',
+  TOUCH_TARGET_SMALL: 'Tap area too small for touch',
+  CONTRAST_TEXT: 'Text color has enough contrast',
+  CONTRAST_TEXT_FAIL: 'Text contrast is too low',
+  CONTRAST_FAIL: 'Color contrast is too low',
+  NON_TEXT_CONTRAST_FAIL: 'UI element contrast is too low',
+  NON_TEXT_CONTRAST: 'UI elements have enough contrast',
+  CONTRAST_NON_TEXT: 'Non-text contrast check',
+  PLACEHOLDER_NOT_ONLY_LABEL: 'Label exists beyond placeholder',
+  ERROR_TEXT_NOT_COLOR_ONLY: 'Error shown in text, not just color',
+  REQUIRED_STATE_INDICATED: 'Required field is marked',
+  CLOSE_BUTTON_HAS_LABEL: 'Close button has a clear label',
+  FOCUS_TRAP_DESCRIBED: 'Focus stays inside while open',
+  ARIA_MODAL_TRUE: 'Marked to trap focus for screen readers',
+  ACCORDION_HEADERS_ARE_BUTTONS: 'Section headers are interactive buttons',
+  ACCORDION_NO_HEADING: 'Missing section heading',
+  ACCORDION_PANEL_REGION: 'Content area is properly marked',
+  PANEL_HAS_REGION_ROLE: 'Content region is labeled',
+  EACH_STAR_DESCRIBED: 'Each star has a descriptive label',
+  CURRENT_VALUE_COMMUNICATED: 'Current rating value is communicated',
+  RATING_ROLE_MISSING: 'Rating widget needs correct role',
+  RATING_VALUE_NOT_COMMUNICATED: 'Current rating is not announced',
+  VALUE_VISIBLE: 'Current value is visible',
+  ON_OFF_STATE_NOT_COLOR_ONLY: 'On/off state shown beyond color',
+  CHEVRON_OR_EXPAND_INDICATOR: 'Has expand/collapse indicator',
+  EACH_RADIO_HAS_LABEL: 'Each option has a text label',
+  GROUP_LABEL_IF_IN_GROUP: 'Group context is labeled',
+  ICON_BUTTON_NO_LABEL: 'Icon button needs a text label',
+  STATE_COVERAGE_CORE: 'Has all required interaction states',
+  STATE_COVERAGE_INPUT: 'Input has all required states',
+  STATE_COVERAGE_CHECKBOX: 'Checkbox has all required states',
+  STATE_COVERAGE_SELECT: 'Dropdown has all required states',
+  STATE_COVERAGE_SLIDER: 'Slider has all required states',
+  STATE_COVERAGE_TOGGLE: 'Toggle has all required states',
+  DIALOG_NO_CLOSE: 'Dialog is missing a close button',
+  DIALOG_NO_HEADING: 'Dialog is missing a title',
+  LOW_CONTRAST: 'Color contrast is too low',
+  NO_INPUT_LABEL: 'Input field has no label',
+  MISSING_ALT: 'Image is missing a description',
+  NO_ERROR_MESSAGE: 'Error message is missing',
+  MISSING_ROLE: 'Element role is not defined',
+  NO_FOCUS_RING: 'No focus indicator visible',
+};
+
+function displayCheckName(checkId) {
+  if (!checkId) return '';
+  if (CHECK_DISPLAY_NAMES[checkId]) return CHECK_DISPLAY_NAMES[checkId];
+  return String(checkId).replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase());
+}
+
+const ARIA_EXPLANATIONS = {
+  ROLE_RADIO_ON_ITEMS: {
+    why: 'Screen readers announce each option and its position in the group. Without role="radio", users cannot navigate options with arrow keys.',
+    pattern: "role='radiogroup' on container + role='radio' on each option",
+    wcag: '4.1.2 Name, Role, Value',
+    apg: 'Radio Group',
+  },
+  FOCUS_RING_VISIBLE: {
+    why: 'Keyboard users navigate by Tab. Without a visible focus indicator, they cannot see which element is active.',
+    pattern: '2px solid outline, minimum 3:1 contrast against adjacent color',
+    wcag: '2.4.11 Focus Appearance',
+    apg: 'Focus indicator',
+  },
+  NON_TEXT_CONTRAST_FAIL: {
+    why: 'Icons, borders, and controls must stand out from their background so people with low vision can perceive them.',
+    pattern: 'UI shapes and strokes at least 3:1 against adjacent background',
+    wcag: '1.4.11 Non-text Contrast',
+    apg: 'General UI',
+  },
+  HAS_LABEL: {
+    why: 'Every input needs a visible label so users know what to enter before they interact with the field.',
+    pattern: '<label for="id"> tied to the input, or aria-labelledby',
+    wcag: '3.3.2 Labels or Instructions',
+    apg: 'Text Field',
+  },
+  NON_COMPONENT_ELEMENT: {
+    why: 'Figma components map to reusable accessible patterns in code. Raw frames are harder for developers to implement correctly.',
+    pattern: 'Create a component with variants for states (default, hover, focus, disabled)',
+    wcag: '4.1.2 Name, Role, Value',
+    apg: 'Component pattern',
+  },
+};
+
+function getCheckExplanation(checkId) {
+  return ARIA_EXPLANATIONS[checkId] || {
+    why: 'This check helps your design meet WCAG 2.2 AA so the built product works for keyboard and screen reader users.',
+    pattern: displayCheckName(checkId),
+    wcag: '4.1.2 Name, Role, Value',
+    apg: 'ARIA APG',
+  };
+}
+
+function humanizeSignalLine(raw) {
+  const s = String(raw || '');
+  const nameM = s.match(/^name '([^']+)'/);
+  if (nameM) return "• The layer name contains '" + nameM[1] + "'";
+  const sibM = s.match(/^(\d+) (?:layers match|siblings match) '([^']+)'/);
+  if (sibM) return '• ' + sibM[1] + " child layers share the name pattern '" + sibM[2] + "'";
+  if (s.indexOf('child prefix') >= 0 || s.indexOf('homogeneous') >= 0) return '• Child layer names suggest this pattern';
+  if (s.indexOf('chevron') >= 0 || s.indexOf('compound row') >= 0) return '• Rows contain both text and a chevron indicator';
+  if (s.indexOf('vertical') >= 0) return '• Layers are stacked vertically';
+  if (s.indexOf('horizontal') >= 0 || s.indexOf('tablist penalty') >= 0) return '• Layout suggests horizontal tabs, not accordion rows';
+  const repM = s.match(/(\d+) layers match/);
+  if (repM) return '• ' + repM[1] + ' layers share a repeating structure';
+  if (s.indexOf('repeating') >= 0) return '• Repeating row structure detected';
+  return '• ' + s;
+}
+
+function humanizeReasoning(result, role) {
+  const signals = result.signalDetails || [];
+  const ranked = result.rankedScores || [];
+  const winnerScore = result.signalScore || 0;
+  let runnerScore = 0;
+  if (ranked.length > 1) runnerScore = ranked[1].score || 0;
+  const lines = signals.map(humanizeSignalLine);
+  const roleLabel = role ? (role.charAt(0).toUpperCase() + role.slice(1)) : 'component';
+  const summary = 'Identified as ' + roleLabel + ' (confidence score ' + winnerScore +
+    (runnerScore ? (' vs ' + runnerScore + ' for next candidate)') : ')') + '.';
+  if (lines.length === 0) return summary;
+  return summary + '\n\nEvidence found:\n' + lines.join('\n');
+}
+
+let trackedSelectionId = null;
+
+const selectionState = {
+  lastScannedNodeId:   null,
+  lastScannedResults:  null,
+  currentSelection:    null,
+};
+
+function previewPlaceholderHtml(message) {
+  return `<div class="preview-placeholder"><span class="ph-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 3L4 20L9 15L12 21L14 20L11 14L18 14L4 3Z" fill="#2B3E52"/></svg></span><span>${escapeHtml(message || 'Select a layer to begin')}</span></div>`;
+}
+
+function showPreviewPlaceholder() {
+  _stickyPreviewDataUrl = null;
+  $('preview-inner').innerHTML = previewPlaceholderHtml('Select a layer to begin');
+  updateStickyThumbnail();
+}
+
+function clearResultsContent() {
+  $('content').innerHTML = '';
+  const fb = $('apply-feedback'); if (fb) fb.innerHTML = '';
+}
+
+function beginNewScan() {
+  selectionState.lastScannedNodeId = null;
+  selectionState.lastScannedResults = null;
+  currentState = null;
+  $('btn-scan').disabled = true;
+  $('content').innerHTML = loadingHtml('Reading context…');
+  resetStickyHeader();
+}
+
+function renderLastScanBanner(data) {
+  const name = escapeHtml(data.nodeName || 'layer');
+  return `<div class="last-scan-banner" id="last-scan-banner" data-nodeid="${escapeHtml(data.nodeId || '')}">
+    <span class="last-scan-banner-text">Showing last scan · ${name}</span>
+    <button type="button" class="btn-mini" id="btn-rescan-last">Re-scan</button>
+  </div>`;
+}
+
+function wireLastScanBanner(data) {
+  const btn = $('btn-rescan-last');
+  if (!btn || !data || !data.nodeId) return;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    beginNewScan();
+    parent.postMessage({ pluginMessage: { type: 'RESCAN_NODE', nodeId: data.nodeId } }, '*');
+  });
+}
+
+function refreshResultsPanel() {
+  const sel = selectionState.currentSelection;
+  const last = selectionState.lastScannedResults;
+  if (!last) {
+    clearResultsContent();
+    return;
+  }
+  const isLive = sel && sel.nodeId === selectionState.lastScannedNodeId;
+  renderResult(last, { viewMode: isLive ? 'live' : 'last-scan' });
+}
+
+function handleSelectionCleared() {
+  selectionState.currentSelection = null;
+  trackedSelectionId = null;
+  showPreviewPlaceholder();
+  const sn = $('sticky-node-name'); if (sn) sn.textContent = '—';
+  const st = $('sticky-node-type'); if (st) st.textContent = '—';
+  refreshResultsPanel();
+  updateScrollToComponentButton();
+}
+
+function handleSelectionChanged(msg) {
+  selectionState.currentSelection = {
+    nodeId:   msg.nodeId,
+    nodeName: msg.nodeName,
+    nodeType: msg.nodeType,
+  };
+  trackedSelectionId = msg.nodeId;
+  if ($('sticky-node-name')) $('sticky-node-name').textContent = msg.nodeName || '—';
+  if ($('sticky-node-type')) $('sticky-node-type').textContent = msg.nodeType || '';
+  refreshResultsPanel();
+  updateScrollToComponentButton();
+}
+
+function openCheckInfoPanel(checkId, wcagRefs) {
+  const exp = getCheckExplanation(checkId);
+  $('explain-heading').textContent = displayCheckName(checkId);
+  const wcag = wcagRefs || exp.wcag;
+  $('explain-body').innerHTML = `
+    <div class="explain-issue-title">${escapeHtml(displayCheckName(checkId))}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
+      <span class="meta-badge badge-rule">WCAG ${escapeHtml(wcag)}</span>
+      <span class="meta-badge badge-ai">${escapeHtml(exp.apg || 'ARIA APG')}</span>
+    </div>
+    <div class="explain-section-label">Why it matters</div>
+    <div class="explain-why">${escapeHtml(exp.why)}</div>
+    <div class="explain-section-label">ARIA pattern</div>
+    <pre class="explain-example">${escapeHtml(exp.pattern)}</pre>
+    <div class="explain-section-label">WCAG criterion</div>
+    <div class="explain-why">Success Criterion ${escapeHtml(wcag)}</div>`;
+  $('explain-panel').classList.add('open');
+  $('explain-panel').setAttribute('aria-hidden', 'false');
+  $('explain-overlay').classList.add('open');
+}
+
 // ── Why-it-matters slide-in panel ──────────────────────────────────────────
 function openExplainPanel(issue) {
   if (!issue || !issue.explanation) return;
   const exp = issue.explanation;
+  $('explain-heading').textContent = 'Why it matters';
   $('explain-body').innerHTML = `
     <div class="explain-issue-title">${escapeHtml(issue.displayTitle || issue.message)}</div>
 
@@ -1928,13 +2202,27 @@ function savePreviewState() {
     previewState.bgLight = false; applyPreviewBg(); savePreviewState();
   });
   $('btn-scroll-to-component').addEventListener('click', () => {
-    if (!currentState || !currentState.nodeId) return;
+    const nodeId = (selectionState.currentSelection && selectionState.currentSelection.nodeId)
+      || (currentState && currentState.nodeId)
+      || selectionState.lastScannedNodeId;
+    if (!nodeId) return;
     parent.postMessage({ pluginMessage: {
       type: 'SCROLL_TO_COMPONENT',
-      rootNodeId: currentState.nodeId,
-      nodeId: currentState.nodeId,
+      rootNodeId: nodeId,
+      nodeId: nodeId,
     } }, '*');
   });
+  const resetLayerBtn = $('btn-reset-layer');
+  if (resetLayerBtn) {
+    resetLayerBtn.addEventListener('click', () => {
+      const id = (currentState && currentState.nodeId)
+        || selectionState.lastScannedNodeId
+        || trackedSelectionId;
+      if (!id) return;
+      parent.postMessage({ pluginMessage: { type: 'RESET_LAYER', rootNodeId: id } }, '*');
+      showFixToast('Resetting layer…');
+    });
+  }
 })();
 
 // Last preview stored as data URI so the sticky header thumbnail can use it
@@ -1993,9 +2281,11 @@ function showPreviewBase64(imageData) {
 function updateScrollToComponentButton() {
   const btn = $('btn-scroll-to-component');
   if (!btn) return;
-  const enabled = !!(currentState && currentState.nodeId);
-  btn.disabled = !enabled;
-  btn.style.opacity = enabled ? '1' : '0.4';
+  const nodeId = (selectionState.currentSelection && selectionState.currentSelection.nodeId)
+    || (currentState && currentState.nodeId)
+    || selectionState.lastScannedNodeId;
+  btn.disabled = !nodeId;
+  btn.style.opacity = nodeId ? '1' : '0.4';
 }
 
 function copyFigmaAiPrompt(prompt, btnEl) {
@@ -2012,8 +2302,10 @@ function copyFigmaAiPrompt(prompt, btnEl) {
 function getIssuePrompt(issue, idx) {
   if (!issue) return '';
   if (issue.waitingPrompt) return issue.waitingPrompt;
+  if (issue.figmaAiPrompt) return issue.figmaAiPrompt;
   if (currentState && currentState.result && currentState.result.issues && idx != null) {
-    return currentState.result.issues[idx].waitingPrompt || '';
+    const row = currentState.result.issues[idx];
+    return (row && (row.waitingPrompt || row.figmaAiPrompt)) || '';
   }
   return '';
 }
@@ -2032,10 +2324,8 @@ function renderFigmaAiButton(issueIdx) {
 
 // ── Analyze tab ────────────────────────────────────────────────────────────
 $('btn-scan').addEventListener('click', () => {
+  beginNewScan();
   parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
-  $('btn-scan').disabled = true;
-  $('content').innerHTML = loadingHtml('Reading context…');
-  resetStickyHeader();
 });
 
 (function initAiConsentDialog() {
@@ -2294,10 +2584,10 @@ function runAutoFix(issueIdx, strategy, extra) {
     pendingLinkSkipIds = [];
   }
   const row = document.querySelector('[data-issue-idx="' + issueIdx + '"].issue-item');
-  const btn = row ? row.querySelector('.btn-autofix, .btn-autofix-direct, .btn-focus-ai') : null;
+  const btn = row ? row.querySelector('.btn-autofix, .btn-autofix-direct, .btn-focus-ai, .btn-figma-ai-fix') : null;
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="autofix-spinner"></span> Fixing…';
+    btn.innerHTML = '<span class="autofix-spinner"></span> ' + (strategy === 'prompt' ? 'Preparing…' : 'Fixing…');
   }
   parent.postMessage({ pluginMessage: Object.assign({
     type:       'AUTO_FIX_ISSUE',
@@ -2308,79 +2598,73 @@ function runAutoFix(issueIdx, strategy, extra) {
     issueIdx:   issueIdx,
     detectedRole: currentState.result.role,
     message:    issue.message,
+    figmaAiPrompt: issue.figmaAiPrompt || '',
     previousIssues: (currentState.result.issues || []).slice(),
   }, extra) }, '*');
   pendingAutoFixIdx = issueIdx;
 }
 
 // ── Inline auto-fix control on each issue row ─────────────────────────────
-function renderAutoFixControl(issue, idx) {
-  if (issue.waitingForAi) {
-    return `
-    <div class="issue-actions issue-message-only">
-      <div class="issue-waiting-ai-desc">Paste the prompt in Figma AI chat, apply the fix, then re-scan here.</div>
+const FIGMA_AI_STAR_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>';
+
+function renderFigmaAiWaitingActions(idx) {
+  return `
+    <div class="issue-actions issue-message-only issue-waiting-figma-ai">
       ${renderFigmaAiButton(idx)}
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
         <button class="btn-focus-ai btn-rescan-ai" data-issue-idx="${idx}">Re-scan now</button>
       </div>
-      <div class="issue-waiting-ai-note"><svg width="16" height="16" viewBox="0 0 16 16" fill="#136EF8" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg>Waiting for Figma AI fix</div>
+      <div class="issue-waiting-ai-note">${FIGMA_AI_STAR_SVG}Waiting for Figma AI fix</div>
+      <div class="figma-ai-card-hint">Open Figma AI (⌘⌥I) · Paste · Return here and Re-scan</div>
     </div>`;
-  }
-  if (issue.designerPending) {
-    const age = formatPendingAge(issue.pendingSince);
-    return `
+}
+
+function renderFigmaAiInitialActions(idx) {
+  return `
     <div class="issue-actions issue-message-only">
-      <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Build with AI</button>
-        <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
-      </div>
-      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
+      <button class="btn-figma-ai-fix btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">
+        ${FIGMA_AI_STAR_SVG} Fix with Figma AI
+      </button>
+      ${renderFigmaAiButton(idx)}
+      <div class="figma-ai-card-hint">Open Figma AI (⌘⌥I) · Paste · Return here and Re-scan</div>
     </div>`;
-  }
-  if (issue.fixKind === 'focus_state') {
-    const age = issue.pendingSince ? formatPendingAge(issue.pendingSince) : '';
-    return `
-    <div class="issue-actions issue-message-only">
-      ${age ? '<div class="issue-pending-note">You marked this as pending ' + age + '</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="btn-focus-ai" data-issue-idx="${idx}" data-strategy="prompt">Build with AI</button>
-        ${renderFigmaAiButton(idx)}
-        <button class="btn-focus-pending" data-issue-idx="${idx}" data-action="pending">I'll build it</button>
-      </div>
-      ${age ? '<div class="issue-pending-note">Pending · ' + age + '</div>' : ''}
-    </div>`;
-  }
+}
+
+function renderAutoFixControl(issue, idx) {
   if (issue.acknowledged) {
-    return '<div class="issue-actions"><span class="ack-badge">✓ Acknowledged</span></div>';
+    return '<div class="issue-actions"><span class="ack-badge">✓ Reviewed</span></div>';
   }
-  if (issue.fixKind === 'message_only') {
-    const msg = issue.designerMessage || issue.message || '';
+  if (issue.waitingForAi) {
+    return renderFigmaAiWaitingActions(idx);
+  }
+
+  const capability = issue.capability ||
+    (issue.autoFixable ? 'AUTO' : (issue.fixKind === 'figma_ai' ? 'FIGMA_AI' : 'DESIGNER'));
+
+  if (capability === 'FIGMA_AI') {
+    return renderFigmaAiInitialActions(idx);
+  }
+
+  if (capability === 'DESIGNER') {
+    const msg = issue.designerMessage || issue.message || 'This needs a design decision — the plugin cannot apply it automatically.';
     return `
     <div class="issue-actions issue-message-only">
       <div class="designer-fix-msg">${escapeHtml(msg)}</div>
-      <button class="btn-acknowledge" data-issue-idx="${idx}">✓ Mark as acknowledged</button>
+      <button class="btn-acknowledge" data-issue-idx="${idx}">✓ Mark as reviewed</button>
     </div>`;
   }
-  if (!issue.autoFixable) {
-    return `
-    <div class="issue-actions">
-      <button class="btn-acknowledge" data-issue-idx="${idx}">✓ Mark as acknowledged</button>
-    </div>`;
-  }
+
+  // AUTO — plugin applies the fix directly
   if (issue.fixKind === 'annotation') {
     return `
     <div class="issue-actions">
-      <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix
-      </button>
+      <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">✨ Fix automatically</button>
     </div>`;
   }
   const isAiContent = issue.fixKind === 'ai_content';
   return `
     <div class="issue-actions">
-      <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix <span class="caret">▾</span>
-      </button>
+      <button class="btn-autofix" data-issue-idx="${idx}" aria-haspopup="true" aria-expanded="false">✨ Fix automatically <span class="caret">▾</span></button>
       <div class="autofix-menu" data-menu-idx="${idx}">
         ${isAiContent ? `
           <div class="autofix-opt" data-strategy="ai" data-idx="${idx}"><span class="autofix-opt-icon">✨</span> Generate with AI</div>
@@ -2603,9 +2887,8 @@ function renderFromStoredSnapshot(msg) {
   $('content').insertAdjacentHTML('afterbegin', bannerHTML);
   $('btn-rescan').addEventListener('click', () => {
     suppressStoredBannerFor = msg.nodeId;
-    // Trigger a fresh analysis on this node — selection is already on it
-    parent.postMessage({ pluginMessage: { type: 'ANALYZE_SELECTION' } }, '*');
-    $('content').innerHTML = loadingHtml('Re-scanning…');
+    beginNewScan();
+    parent.postMessage({ pluginMessage: { type: 'RESCAN_NODE', nodeId: msg.nodeId } }, '*');
   });
   $('btn-keep').addEventListener('click', () => {
     const b = $('stored-banner'); if (b) b.remove();
@@ -2911,8 +3194,14 @@ function copyToClipboard(text) {
   document.body.removeChild(ta);
 }
 
-function renderResult(data) {
+function renderResult(data, options) {
+  options = options || {};
+  const viewMode = options.viewMode || 'live';
   currentState = data;
+  if (viewMode === 'live') {
+    selectionState.lastScannedNodeId = data.nodeId;
+    selectionState.lastScannedResults = data;
+  }
   const r    = data.result;
   const conf = r.confidence;
   // Figma asset icons (pencil=rename, document=setPluginData/addAnnotation)
@@ -2932,7 +3221,8 @@ function renderResult(data) {
 
   // Separate ariaSchema suggestion (shown in schema panel, not in suggestion list)
   const schemaSug = (r.suggestions || []).find(s => s.key === 'a11y.v1.ariaSchema');
-  const otherSugs = (r.suggestions || []).filter(s => s.key !== 'a11y.v1.ariaSchema');
+  const otherSugs = (r.suggestions || []).filter(s =>
+    s.key !== 'a11y.v1.ariaSchema' && s.type !== 'setPluginData' && s.type !== 'addAnnotation');
 
   const sugHtml = otherSugs.map(s => {
     const displayVal = s.type === 'setPluginData' && s.key
@@ -2959,9 +3249,9 @@ function renderResult(data) {
     <div style="padding:8px 14px 4px;">
       <div class="section-label">Passed checks</div>
       ${passedAudits.map(a => `
-        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:14px;font-weight:400;color:#3A4B61;line-height:1.5">
+        <div class="check-row-clickable" data-check-id="${escapeHtml(a.name)}" data-check-wcag="${escapeHtml(a.wcagRefs || '')}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:14px;font-weight:400;color:#3A4B61;line-height:1.5">
           ${_checkSvg}
-          <span>${a.name}</span>
+          <span>${escapeHtml(displayCheckName(a.name))}</span>
         </div>`).join('')}
     </div>`;
 
@@ -3021,7 +3311,7 @@ function renderResult(data) {
               <div class="issue-msg">${escapeHtml(i.displayTitle || i.message)}</div>
               ${i.explanation ? `<button class="btn-explain" data-explain-idx="${idx}" aria-label="Why this matters">?</button>` : ''}
             </div>
-            <div class="issue-wcag">WCAG ${i.wcagRef} · ${i.code}</div>
+            <div class="issue-wcag">WCAG ${i.wcagRef} · ${escapeHtml(displayCheckName(i.code))}</div>
           </div>
           ${renderAutoFixControl(i, idx)}
         </div>`).join('')}
@@ -3042,9 +3332,9 @@ function renderResult(data) {
     : `<span class="meta-badge" style="background:#E8F0FE;color:#3A4B61">Rule engine fallback</span>`;
 
   const auditLogRows = auditLog.map(a => `
-    <div class="audit-row">
+    <div class="audit-row check-row-clickable" data-check-id="${escapeHtml(a.name)}" data-check-wcag="${escapeHtml(a.wcagRefs || '')}">
       <span class="audit-status ${a.status}">${a.status}</span>
-      <span class="audit-name">${a.name}</span>
+      <span class="audit-name">${escapeHtml(displayCheckName(a.name))}</span>
       ${a.wcagRefs ? `<span class="audit-wcag">WCAG ${a.wcagRefs}</span>` : ''}
     </div>`).join('');
 
@@ -3061,7 +3351,7 @@ function renderResult(data) {
         </div>
         <div class="decided-row">
           <span class="decided-label">Reasoning</span>
-          <span class="decided-value">${r.reasoning || '—'}</span>
+          <span class="decided-value human-reasoning">${escapeHtml(humanizeReasoning(r, r.role))}</span>
         </div>
         <div class="decided-row">
           <span class="decided-label">Signals matched</span>
@@ -3101,9 +3391,10 @@ function renderResult(data) {
   if (data.aiError)  metaBadge += ` <span style="color:var(--accent-amber);font-size:10px">AI failed</span>`;
   if (data.noApiKey) metaBadge += ` <span style="color:var(--text-muted);font-size:10px">No API key — add in Settings</span>`;
 
-  const devCodeHtml = renderAriaSchema(schemaSug ? schemaSug.value : null);
+  const devCodeHtml = isDevMode ? renderAriaSchema(schemaSug ? schemaSug.value : null) : '';
+  const lastScanBanner = viewMode === 'last-scan' ? renderLastScanBanner(data) : '';
 
-  $('content').innerHTML = `
+  $('content').innerHTML = lastScanBanner + `
     <div class="result-card">
       <div class="result-header">
         <div class="node-info">
@@ -3146,6 +3437,7 @@ function renderResult(data) {
 <div class="fix-toast" id="fix-toast" role="status"></div>`;
 
   $('btn-scan').disabled = false;
+  if (viewMode === 'last-scan') wireLastScanBanner(data);
 
   // [?] explain buttons — open the Why-it-matters slide-in panel
   document.querySelectorAll('#content .btn-explain').forEach(btn => {
@@ -3288,8 +3580,15 @@ function renderResult(data) {
   });
 
   $('btn-reset').addEventListener('click', () => {
-    currentState = null;
-    $('content').innerHTML = `<div class="empty-state"><div class="icon">◎</div><p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p></div>`;
+    if (!currentState || !currentState.nodeId) return;
+    $('content').insertAdjacentHTML('beforeend', '<div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">Resetting…</div>');
+    parent.postMessage({ pluginMessage: { type: 'RESET_LAYER', rootNodeId: currentState.nodeId } }, '*');
+  });
+
+  document.querySelectorAll('#content .check-row-clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      openCheckInfoPanel(row.dataset.checkId, row.dataset.checkWcag);
+    });
   });
 
   // "Apply Fixes…" → show "Fix in place vs copy" modal
@@ -3324,8 +3623,9 @@ function renderResult(data) {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.issueIdx, 10);
       const issue = (currentState.result.issues || [])[idx];
-      if (issue && issue.waitingPrompt) {
-        copyFigmaAiPrompt(issue.waitingPrompt, btn);
+      const prompt = getIssuePrompt(issue, idx);
+      if (prompt) {
+        copyFigmaAiPrompt(prompt, btn);
       } else {
         dispatchAutoFix(idx, 'prompt');
       }
@@ -3899,6 +4199,7 @@ function handleUpdatePreview(msg) {
 
 function handleAnalysisResults(msg) {
   hideFixProgress();
+  trackedSelectionId = msg.nodeId;
   const b = $('btn-apply');
   const bb = $('btn-apply-blockers');
   const issues = (msg.result && msg.result.issues) || [];
@@ -3977,13 +4278,19 @@ function handleRescanAiStatus(msg) {
 function handleApplyResult(msg) {
   hideFixProgress();
   const ok         = msg.applied > 0;
-  const detailHtml = (msg.details || []).map(function(d) { return '<div class="apply-detail">' + d + '</div>'; }).join('');
+  const detailHtml = (msg.details || []).map(function(d) {
+    if (/\[(ariaRole|componentType|wcagRef|ariaSchema)\]/i.test(d)) return '';
+    return '<div class="apply-detail">' + escapeHtml(d) + '</div>';
+  }).join('');
   const undoNote   = msg.mode === 'inplace' && ok
     ? '<div class="apply-detail" style="color:var(--accent-blue);margin-top:5px">\u21a9 Cmd+Z undoes all changes</div>' : '';
   const copyNote   = msg.reviewIndicatorId
     ? '<div class="apply-detail" style="color:var(--accent-green)">\uD83D\uDCCB Fixed copy placed 120px right \u2014 original untouched</div>' : '';
   const modeNote   = msg.modeNote && msg.mode === 'annotate'
     ? '<div class="apply-detail" style="color:#a78bfa">' + msg.modeNote + '</div>' : '';
+  const devCodegenNote = msg.devModeCodegen
+    ? '<div class="apply-detail" style="margin-top:6px;color:var(--text-muted)">Developers: select this layer in Dev Mode → <strong>Code</strong> tab → <strong>A11y Shift</strong></div>'
+    : '';
   const fb = $('apply-feedback');
   if (fb) {
     const resultText = ok
@@ -3992,7 +4299,7 @@ function handleApplyResult(msg) {
     const skippedText = msg.skipped > 0 ? (' \u00b7 ' + msg.skipped + ' skipped') : '';
     fb.innerHTML = '<div class="apply-result ' + (ok ? 'success' : 'error') + '">'
       + resultText + skippedText
-      + undoNote + copyNote + modeNote
+      + undoNote + copyNote + modeNote + devCodegenNote
       + detailHtml
       + '</div>';
   }
@@ -4006,7 +4313,24 @@ function handleAskAnswerSaved(msg) {
 
 function handleError(msg) {
   $('btn-scan').disabled = false;
-  $('content').innerHTML = '<div class="apply-result error" style="margin:0">\u2717 ' + msg.message + '</div>';
+  $('content').innerHTML = '<div class="apply-result error" style="margin:0">\u2717 ' + escapeHtml(msg.message) + '</div>';
+}
+
+function handleScanSkipped(msg) {
+  $('btn-scan').disabled = false;
+  const reason = msg.reason || 'This layer was created by A11y Shift.';
+  if (selectionState.lastScannedResults) {
+    showFixToast(reason);
+    refreshResultsPanel();
+  } else {
+    const name = msg.nodeName ? '<strong>' + escapeHtml(msg.nodeName) + '</strong>' : 'this layer';
+    $('content').innerHTML = `
+      <div class="empty-state" style="padding:24px 16px">
+        <div class="icon">◎</div>
+        <p>${escapeHtml(reason)}</p>
+        <p style="margin-top:8px;color:var(--text-muted);font-size:12px">You selected ${name}. Choose the original component inside or next to it.</p>
+      </div>`;
+  }
 }
 
 // ── Message dispatch map (built after all handlers are defined) ──────────────
@@ -4030,6 +4354,12 @@ window.onmessage = function(event) {
     ANALYSIS_RESULTS:       handleAnalysisResults,
     STORED_STATE_AVAILABLE: handleStoredStateAvailable,
     STORED_STATE:           handleStoredStateMessage,
+    SELECTION_CLEARED:      handleSelectionCleared,
+    SELECTION_CHANGED:      handleSelectionChanged,
+    RESET_RESULT:           function(msg) {
+      if (msg.ok) showFixToast('Reset complete — scan updated');
+      else showFixToast(msg.message || 'No snapshot to restore');
+    },
     COMPONENT_INDEX:        handleComponentIndex,
     SCROLL_TO_NODE_RESULT:  function() {},
     SCAN_RESULTS:           handleScanResults,
@@ -4042,6 +4372,7 @@ window.onmessage = function(event) {
     RESCAN_AI_STATUS:       handleRescanAiStatus,
     ASK_ANSWER_SAVED:       handleAskAnswerSaved,
     ERROR:                  handleError,
+    SCAN_SKIPPED:           handleScanSkipped,
     DEBUG_FIX_COVERAGE_RESULT: handleDebugFixCoverageResult,
   };
   const handler = handlers[msg.type];
