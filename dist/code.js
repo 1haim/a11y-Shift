@@ -439,22 +439,32 @@ async function gatherContext(node, allTextNodes) {
   let componentProps = {};
   if (node.type === "INSTANCE") {
     variantProps = node.variantProperties || {};
-    var main = node.mainComponent;
+    const main = await node.getMainComponentAsync();
     if (main) {
-      var instDefs = (main.parent && main.parent.type === "COMPONENT_SET")
-        ? main.parent.componentPropertyDefinitions
-        : main.componentPropertyDefinitions;
-      for (const [k, v] of Object.entries(instDefs || {})) {
+      let instDefs = {};
+      try {
+        instDefs = ((main.parent && main.parent.type === "COMPONENT_SET")
+          ? main.parent.componentPropertyDefinitions
+          : main.componentPropertyDefinitions) || {};
+      } catch (_e) {
+        instDefs = {}; // component set has errors — treat as no properties
+      }
+      for (const [k, v] of Object.entries(instDefs)) {
         componentProps[k] = String(v.defaultValue || "");
       }
     }
   }
   if (node.type === "COMPONENT") {
     var isVariant = node.parent && node.parent.type === "COMPONENT_SET";
-    var compDefs = isVariant
-      ? node.parent.componentPropertyDefinitions
-      : node.componentPropertyDefinitions;
-    for (const [k, v] of Object.entries(compDefs || {})) {
+    let compDefs = {};
+    try {
+      compDefs = (isVariant
+        ? node.parent.componentPropertyDefinitions
+        : node.componentPropertyDefinitions) || {};
+    } catch (_e) {
+      compDefs = {}; // component set has errors — treat as no properties
+    }
+    for (const [k, v] of Object.entries(compDefs)) {
       componentProps[k] = String(v.defaultValue || "");
     }
   }
@@ -786,7 +796,7 @@ function getEffectiveBackground(node) {
 // ─── State variant map ────────────────────────────────────────────────────────
 // Returns { stateName: ComponentNode } for the COMPONENT_SET containing node.
 
-function findStateVariants(node) {
+async function findStateVariants(node) {
   const variantMap = {};
   let set = null;
 
@@ -795,7 +805,7 @@ function findStateVariants(node) {
   } else if (node.type === "COMPONENT") {
     if (node.parent && node.parent.type === "COMPONENT_SET") set = node.parent;
   } else if (node.type === "INSTANCE") {
-    const mc = node.mainComponent;
+    const mc = await node.getMainComponentAsync();
     if (mc && mc.parent && mc.parent.type === "COMPONENT_SET") set = mc.parent;
   }
 
@@ -2127,17 +2137,17 @@ function stateIsPresent(required, foundStates) {
   return false;
 }
 
-function auditStateCoverage(node, spec) {
+async function auditStateCoverage(node, spec) {
   const issues   = [];
-  const stateMap = findStateVariants(node);
+  const stateMap = await findStateVariants(node);
   const found    = Object.keys(stateMap);
 
   for (let i = 0; i < spec.requiredStates.length; i++) {
     const required = spec.requiredStates[i];
     if (stateIsPresent(required, found)) continue;
-    if (required === "focus" && componentHasFocusVariants(node)) continue;
-    if ((required === "checked" || required === "unchecked") && componentHasCheckedOrStateVariants(node)) continue;
-    if ((required === "open" || required === "closed" || required === "expanded") && componentHasExpandedVariants(node)) continue;
+    if (required === "focus" && await componentHasFocusVariants(node)) continue;
+    if ((required === "checked" || required === "unchecked") && await componentHasCheckedOrStateVariants(node)) continue;
+    if ((required === "open" || required === "closed" || required === "expanded") && await componentHasExpandedVariants(node)) continue;
 
     const isCritical = required === "focus" || required === "default";
     const severity   = isCritical ? "HIGH" : "MED";
@@ -2151,7 +2161,7 @@ function auditStateCoverage(node, spec) {
   return issues;
 }
 
-function auditTouchTarget(node) {
+async function auditTouchTarget(node) {
   const issues = [];
 
   // Resolve the node to measure:
@@ -2159,7 +2169,7 @@ function auditTouchTarget(node) {
   // - COMPONENT / INSTANCE / FRAME / GROUP → measure directly
   let target = node;
   if (node.type === "COMPONENT_SET" && node.children && node.children.length > 0) {
-    const stateMap = findStateVariants(node);
+    const stateMap = await findStateVariants(node);
     target = stateMap["default"] || stateMap["rest"] || node.children[0];
   }
 
@@ -2189,9 +2199,9 @@ function auditTouchTarget(node) {
   return issues;
 }
 
-function auditFocusRing(node) {
+async function auditFocusRing(node) {
   const issues    = [];
-  const stateMap  = findStateVariants(node);
+  const stateMap  = await findStateVariants(node);
   const focusNode = stateMap["focus"];
 
   // No focus variant → handled by stateCoverage; don't double-report
@@ -2277,14 +2287,14 @@ function auditFocusRing(node) {
   return issues;
 }
 
-function auditTextContrast(node) {
+async function auditTextContrast(node) {
   const issues = [];
 
   // For COMPONENT_SET scan the default variant only — scanning all variants would
   // report the same text N times. We also scan "error" if it exists (text may differ).
   const nodesToScan = [];
   if (node.type === "COMPONENT_SET" && node.children && node.children.length > 0) {
-    const stateMap = findStateVariants(node);
+    const stateMap = await findStateVariants(node);
     const defaultNode = stateMap["default"] || stateMap["rest"] || node.children[0];
     nodesToScan.push(defaultNode);
     // Also scan error state — error messages are often low-contrast red text
@@ -2384,9 +2394,9 @@ function auditIconOnlyLabel(node, spec) {
   return issues;
 }
 
-function auditColorOnlyDisabled(node) {
+async function auditColorOnlyDisabled(node) {
   const issues   = [];
-  const stateMap = findStateVariants(node);
+  const stateMap = await findStateVariants(node);
   const disabled = stateMap["disabled"];
   const defNode  = stateMap["default"];
 
@@ -2504,9 +2514,9 @@ function auditHasInputLabel(node, spec, ctx) {
   return issues;
 }
 
-function auditHasErrorState(node) {
+async function auditHasErrorState(node) {
   var issues = [];
-  var stateMap = findStateVariants(node);
+  var stateMap = await findStateVariants(node);
   if (!stateMap["error"]) {
     issues.push(makeIssue("HIGH", "NO_ERROR_STATE", "3.3.1",
       "No 'error' state variant found — inputs must have a visible error state (WCAG 3.3.1)",
@@ -2522,8 +2532,8 @@ function auditHasErrorState(node) {
   return issues;
 }
 
-function auditHasIndeterminate(node) {
-  var stateMap = findStateVariants(node);
+async function auditHasIndeterminate(node) {
+  var stateMap = await findStateVariants(node);
   if (!stateMap["indeterminate"]) {
     return [makeIssue("LOW", "NO_INDETERMINATE_STATE", "4.1.2",
       "Consider adding an indeterminate state for tri-state checkboxes (e.g. select-all) (WCAG 4.1.2)",
@@ -3070,19 +3080,27 @@ function componentNameMatchesType(componentName, typeKey) {
   return false;
 }
 
-function componentSetForNode(node) {
+async function componentSetForNode(node) {
   if (!node) return null;
   if (node.type === "COMPONENT_SET") return node;
   if (node.type === "COMPONENT" && node.parent && node.parent.type === "COMPONENT_SET") return node.parent;
-  if (node.type === "INSTANCE" && node.mainComponent) {
-    const master = node.mainComponent;
-    if (master.parent && master.parent.type === "COMPONENT_SET") return master.parent;
+  if (node.type === "INSTANCE") {
+    try {
+      const master = await node.getMainComponentAsync();
+      const parent = (master && master.parent);
+      if (parent && parent.type === "COMPONENT_SET") {
+        const _ = parent.componentPropertyDefinitions; // test access — throws if component set is broken
+        return parent;
+      }
+    } catch (_e) {
+      return null; // component set broken — skip gracefully
+    }
   }
   return null;
 }
 
-function componentHasVariantStateAxes(node, axisKeywords) {
-  const set = componentSetForNode(node);
+async function componentHasVariantStateAxes(node, axisKeywords) {
+  const set = await componentSetForNode(node);
   if (!set) return false;
 
   try {
@@ -3122,22 +3140,22 @@ function componentHasVariantStateAxes(node, axisKeywords) {
   return false;
 }
 
-function componentHasCheckedOrStateVariants(node) {
-  const sm = findStateVariants(node);
+async function componentHasCheckedOrStateVariants(node) {
+  const sm = await findStateVariants(node);
   if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"] || sm["selected"] || sm["active"]) return true;
-  return componentHasVariantStateAxes(node, ["check", "select", "state", "on", "off", "active", "selected"]);
+  return await componentHasVariantStateAxes(node, ["check", "select", "state", "on", "off", "active", "selected"]);
 }
 
-function componentHasFocusVariants(node) {
-  const sm = findStateVariants(node);
+async function componentHasFocusVariants(node) {
+  const sm = await findStateVariants(node);
   if (sm["focus"] || sm["focused"]) return true;
-  return componentHasVariantStateAxes(node, ["focus", "focused", "keyboard"]);
+  return await componentHasVariantStateAxes(node, ["focus", "focused", "keyboard"]);
 }
 
-function componentHasExpandedVariants(node) {
-  const sm = findStateVariants(node);
+async function componentHasExpandedVariants(node) {
+  const sm = await findStateVariants(node);
   if (sm["expanded"] || sm["collapsed"] || sm["open"] || sm["closed"]) return true;
-  return componentHasVariantStateAxes(node, ["expand", "open", "collapsed"]);
+  return await componentHasVariantStateAxes(node, ["expand", "open", "collapsed"]);
 }
 
 function appendNonComponentIssue(issues, node, spec, typeKey) {
@@ -3261,11 +3279,12 @@ async function findAccessibleComponentCandidates(typeKey, referenceNode) {
 
   // Step A — instances on current page → mainComponent
   const page = figma.currentPage;
+  await figma.currentPage.loadAsync();
   if ("findAll" in page) {
     const instances = page.findAll(function(n) { return n.type === "INSTANCE"; });
     for (let i = 0; i < instances.length; i++) {
       const inst = instances[i];
-      const master = inst.mainComponent;
+      const master = await inst.getMainComponentAsync();
       if (!master) continue;
       if (componentNameMatchesType(master.name, typeKey)) {
         addCandidate(master, "instance", false);
@@ -3274,6 +3293,7 @@ async function findAccessibleComponentCandidates(typeKey, referenceNode) {
   }
 
   // Step B — name search (with aliases) across file
+  await figma.loadAllPagesAsync();
   const pages = figma.root.children;
   for (let p = 0; p < pages.length; p++) {
     const pg = pages[p];
@@ -3394,9 +3414,9 @@ function checkerHasHeading(node, ctx, typeKey) {
     node.id)];
 }
 
-function matrixIssuesFromAudit(fn, node, spec, ctx) {
+async function matrixIssuesFromAudit(fn, node, spec, ctx) {
   const specUse = spec || { role: "group", isStarRating: false, requiredStates: [] };
-  const r = fn(node, specUse, ctx);
+  const r = await fn(node, specUse, ctx);
   return r && r.length ? r : [];
 }
 
@@ -3416,8 +3436,8 @@ function checkerPlaceholderNotOnlyLabel(node, ctx) {
     node.id)];
 }
 
-function checkerRequiredStateIndicated(node, ctx) {
-  const stateMap = findStateVariants(node);
+async function checkerRequiredStateIndicated(node, ctx) {
+  const stateMap = await findStateVariants(node);
   const req = stateMap["required"] || stateMap["error"];
   const textBlob = (ctx.innerText || []).join(" ").toLowerCase();
   if (req || textBlob.indexOf("required") >= 0 || textBlob.indexOf("*") >= 0) return [];
@@ -3451,14 +3471,14 @@ function checkerAccordionHeadersAreButtons(node, ctx) {
   return issues;
 }
 
-function checkerAriaExpandedAnnotated(node, ctx, typeKey) {
+async function checkerAriaExpandedAnnotated(node, ctx, typeKey) {
   if (typeKey === "accordion") {
     if (getSharedA11y(node, "ariaExpanded")) return [];
     return [makeIssue("MED", "ARIA_EXPANDED_MISSING", "4.1.2",
       "Document aria-expanded on accordion root in Dev Mode handoff (setSharedPluginData)",
       node.id)];
   }
-  const stateMap = findStateVariants(node);
+  const stateMap = await findStateVariants(node);
   const hasExp = stateMap["expanded"] || stateMap["collapsed"] || stateMap["open"] || stateMap["closed"];
   if (hasExp) return [];
   if (getSharedA11y(node, "ariaExpanded")) return [];
@@ -3598,9 +3618,9 @@ const SPEC_CHECKERS = {
     appendNonComponentIssue(issues, node, spec || { role: typeKey }, typeKey);
     return issues;
   },
-  HAS_ACCESSIBLE_NAME: function(node, ctx) {
+  HAS_ACCESSIBLE_NAME: async function(node, ctx) {
     if (hasAccessibleName(node, ctx)) return [];
-    const iconIssues = matrixIssuesFromAudit(auditIconOnlyLabel, node, { role: "button", requiredStates: [] }, ctx);
+    const iconIssues = await matrixIssuesFromAudit(auditIconOnlyLabel, node, { role: "button", requiredStates: [] }, ctx);
     if (iconIssues.length) return iconIssues;
     return [makeIssue("HIGH", "ICON_BUTTON_NO_LABEL", "4.1.2", "No accessible name — add visible text or aria-label", node.id)];
   },
@@ -3608,8 +3628,8 @@ const SPEC_CHECKERS = {
   TOUCH_TARGET_24_WITH_SPACING: function(node, ctx) { return matrixIssuesFromAudit(auditTouchTarget, node, { role: "group", requiredStates: [] }, ctx); },
   CONTRAST_TEXT: function(node, ctx) { return matrixIssuesFromAudit(auditTextContrast, node, { role: "button", requiredStates: [] }, ctx); },
   CONTRAST_NON_TEXT: function(node, ctx) { return checkNonTextContrast(node, ctx); },
-  FOCUS_RING_VISIBLE: function(node, ctx) {
-    if (componentHasFocusVariants(node)) return [];
+  FOCUS_RING_VISIBLE: async function(node, ctx) {
+    if (await componentHasFocusVariants(node)) return [];
     return matrixIssuesFromAudit(auditFocusRing, node, { role: "button", requiredStates: ["focus"] }, ctx);
   },
   ROLE_BUTTON_ANNOTATED: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "button", "ROLE_BUTTON_MISSING"); },
@@ -3636,9 +3656,9 @@ const SPEC_CHECKERS = {
   STATE_COVERAGE_TOGGLE: function(node, ctx) {
     return matrixIssuesFromAudit(auditStateCoverage, node, { role: "switch", requiredStates: ["unchecked", "checked", "focus", "disabled"] }, ctx);
   },
-  ARIA_CHECKED_ANNOTATED: function(node, ctx) {
-    if (componentHasCheckedOrStateVariants(node)) return [];
-    const sm = findStateVariants(node);
+  ARIA_CHECKED_ANNOTATED: async function(node, ctx) {
+    if (await componentHasCheckedOrStateVariants(node)) return [];
+    const sm = await findStateVariants(node);
     if (sm["checked"] || sm["unchecked"] || sm["on"] || sm["off"]) return [];
     if (getSharedA11y(node, "ariaChecked")) return [];
     return [makeIssue("MED", "ARIA_CHECKED_MISSING", "4.1.2", "Document checked/unchecked (or on/off) states for assistive tech", node.id)];
@@ -3653,8 +3673,8 @@ const SPEC_CHECKERS = {
   ROLE_RADIOGROUP_ON_CONTAINER: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "radiogroup", "ROLE_RADIOGROUP_MISSING"); },
   ROLE_RADIO_ON_ITEMS: function(node, ctx) { return matrixIssuesFromAudit(auditEachRadioHasLabel, node, { role: "radio-group", requiredStates: [] }, ctx); },
   ROLE_COMBOBOX_OR_LISTBOX: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "combobox", "ROLE_COMBOBOX_MISSING"); },
-  EXPANSION_STATE_ANNOTATED: function(node, ctx, typeKey) {
-    if (componentHasExpandedVariants(node)) return [];
+  EXPANSION_STATE_ANNOTATED: async function(node, ctx, typeKey) {
+    if (await componentHasExpandedVariants(node)) return [];
     return checkerAriaExpandedAnnotated(node, ctx, typeKey || "select");
   },
   CHEVRON_OR_EXPAND_INDICATOR: function(node, ctx, typeKey) {
@@ -3684,9 +3704,9 @@ const SPEC_CHECKERS = {
   },
   ROLE_TABLIST_ON_CONTAINER: function(node, ctx) { return checkerRoleAnnotated(node, ctx, "tablist", "ROLE_TABLIST_MISSING"); },
   ROLE_TAB_ON_ITEMS: function(node, ctx) { return checkerTabsStructure(node, ctx); },
-  ARIA_SELECTED_ANNOTATED: function(node, ctx) {
-    if (componentHasVariantStateAxes(node, ["select", "selected", "active", "tab", "state"])) return [];
-    const sm = findStateVariants(node);
+  ARIA_SELECTED_ANNOTATED: async function(node, ctx) {
+    if (await componentHasVariantStateAxes(node, ["select", "selected", "active", "tab", "state"])) return [];
+    const sm = await findStateVariants(node);
     if (sm["selected"] || sm["active"] || sm["default"]) return [];
     if ("children" in node) {
       for (let i = 0; i < node.children.length; i++) {
@@ -3742,7 +3762,7 @@ async function runMatrixChecks(node, ctx, typeKey, spec) {
     }
     try {
       if (!isNodeVisible(node)) continue;
-      const result = fn(node, ctx, typeKey, spec) || [];
+      const result = (await fn(node, ctx, typeKey, spec)) || [];
       for (let j = 0; j < result.length; j++) issues.push(result[j]);
       let status = "PASS";
       if (result.some(function(x) { return x.severity === "HIGH"; })) status = "BLOCK";
@@ -3805,7 +3825,7 @@ async function auditNode(node, spec, ctx) {
     const fn        = AUDIT_FUNCTIONS[auditName];
     if (!fn) continue;
     try {
-      const result      = fn(node, spec, ctx);
+      const result      = await fn(node, spec, ctx);
       const auditIssues = (result && result.length) ? result : [];
       for (let j = 0; j < auditIssues.length; j++) issues.push(auditIssues[j]);
 
@@ -4425,7 +4445,7 @@ async function fixMissingFocusState(p) {
   if (p.rootNode.type !== "COMPONENT_SET") {
     return { ok: false, code: "MISSING_STATE_FOCUS", message: "Focus variant requires a Component Set with variants." };
   }
-  const stateMap   = findStateVariants(p.rootNode);
+  const stateMap   = await findStateVariants(p.rootNode);
   const defaultVar = stateMap["default"] || stateMap["rest"] || p.rootNode.children[0];
   if (!defaultVar) return { ok: false, code: "MISSING_STATE_FOCUS", message: "Could not find a default variant to duplicate." };
 
@@ -4445,7 +4465,7 @@ async function fixMissingDisabledState(p) {
   if (p.rootNode.type !== "COMPONENT_SET") {
     return { ok: false, code: "MISSING_STATE_DISABLED", message: "Disabled variant requires a Component Set." };
   }
-  const stateMap   = findStateVariants(p.rootNode);
+  const stateMap   = await findStateVariants(p.rootNode);
   const defaultVar = stateMap["default"] || stateMap["rest"] || p.rootNode.children[0];
   if (!defaultVar) return { ok: false, code: "MISSING_STATE_DISABLED", message: "Could not find a default variant to duplicate." };
 
@@ -4995,6 +5015,7 @@ async function fixChevronIndicator(p) {
   const chevronRe = /chevron|arrow|caret|expand/i;
   let chevronSource = null;
   if ("findAll" in figma.currentPage) {
+    await figma.currentPage.loadAsync();
     const found = figma.currentPage.findAll(function(n) {
       return chevronRe.test(n.name) && isNodeVisible(n);
     });
@@ -5969,35 +5990,51 @@ async function analyzeNodeAndPost(rootNode, options) {
   options = options || {};
   const previousIssues = options.previousIssues || [];
 
+  console.log("[A11y] analyzeNodeAndPost step 1: start", rootNode.name);
   const ctx = await gatherContext(rootNode);
   let detection = detectComponent(ctx, rootNode);
   ctx.competitorRole = detection.competitorRole || null;
+  console.log("[A11y] analyzeNodeAndPost step 2: detection done, role=", detection.role, "needsVision=", detection.needsVisionTiebreak);
 
   if (detection.needsVisionTiebreak) {
     const tieKey = await figma.clientStorage.getAsync("openai-api-key");
     if (tieKey) {
       figma.ui.postMessage({ type: "AI_LOADING", phase: "vision" });
+      console.log("[A11y] analyzeNodeAndPost step 3: before vision tiebreak");
+      let _visionTie = null;
       try {
-        const visionResult = await classifyWithVision(rootNode, tieKey);
-        const visionSpec   = findSpecByRoleHint(visionResult.role);
+        const _visionTieCall = classifyWithVision(rootNode, tieKey);
+        const _visionTieTimeout = new Promise(function(resolve) {
+          setTimeout(function() { resolve(null); }, 12000);
+        });
+        _visionTie = await Promise.race([_visionTieCall, _visionTieTimeout]);
+        console.log("[A11y] analyzeNodeAndPost step 4: vision tiebreak done, role=", _visionTie && _visionTie.role);
+      } catch (_tieErr) {
+        console.warn("[A11y] analyzeNodeAndPost vision tiebreak error:", String(_tieErr));
+        _visionTie = null;
+      }
+      if (_visionTie) {
+        const visionSpec = findSpecByRoleHint(_visionTie.role);
         if (visionSpec) {
           detection = Object.assign({}, detection, {
             role:               visionSpec.role,
             spec:               visionSpec,
             reasoning:          "Vision tiebreak vs " + (detection.competitorRole || "?") + ": " +
-                                (visionResult.reasoning || visionSpec.role),
+                                (_visionTie.reasoning || visionSpec.role),
             detectionPath:      "vision-tiebreak",
-            confidence:         visionResult.confidence || "MED",
+            confidence:         _visionTie.confidence || "MED",
             needsVisionTiebreak: false,
           });
         }
-      } catch (_tieErr) { /* keep spec-engine winner */ }
+      }
     }
   }
 
+  console.log("[A11y] analyzeNodeAndPost step 5: before auditNode");
   const auditResult  = detection.spec ? await auditNode(rootNode, detection.spec, ctx) : { issues: [], auditLog: [] };
   const issues       = auditResult.issues;
   const auditLog     = auditResult.auditLog;
+  console.log("[A11y] analyzeNodeAndPost step 6: auditNode done, issues=", issues.length);
 
   if (issues.length > 0) {
     const apiKeyForTitles = await figma.clientStorage.getAsync("openai-api-key");
@@ -6053,6 +6090,7 @@ async function analyzeNodeAndPost(rootNode, options) {
     resolvedIssues: resolvedIssues,
   };
 
+  console.log("[A11y] analyzeNodeAndPost step 7: before postMessage ANALYSIS_RESULTS");
   figma.ui.postMessage({
     type:                 "ANALYSIS_RESULTS",
     nodeId:               rootNode.id,
@@ -6063,6 +6101,7 @@ async function analyzeNodeAndPost(rootNode, options) {
     pendingDesignerCount: pendingDesignerCount,
     afterFix:             !!options.afterFix,
   });
+  console.log("[A11y] analyzeNodeAndPost step 8: ANALYSIS_RESULTS sent ✓");
 }
 
 async function autoFixIssue(params) {
@@ -6158,7 +6197,7 @@ Inner text: ${ctx.innerText.slice(0, 5).join(" | ")}
 Nearby labels (spatial): ${ctx.nearbyText.slice(0, 5).join(" | ")}
 Variant props: ${JSON.stringify(ctx.variantProps)}`;
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const _aiFetch = fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -6175,6 +6214,10 @@ Variant props: ${JSON.stringify(ctx.variantProps)}`;
       ],
     }),
   });
+  const _aiTimeout = new Promise(function(_, reject) {
+    setTimeout(function() { reject(new Error("Text AI timeout after 15s")); }, 15000);
+  });
+  const resp = await Promise.race([_aiFetch, _aiTimeout]);
 
   if (!resp.ok) {
     const err = await resp.text();
@@ -6244,7 +6287,7 @@ async function classifyWithVision(rootNode, apiKey) {
     "What interactive component is this? Name: " + (rootNode.name || "") +
     ". Prefer starRating for star-rating controls; radioGroup for radio sets; combobox for dropdowns.";
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const visionFetch = fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -6270,6 +6313,11 @@ async function classifyWithVision(rootNode, apiKey) {
       ],
     }),
   });
+  const visionTimeout = new Promise(function(_, reject) {
+    setTimeout(function() { reject(new Error("Vision AI timeout after 15s")); }, 15000);
+  });
+
+  const resp = await Promise.race([visionFetch, visionTimeout]);
 
   if (!resp.ok) {
     const err = await resp.text();
@@ -6425,20 +6473,67 @@ async function removeFromIndex(nodeId) {
 }
 
 // ── Selection change → push stored snapshot to UI when available ──
-// We only fire when there is exactly one node selected AND it has a stored scan,
-// so the analyze flow's empty/loading states are never overwritten by surprise.
-figma.on("selectionchange", function() {
+// Recursively find INSTANCE/COMPONENT children within a GROUP/FRAME, max depth 3.
+function findComponentsInside(node, depth) {
+  depth = depth || 0;
+  if (depth > 3) return [];
+  var results = [];
+  var children = node.children || [];
+  for (var _fi = 0; _fi < children.length; _fi++) {
+    var child = children[_fi];
+    if (child.type === "INSTANCE" || child.type === "COMPONENT") {
+      results.push(child);
+    } else if ((child.type === "GROUP" || child.type === "FRAME") && results.length === 0) {
+      var nested = findComponentsInside(child, depth + 1);
+      for (var _ni = 0; _ni < nested.length; _ni++) results.push(nested[_ni]);
+    }
+  }
+  return results;
+}
+
+async function handleSelectionNode(node) {
+  // 1. If GROUP/FRAME with multiple components inside → offer Dive In
+  if ((node.type === "GROUP" || node.type === "FRAME") && "children" in node) {
+    var compChildren = findComponentsInside(node);
+    if (compChildren.length >= 2) {
+      figma.ui.postMessage({
+        type:       "SHOW_DIVE_IN_PROMPT",
+        nodeId:     node.id,
+        nodeName:   node.name,
+        childIds:   compChildren.map(function(c) { return c.id; }),
+        firstChildId: compChildren[0].id,
+        childCount: compChildren.length,
+      });
+      return;
+    }
+  }
+
+  // 2. Show stored scan if available
+  const stored = readStoredScan(node);
+  if (stored) {
+    figma.ui.postMessage({
+      type:     "STORED_STATE_AVAILABLE",
+      nodeId:   node.id,
+      nodeName: node.name,
+      nodeType: node.type,
+      snapshot: stored,
+    });
+    return;
+  }
+
+  // 3. For selectable component-like nodes → export quick preview
+  if (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "FRAME") {
+    try {
+      const bytes = await node.exportAsync({ format: "PNG", constraint: { type: "SCALE", value: 0.5 } });
+      figma.ui.postMessage({ type: "AUDIT_RESULT", imageBytes: Array.from(bytes), nodeId: node.id, nodeName: node.name });
+    } catch (_e) { /* preview is optional */ }
+  }
+}
+
+figma.on("selectionchange", async function() {
   const sel = figma.currentPage.selection;
   if (sel.length !== 1) return;
-  const stored = readStoredScan(sel[0]);
-  if (!stored) return;
-  figma.ui.postMessage({
-    type:     "STORED_STATE_AVAILABLE",
-    nodeId:   sel[0].id,
-    nodeName: sel[0].name,
-    nodeType: sel[0].type,
-    snapshot: stored,
-  });
+  await handleSelectionNode(sel[0]);
 });
 
 async function scrollToNode(nodeId) {
@@ -6463,6 +6558,17 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === "SAVE_API_KEY") {
     await figma.clientStorage.setAsync("openai-api-key", msg.key);
     figma.ui.postMessage({ type: "KEY_SAVED" });
+    return;
+  }
+
+  if (msg.type === "RESET_SCAN") {
+    if (msg.nodeId) {
+      const resetNode = await getNodeById(msg.nodeId);
+      if (resetNode && resetNode.setPluginData) {
+        try { resetNode.setPluginData(LAST_SCAN_KEY, ""); } catch (_e) {}
+      }
+    }
+    figma.ui.postMessage({ type: "SCAN_RESET" });
     return;
   }
 
@@ -6925,21 +7031,33 @@ figma.ui.onmessage = async (msg) => {
       const tieKey = await figma.clientStorage.getAsync("openai-api-key");
       if (tieKey) {
         figma.ui.postMessage({ type: "AI_LOADING", phase: "vision" });
+        console.log("[A11y] ANALYZE_SELECTION tiebreak: before vision");
+        let _tiebreakerResult = null;
         try {
-          const visionResult = await classifyWithVision(rootNode, tieKey);
-          const visionSpec   = findSpecByRoleHint(visionResult.role);
+          const _tbCall = classifyWithVision(rootNode, tieKey);
+          const _tbTimeout = new Promise(function(resolve) {
+            setTimeout(function() { resolve(null); }, 12000);
+          });
+          _tiebreakerResult = await Promise.race([_tbCall, _tbTimeout]);
+          console.log("[A11y] ANALYZE_SELECTION tiebreak: vision done, role=", _tiebreakerResult && _tiebreakerResult.role);
+        } catch (_tieErr) {
+          console.warn("[A11y] ANALYZE_SELECTION tiebreak: vision error:", String(_tieErr));
+          _tiebreakerResult = null;
+        }
+        if (_tiebreakerResult) {
+          const visionSpec = findSpecByRoleHint(_tiebreakerResult.role);
           if (visionSpec) {
             detection = Object.assign({}, detection, {
               role:               visionSpec.role,
               spec:               visionSpec,
               reasoning:          "Vision tiebreak vs " + (detection.competitorRole || "?") + ": " +
-                                  (visionResult.reasoning || visionSpec.role),
+                                  (_tiebreakerResult.reasoning || visionSpec.role),
               detectionPath:      "vision-tiebreak",
-              confidence:         visionResult.confidence || "MED",
+              confidence:         _tiebreakerResult.confidence || "MED",
               needsVisionTiebreak: false,
             });
           }
-        } catch (_tieErr) { /* keep spec-engine winner */ }
+        }
       }
     }
 
@@ -7011,8 +7129,15 @@ figma.ui.onmessage = async (msg) => {
 
     figma.ui.postMessage({ type: "AI_LOADING", phase: "text" });
 
+    let _resultSent = false;
+    let _pipelineError = null;
     try {
+      console.log("[A11y] step 1: start AI pipeline", rootNode.name);
+
+      console.log("[A11y] step 2: before classifyWithAI");
       const aiResult        = await classifyWithAI(ctx, apiKey);
+      console.log("[A11y] step 3: classifyWithAI done, role=", aiResult.role);
+
       let finalIssues       = issues;
       let finalAuditLog     = auditLog;
       let activeSpec        = detection.spec;
@@ -7024,31 +7149,53 @@ figma.ui.onmessage = async (msg) => {
       let specFromText      = findSpecByRoleHint(aiResult.role);
 
       if (specFromText && !roleUnknown) {
+        console.log("[A11y] step 4a: text role known — running specs for", aiResult.role);
         const audited = await runSpecsForType(aiResult.role, rootNode, ctx);
         finalIssues   = audited.issues;
         finalAuditLog = audited.auditLog;
         activeSpec    = audited.spec;
         if (activeSpec) aiResult.role = activeSpec.role;
         finalSuggestions = generateSuggestions(rootNode, activeSpec, ctx, finalIssues);
+        console.log("[A11y] step 4b: runSpecs done, issues=", finalIssues.length);
       } else {
+        console.log("[A11y] step 4a: role unknown/missing — entering vision path");
         figma.ui.postMessage({ type: "AI_LOADING", phase: "vision" });
-        const visionResult = await classifyWithVision(rootNode, apiKey);
-        const visionUnknown = !visionResult.role || String(visionResult.role).toLowerCase() === "unknown";
-        const specFromVision = findSpecByRoleHint(visionResult.role);
 
-        if (specFromVision && !visionUnknown) {
-          const audited = await runSpecsForType(visionResult.role, rootNode, ctx);
-          finalIssues   = audited.issues;
-          finalAuditLog = audited.auditLog;
-          activeSpec    = audited.spec;
-          aiResult.role = activeSpec.role;
-          aiResult.confidence = visionResult.confidence || "MED";
-          aiResult.reasoning = "Vision: " + (visionResult.reasoning || activeSpec.role);
-          detectionPath = "vision-ai";
-          finalSuggestions = generateSuggestions(rootNode, activeSpec, ctx, finalIssues);
+        let visionResult = null;
+        try {
+          const _visionCall = classifyWithVision(rootNode, apiKey);
+          const _visionHardTimeout = new Promise(function(resolve) {
+            setTimeout(function() { resolve(null); }, 12000);
+          });
+          visionResult = await Promise.race([_visionCall, _visionHardTimeout]);
+          console.log("[A11y] step 4b: vision done, role=", visionResult && visionResult.role);
+        } catch (_ve) {
+          console.warn("[A11y] step 4b: vision error:", String(_ve));
+          visionResult = null;
+        }
+
+        if (visionResult) {
+          const visionUnknown  = !visionResult.role || String(visionResult.role).toLowerCase() === "unknown";
+          const specFromVision = findSpecByRoleHint(visionResult.role);
+          if (specFromVision && !visionUnknown) {
+            console.log("[A11y] step 5: running specs for vision role", visionResult.role);
+            const audited = await runSpecsForType(visionResult.role, rootNode, ctx);
+            finalIssues   = audited.issues;
+            finalAuditLog = audited.auditLog;
+            activeSpec    = audited.spec;
+            aiResult.role = activeSpec.role;
+            aiResult.confidence = visionResult.confidence || "MED";
+            aiResult.reasoning = "Vision: " + (visionResult.reasoning || activeSpec.role);
+            detectionPath = "vision-ai";
+            finalSuggestions = generateSuggestions(rootNode, activeSpec, ctx, finalIssues);
+            console.log("[A11y] step 5b: runSpecs done, issues=", finalIssues.length);
+          }
+        } else {
+          console.log("[A11y] step 4c: vision returned null — continuing with rule-engine result");
         }
       }
 
+      console.log("[A11y] step 6: before enrichIssues, count=", finalIssues.length);
       if (finalIssues.length > 0) {
         ctx.componentType = (activeSpec && activeSpec.role) || aiResult.role || ctx.nodeType;
         await enrichIssuesWithTitlesAndExplanations(finalIssues, rootNode, ctx, apiKey);
@@ -7058,6 +7205,8 @@ figma.ui.onmessage = async (msg) => {
 
       const estimatedTokens = Math.round(JSON.stringify(ctx).length / 4) +
         (detectionPath === "vision-ai" ? 900 : 200);
+
+      console.log("[A11y] step 7: before postMessage ANALYSIS_RESULTS");
       figma.ui.postMessage({
         type:     "ANALYSIS_RESULTS",
         nodeId:   rootNode.id,
@@ -7078,17 +7227,25 @@ figma.ui.onmessage = async (msg) => {
         estimatedTokens,
         usedSpec:   !!activeSpec,
       });
+      _resultSent = true;
+      console.log("[A11y] step 8: ANALYSIS_RESULTS sent ✓");
     } catch (e) {
-      figma.ui.postMessage({
-        type:     "ANALYSIS_RESULTS",
-        nodeId:   rootNode.id,
-        nodeName: rootNode.name,
-        nodeType: rootNode.type,
-        result:   resultPayload,
-        aiError:  String(e),
-        usedSpec: !!detection.spec,
-        pendingDesignerCount: pendingDesignerCount,
-      });
+      _pipelineError = e;
+      console.error("[A11y] pipeline catch:", String(e));
+    } finally {
+      if (!_resultSent) {
+        console.warn("[A11y] finally: result not sent — sending fallback ANALYSIS_RESULTS");
+        figma.ui.postMessage({
+          type:     "ANALYSIS_RESULTS",
+          nodeId:   rootNode.id,
+          nodeName: rootNode.name,
+          nodeType: rootNode.type,
+          result:   resultPayload,
+          aiError:  _pipelineError ? String(_pipelineError) : "Pipeline did not complete",
+          usedSpec: !!detection.spec,
+          pendingDesignerCount: pendingDesignerCount,
+        });
+      }
     }
   }
 };

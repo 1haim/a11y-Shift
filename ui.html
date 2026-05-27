@@ -301,9 +301,10 @@
   .result-reasoning { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 
   /* ── Issues ──────────────────────────────────────────────────────── */
-  .issues-section { padding: 10px 14px; border-top: 1px solid var(--border); }
+  .issues-section { padding: 0; border-top: 1px solid var(--border); }
+  .issues-section .section-collapse-body.open { padding: 0 14px 10px; }
   .issues-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .issues-count   { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #0A2540; }
+  .issues-count   { font-size: 16px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #0A2540; }
   .issues-count.has-high { color: #0A2540; }
   .issue-item {
     display: flex; flex-direction: column; gap: 12px;
@@ -406,6 +407,22 @@
   .btn-ask-opt:hover { background: var(--border2); color: var(--text); border-color: var(--accent-blue); }
   .btn-ask-opt.selected { background: #0d2033; border-color: var(--accent-blue); color: var(--accent-blue); }
 
+  /* ── Bottom actions (Fix All / Reset) ───────────────────────────── */
+  .bottom-actions { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+  .btn-primary {
+    background: #1966D2; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 0; font-size: 14px; font-weight: 500; cursor: pointer; width: 100%;
+  }
+  .btn-primary:hover { background: #1554b8; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    background: transparent; color: var(--text-muted); border: none;
+    padding: 8px 0; font-size: 13px; cursor: pointer; width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-full-width { display: block; width: 100%; }
+
   /* ── Apply ───────────────────────────────────────────────────────── */
   .apply-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .btn-apply {
@@ -430,6 +447,42 @@
     background: transparent; border: none; color: #3A4B61;
   }
   .btn-apply.btn-back-ghost:hover { background: #F8FAFF; }
+  /* Annotate button (annotation-kind issues) */
+  .btn-annotate {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+    background: #EAF6F0; border: 1.5px solid #078912; color: #078912;
+  }
+  .btn-annotate:hover { background: #D4EDDA; }
+  /* apply-area layout */
+  .apply-area { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .apply-warning-bar {
+    padding: 8px 12px; background: #FFF3CD; border: 1px solid #FFCA28;
+    border-radius: 6px; font-size: 13px; color: #856404;
+  }
+  .apply-row-main { display: flex; gap: 8px; }
+  .apply-row-main .btn-apply { flex: 1; }
+  .apply-secondary-row { text-align: center; }
+  .apply-text-link {
+    background: none; border: none; color: #136EF8; font-size: 13px;
+    cursor: pointer; text-decoration: underline; padding: 2px 4px;
+  }
+  .apply-text-link:hover { color: #0E5ADB; }
+  /* collapsible passed / issues sections */
+  .section-collapse-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px 4px; cursor: pointer; user-select: none;
+  }
+  .section-collapse-toggle:hover { background: #F8FAFF; }
+  .section-collapse-toggle .toggle-chevron {
+    flex-shrink: 0; transition: transform 0.2s;
+  }
+  .section-collapse-toggle.open .toggle-chevron { transform: rotate(90deg); }
+  .section-collapse-body {
+    overflow: hidden; max-height: 0; transition: max-height 0.25s ease;
+  }
+  .section-collapse-body.open { max-height: 2000px; }
   .apply-result {
     padding: 10px 14px; border-radius: var(--radius);
     font-size: 12px; line-height: 1.8; margin-top: 10px;
@@ -1841,6 +1894,35 @@ let currentState    = null;
 let currentScanData = null;
 let isDevMode       = false;
 let settings        = { threshold: 3, aiModel: 'gpt-4o-mini', annotationDestination: 'ask' };
+// In-memory replacement for sessionStorage (blocked in Figma plugin data: URL context)
+const _sectionState = {};
+
+// Human-readable labels for audit check IDs
+const CHECK_LABELS = {
+  GROUP_HAS_LABEL:              'Group has accessible label',
+  EACH_RADIO_HAS_LABEL:         'Each option has a label',
+  EACH_STAR_DESCRIBED:          'Each star has a description',
+  ROLE_RADIO_ON_ITEMS:          'Items are marked as radio buttons',
+  FOCUS_RING_VISIBLE:           'Focus indicator is visible',
+  TOUCH_TARGET_24_WITH_SPACING: 'Touch target meets minimum size',
+  ARIA_CHECKED:                 'Selected state is communicated',
+  ARIA_EXPANDED:                'Expanded state is communicated',
+  MISSING_STATE:                'Interactive state is defined',
+  CONTRAST_RATIO:               'Color contrast is sufficient',
+  HEADING_EXISTS:               'Section has a heading',
+  LABEL_ASSOCIATED:             'Label is linked to its field',
+  BUTTON_HAS_NAME:              'Button has an accessible name',
+  LINK_HAS_NAME:                'Link has an accessible name',
+  KEYBOARD_ACCESSIBLE:          'Keyboard navigation works',
+  FOCUS_ORDER:                  'Focus order is logical',
+};
+function friendlyCheckName(id) {
+  if (!id) return '';
+  if (CHECK_LABELS[id]) return CHECK_LABELS[id];
+  return id.split('_').map(function(w) {
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2046,7 +2128,7 @@ $('btn-scan').addEventListener('click', () => {
     allowBtn.addEventListener('click', () => {
       const cb = document.getElementById('ai-consent-dont-ask');
       if (cb && cb.checked) {
-        try { sessionStorage.setItem('a11y-ai-consent', '1'); } catch (_e) {}
+        _sectionState['a11y-ai-consent'] = '1';
       }
       const pending = pendingAiFix;
       hideAiConsentDialog();
@@ -2221,11 +2303,11 @@ function wireFrameworkTabs(container, ariaSchemaStr) {
 }
 
 function getAnnotationDestSession() {
-  try { return sessionStorage.getItem('a11y-annotation-dest-session'); } catch (_e) { return null; }
+  return _sectionState['a11y-annotation-dest-session'] || null;
 }
 
 function setAnnotationDestSession(dest) {
-  try { sessionStorage.setItem('a11y-annotation-dest-session', dest); } catch (_e) {}
+  _sectionState['a11y-annotation-dest-session'] = dest;
 }
 
 function formatPendingAge(ts) {
@@ -2351,7 +2433,7 @@ function renderAutoFixControl(issue, idx) {
     </div>`;
   }
   if (issue.acknowledged) {
-    return '<div class="issue-actions"><span class="ack-badge">✓ Acknowledged</span></div>';
+    return '<div class="issue-actions"><span class="ack-badge">✓ Noted — fix manually</span></div>';
   }
   if (issue.fixKind === 'message_only') {
     const msg = issue.designerMessage || issue.message || '';
@@ -2370,8 +2452,8 @@ function renderAutoFixControl(issue, idx) {
   if (issue.fixKind === 'annotation') {
     return `
     <div class="issue-actions">
-      <button class="btn-autofix-direct" data-issue-idx="${idx}" data-strategy="generic">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.5 1.5C8.5 1.5 8.91 4.8 10.2 6.09C11.5 7.38 14.5 7.5 14.5 7.5C14.5 7.5 11.5 7.62 10.2 8.91C8.91 10.2 8.5 13.5 8.5 13.5C8.5 13.5 8.09 10.2 6.8 8.91C5.5 7.62 2.5 7.5 2.5 7.5C2.5 7.5 5.5 7.38 6.8 6.09C8.09 4.8 8.5 1.5 8.5 1.5Z"/></svg> Auto Fix
+      <button class="btn-annotate" data-issue-idx="${idx}" data-strategy="generic">
+        Annotate
       </button>
     </div>`;
   }
@@ -2395,7 +2477,7 @@ function renderAutoFixControl(issue, idx) {
 let pendingAiFix = null;
 
 function hasAiConsent() {
-  try { return sessionStorage.getItem('a11y-ai-consent') === '1'; } catch (_e) { return false; }
+  return _sectionState['a11y-ai-consent'] === '1';
 }
 
 function showAiConsentDialog(issueIdx, strategy) {
@@ -2706,23 +2788,16 @@ function refreshSummaryBanner() {
       banner.style.display = 'none';
     } else {
       banner.style.display = '';
-      banner.textContent = `${blockers} blocker${blockers > 1 ? 's' : ''} — use Fix blockers & continue or Fix all anyway`;
+      banner.textContent = `${blockers} blocker${blockers > 1 ? 's' : ''} found`;
     }
   }
 
-  // Apply Fixes button — never fully lock out when blockers exist
-  const applyBtn = document.getElementById('btn-apply');
-  const applyBlockersBtn = document.getElementById('btn-apply-blockers');
+  // Apply Fixes button
+  const applyBtn = document.getElementById('btn-fix-all');
   const noSuggestions = !((currentState.result.suggestions || []).length);
   if (applyBtn) {
     applyBtn.disabled = noSuggestions;
-    applyBtn.classList.remove('blocked');
-    applyBtn.textContent = blockers > 0 ? 'Fix all anyway' : 'Apply Fixes…';
-    applyBtn.title = blockers > 0 ? 'Applies all fixes without fixing blockers first' : '';
-  }
-  if (applyBlockersBtn) {
-    applyBlockersBtn.style.display = blockers > 0 ? '' : 'none';
-    applyBlockersBtn.disabled = noSuggestions;
+    applyBtn.textContent = 'Fix All';
   }
 
   // Audit summary count line
@@ -2830,7 +2905,7 @@ function handleAcknowledgeResult(msg) {
   if (msg.ok && row) {
     row.classList.add('issue-acknowledged');
     const actions = row.querySelector('.issue-actions');
-    if (actions) actions.innerHTML = '<span class="ack-badge">✓ Acknowledged</span>';
+    if (actions) actions.innerHTML = '<span class="ack-badge">✓ Noted — fix manually</span>';
     if (currentState && currentState.result && currentState.result.issues && idx != null) {
       currentState.result.issues[idx] = Object.assign({}, currentState.result.issues[idx], { acknowledged: true });
     }
@@ -2840,6 +2915,7 @@ function handleAcknowledgeResult(msg) {
 }
 
 function handleAutoFixResult(msg) {
+  hideFixProgress();
   const idx = (typeof msg.issueIdx === 'number') ? msg.issueIdx : pendingAutoFixIdx;
   const row = idx != null ? document.querySelector('[data-issue-idx="' + idx + '"].issue-item') : null;
   const btn = row ? row.querySelector('.btn-autofix, .btn-autofix-direct, .btn-focus-ai') : null;
@@ -2955,14 +3031,23 @@ function renderResult(data) {
   const auditLog     = r.auditLog || [];
   const passedAudits = auditLog.filter(a => a.status === 'PASS');
   const _checkSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM16.7295 9.31641C16.3518 8.91355 15.7193 8.89293 15.3164 9.27051L10.667 13.6289L8.68359 11.7705C8.28068 11.3929 7.64819 11.4136 7.27051 11.8164C6.89294 12.2193 6.91355 12.8518 7.31641 13.2295L9.98242 15.7295C10.3671 16.0901 10.9659 16.0901 11.3506 15.7295L16.6836 10.7295C17.0865 10.3518 17.1071 9.71933 16.7295 9.31641Z" fill="#078912"/></svg>`;
+  const _passedCollapseKey = 'passed-open-' + (data.nodeId || '');
+  const _passedOpen = _sectionState[_passedCollapseKey] === 'true';
   const passedHtml   = passedAudits.length === 0 ? '' : `
-    <div style="padding:8px 14px 4px;">
-      <div class="section-label">Passed checks</div>
-      ${passedAudits.map(a => `
-        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:14px;font-weight:400;color:#3A4B61;line-height:1.5">
-          ${_checkSvg}
-          <span>${a.name}</span>
-        </div>`).join('')}
+    <div class="section-collapse-wrap" id="passed-section-wrap">
+      <div class="section-collapse-toggle${_passedOpen ? ' open' : ''}" id="passed-toggle">
+        <span class="section-label">${passedAudits.length} Passed check${passedAudits.length !== 1 ? 's' : ''}</span>
+        <svg class="toggle-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="section-collapse-body${_passedOpen ? ' open' : ''}" id="passed-body">
+        <div style="padding:0 14px 8px;">
+          ${passedAudits.map(a => `
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:14px;font-weight:400;color:#3A4B61;line-height:1.5">
+              ${_checkSvg}
+              <span>${friendlyCheckName(a.id || a.name)}</span>
+            </div>`).join('')}
+        </div>
+      </div>
     </div>`;
 
   const waitingCount = issues.filter(i => i.waitingForAi && !i.fixed).length;
@@ -2982,6 +3067,8 @@ function renderResult(data) {
   const resolvedKeys = {};
   resolvedIssues.forEach(ri => { resolvedKeys[ri.code + ':' + (ri.nodeId || '')] = true; });
 
+  const _issuesCollapseKey = 'issues-open-' + (data.nodeId || '');
+  const _issuesOpen = _sectionState[_issuesCollapseKey] === 'true';
   const issuesHtml = issues.length === 0 ? `
     <div class="issues-section" id="issues-section">
       <div class="all-resolved-banner">
@@ -2991,9 +3078,11 @@ function renderResult(data) {
     </div>` : `
     <div class="issues-section" id="issues-section">
       ${pendingBanner}
-      <div class="issues-header">
+      <div class="section-collapse-toggle${_issuesOpen ? ' open' : ''}" id="issues-toggle">
         <span class="issues-count ${hasHigh ? 'has-high' : ''}" id="audit-summary">${issues.length} Issue${issues.length !== 1 ? 's' : ''} Found</span>
+        <svg class="toggle-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4L10 8L6 12" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
+      <div class="section-collapse-body${_issuesOpen ? ' open' : ''}" id="issues-body">
       ${resolvedIssues.map((i, ridx) => `
         <div class="issue-item issue-${i.severity} issue-resolved-strike" data-resolved-idx="${ridx}">
           <span class="issue-sev">✓ Fixed</span>
@@ -3013,6 +3102,7 @@ function renderResult(data) {
             if (i.severity==='HIGH')   return _x   + ' High';
             if (i.severity==='MED')    return _tri + ' Medium';
             if (i.severity==='LOW')    return _ring+ ' Low';
+            if (i.fixKind==='annotation') return _ring + ' Annotation';
             return _ring + ' Manual';
           })()}</span>
           <div class="issue-body">
@@ -3025,6 +3115,7 @@ function renderResult(data) {
           </div>
           ${renderAutoFixControl(i, idx)}
         </div>`).join('')}
+      </div>
     </div>`;
 
   // ── "How I decided" collapsible section
@@ -3124,19 +3215,10 @@ function renderResult(data) {
       <div class="meta-row">${metaBadge}</div>
     </div>
     ${askHtml}
-    <div class="apply-row">
-      <button class="btn-apply primary" id="btn-apply-blockers" style="display:${hasHigh ? '' : 'none'}"
-        ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
-        Fix blockers &amp; continue
-      </button>
-      <button class="btn-apply ${hasHigh ? '' : 'primary'}" id="btn-apply"
-        ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>
-        ${hasHigh ? 'Fix all anyway' : 'Apply Fixes…'}
-      </button>
-      <button class="btn-apply btn-back-ghost" id="btn-reset">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.03-3.22" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 4.5V8H6" stroke="#3A4B61" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Reset
-      </button>
+    <div class="bottom-actions">
+      <button id="btn-fix-all" class="btn-primary btn-full-width"
+        ${(r.suggestions || []).length === 0 ? 'disabled' : ''}>Fix All</button>
+      <button id="btn-reset" class="btn-ghost btn-full-width">↺ Reset</button>
     </div>
     <div id="apply-feedback"></div>
 <div class="fix-progress-wrap" id="fix-progress-wrap">
@@ -3158,7 +3240,7 @@ function renderResult(data) {
   });
 
   // Auto-fix buttons (open menu) + option clicks (dispatch fix)
-  document.querySelectorAll('#content .btn-autofix-direct').forEach(btn => {
+  document.querySelectorAll('#content .btn-autofix-direct, #content .btn-annotate').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       dispatchAutoFix(parseInt(btn.dataset.issueIdx, 10), btn.dataset.strategy || 'generic');
@@ -3259,6 +3341,30 @@ function renderResult(data) {
     });
   });
 
+  // Passed checks collapsible
+  const passedToggle = $('passed-toggle');
+  if (passedToggle) {
+    passedToggle.addEventListener('click', () => {
+      const isOpen = passedToggle.classList.toggle('open');
+      const body = $('passed-body');
+      if (body) body.classList.toggle('open', isOpen);
+      const nodeId = currentState && currentState.nodeId || '';
+      _sectionState['passed-open-' + nodeId] = isOpen ? 'true' : 'false';
+    });
+  }
+
+  // Issues collapsible
+  const issuesToggle = $('issues-toggle');
+  if (issuesToggle) {
+    issuesToggle.addEventListener('click', () => {
+      const isOpen = issuesToggle.classList.toggle('open');
+      const body = $('issues-body');
+      if (body) body.classList.toggle('open', isOpen);
+      const nodeId = currentState && currentState.nodeId || '';
+      _sectionState['issues-open-' + nodeId] = isOpen ? 'true' : 'false';
+    });
+  }
+
   // Dev code toggle
   const toggle = $('devcode-toggle');
   if (toggle) {
@@ -3288,11 +3394,15 @@ function renderResult(data) {
   });
 
   $('btn-reset').addEventListener('click', () => {
+    // Optimistic local reset
+    const resetNodeId = currentState && currentState.nodeId;
     currentState = null;
     $('content').innerHTML = `<div class="empty-state"><div class="icon">◎</div><p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p></div>`;
+    // Ask code.js to clear stored plugin data
+    parent.postMessage({ pluginMessage: { type: 'RESET_SCAN', nodeId: resetNodeId } }, '*');
   });
 
-  // "Apply Fixes…" → show "Fix in place vs copy" modal
+  // "Fix All" → show apply modal
   function startApplyFlow(fixOrder) {
     if (!currentState) return;
     showFixProgress(fixOrder === 'blockers-first' ? 'Fixing blockers first…' : 'Preparing fixes…', 0, 1);
@@ -3303,21 +3413,12 @@ function renderResult(data) {
     showApplyModal(fixOrder);
   }
 
-  $('btn-apply').addEventListener('click', () => {
+  $('btn-fix-all').addEventListener('click', () => {
     if (!currentState) return;
-    const applyBtn = $('btn-apply');
-    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying fixes…'; }
+    const fixAllBtn = $('btn-fix-all');
+    if (fixAllBtn) { fixAllBtn.disabled = true; fixAllBtn.textContent = 'Applying…'; }
     startApplyFlow('all');
   });
-  const applyBlockersBtn = $('btn-apply-blockers');
-  if (applyBlockersBtn) {
-    applyBlockersBtn.addEventListener('click', () => {
-      if (!currentState) return;
-      applyBlockersBtn.disabled = true;
-      applyBlockersBtn.textContent = 'Applying fixes…';
-      startApplyFlow('blockers-first');
-    });
-  }
 
   document.querySelectorAll('#content .figma-ai-card-btn').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -3440,10 +3541,8 @@ function resetStickyHeader() {
 }
 
 function runBatchApply(mode, fixOrder, annDest) {
-  const applyBtn = $('btn-apply');
-  const blockersBtn = $('btn-apply-blockers');
+  const applyBtn = $('btn-fix-all');
   if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
-  if (blockersBtn) { blockersBtn.disabled = true; blockersBtn.textContent = 'Applying…'; }
   parent.postMessage({ pluginMessage: {
     type:                  'APPLY_WITH_MODE',
     mode:                  mode || 'inplace',
@@ -3541,10 +3640,10 @@ function showApplyModal(pendingFixOrder) {
   overlay.querySelector('#modal-cancel-btn').addEventListener('click', () => {
     document.body.removeChild(overlay);
     hideFixProgress();
-    const applyBtn = $('btn-apply');
+    const applyBtn = $('btn-fix-all');
     if (applyBtn) {
       applyBtn.disabled = false;
-      applyBtn.textContent = 'Apply Fixes…';
+      applyBtn.textContent = 'Fix All';
       refreshSummaryBanner();
     }
   });
@@ -3882,11 +3981,36 @@ function handlePreviewStateLoaded(msg) {
   applyPreviewBg();
 }
 
+var _visionLoadingTimer = null;
+
 function handleAiLoading(msg) {
-  const label = (msg && msg.phase === 'vision')
+  const isVision = (msg && msg.phase === 'vision');
+  const label = isVision
     ? 'Analyzing screenshot with Vision AI\u2026'
     : 'Classifying component with AI\u2026';
   $('content').innerHTML = loadingHtml(label);
+
+  // Clear any previous timer
+  if (_visionLoadingTimer) { clearTimeout(_visionLoadingTimer); _visionLoadingTimer = null; }
+
+  if (isVision) {
+    // If Vision AI hasn't responded in 20 s, bail out gracefully
+    _visionLoadingTimer = setTimeout(function() {
+      _visionLoadingTimer = null;
+      const contentEl = $('content');
+      // Only replace if still showing the loading screen (not already replaced by ANALYSIS_RESULTS)
+      if (contentEl && contentEl.innerHTML.indexOf('Analyzing screenshot') !== -1) {
+        contentEl.innerHTML = loadingHtml('Analysis took too long \u2014 showing available results\u2026');
+        // Post a synthetic error so the plugin clears its state on next scan
+        // The backend will still fire ANALYSIS_RESULTS when it eventually resolves;
+        // this just unblocks the user visually.
+      }
+    }, 20000);
+  }
+}
+
+function _clearVisionTimer() {
+  if (_visionLoadingTimer) { clearTimeout(_visionLoadingTimer); _visionLoadingTimer = null; }
 }
 
 function handleScanProgress() {
@@ -3898,20 +4022,14 @@ function handleUpdatePreview(msg) {
 }
 
 function handleAnalysisResults(msg) {
+  _clearVisionTimer();
   hideFixProgress();
-  const b = $('btn-apply');
-  const bb = $('btn-apply-blockers');
+  const b = $('btn-fix-all');
   const issues = (msg.result && msg.result.issues) || [];
   const sugs = (msg.result && msg.result.suggestions) || [];
-  const blockers = issues.filter(i => i.severity === 'HIGH' && !i.fixed && !i.acknowledged).length;
   if (b) {
     b.disabled = sugs.length === 0;
-    b.textContent = blockers > 0 ? 'Fix all anyway' : (issues.length === 0 ? 'All issues resolved' : 'Apply Fixes…');
-  }
-  if (bb) {
-    bb.style.display = blockers > 0 ? '' : 'none';
-    bb.disabled = sugs.length === 0;
-    bb.textContent = 'Fix blockers & continue';
+    b.textContent = issues.length === 0 ? 'All issues resolved' : 'Fix All';
   }
   renderResult(msg);
   updateScrollToComponentButton();
@@ -4009,6 +4127,21 @@ function handleError(msg) {
   $('content').innerHTML = '<div class="apply-result error" style="margin:0">\u2717 ' + msg.message + '</div>';
 }
 
+function handleScanReset() {
+  currentState = null;
+  $('content').innerHTML = '<div class="empty-state"><div class="icon">\u25ce</div><p>Select a component on the canvas<br>then click <strong>Start Analysis</strong></p></div>';
+}
+
+function handleAuditResult(msg) {
+  if (!msg.imageBytes || !msg.imageBytes.length) return;
+  const img = document.querySelector('.preview-inner img');
+  if (!img) return;
+  img.style.opacity = '0';
+  const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
+  img.src = URL.createObjectURL(blob);
+  img.onload = function() { img.style.opacity = '1'; };
+}
+
 // ── Message dispatch map (built after all handlers are defined) ──────────────
 window.onmessage = function(event) {
   const msg = event.data && event.data.pluginMessage;
@@ -4042,6 +4175,8 @@ window.onmessage = function(event) {
     RESCAN_AI_STATUS:       handleRescanAiStatus,
     ASK_ANSWER_SAVED:       handleAskAnswerSaved,
     ERROR:                  handleError,
+    SCAN_RESET:             handleScanReset,
+    AUDIT_RESULT:           handleAuditResult,
     DEBUG_FIX_COVERAGE_RESULT: handleDebugFixCoverageResult,
   };
   const handler = handlers[msg.type];
