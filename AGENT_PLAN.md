@@ -10,12 +10,15 @@
 A Figma plugin for WCAG 2.2 AA + ARIA APG accessibility auditing with self-healing autofix.
 
 ### File structure
+```
 a11y-shift/
-  manifest.json          # networkAccess: OpenAI
+  manifest.json          # id (publish), documentAccess: dynamic-page, OpenAI only
   dist/code.js           # main thread — all rule engine + AI logic
-  ui.html                # dark Apple×OpenAI UI
+  ui.html                # UI iframe — postMessage only, no figma.* / no fetch
+  fonts/                 # CircularXX (UI)
 .cursor/rules/
   figma-a11y-developer.mdc   # Cursor agent rules (alwaysApply: true)
+```
 
   ---
 
@@ -25,33 +28,57 @@ Two-thread Figma plugin:
 - **Main thread** (`dist/code.js`): classification, rule checks, autofix, OpenAI calls
 - **UI iframe** (`ui.html`): renders results, dispatches actions to main thread
 
-Communication: `figma.ui.postMessage()` ↔ `window.parent.postMessage()`
+Communication: `figma.ui.postMessage()` ↔ `parent.postMessage({ pluginMessage })`
 
-All `window.onmessage` handlers use a **dispatch map pattern** — all handler functions
-are defined *before* the `onmessage` listener to avoid "not defined" errors.
+Main thread: `figma.ui.onmessage = async (msg) => { ... }` — all node lookups via
+`await getNodeById(id)` (`getNodeByIdAsync` wrapper). **Never** `figma.getNodeById`.
+
+---
+
+## Published vs Development (critical)
+
+| | Development | Published |
+|---|-------------|-----------|
+| Run from | `Plugins → Development → Import manifest` | Community/org install; manifest `id` must match |
+| Code updates | Re-import / reload plugin after file changes | New version via Figma publish flow |
+| `getNodeById` sync | Do not rely on it — breaks when published | **Use async only** or plugin crashes on analyze |
+| Network | Only `api.openai.com` in manifest | Same; `figma.com/api/*` is **not** available |
+| Figma AI | No REST for plugins | Clipboard prompt + designer pastes in Figma AI |
+
+**Pre-publish checks:** `grep figma\.getNodeById\( dist/code.js` → 0; `grep figma.com/api` → 0;
+`node --check dist/code.js`; test analyze on accordion frame (`clickables`).
 
 ---
 
 ## Component Classification Pipeline
-getSemanticRoot(node)
-  → gatherContext(root) → { nodeType, childNames, siblingPatterns,
-                             nearbyText, actionTextKeywords }
-  → detectComponent (spec engine) → auditNode when spec matched
-  → if LOW / no spec → classifyWithAI (gpt-4o-mini, text)
-  → if role unknown → classifyWithVision (gpt-4o, PNG 0.5×, detail:"low")
-  → runSpecsForType(roleHint, rootNode) → auditNode + enrichIssues
 
-  ### Deep context (depth 3)
-`gatherContext` includes `deepChildScan(node, 3)` → `allChildNames`, `allChildTypes`,
-`repeatingPatterns`, `textHierarchy` (fontSize/fontWeight per text node), `hasChevrons`,
-`leafTextNodes`. Used for classification and matrix checkers (heading text at depth ≤3).
+```
+getSemanticRoot(node)
+  → await gatherContext(root)     // MUST await — includes await deepChildScan
+  → detectComponent(ctx, node)    // spec scores use ctx.hasChevrons, etc.
+  → await auditNode(...) when spec matched
+  → if LOW / no spec → classifyWithAI (gpt-4o-mini)
+  → if unknown → classifyWithVision (gpt-4o)
+  → await runSpecsForType → await auditNode + enrichIssues
+```
+
+### Deep context (depth 3) — async chain
+
+- `deepChildScan(node, 3, depth)` — **async**, `for` loop + `await` per child (never `forEach` + async)
+- `mergeDeepScanResults` merges child scans; chevrons via layer name + `subtreeHasChevronName`
+- `gatherContext` → `const deep = await deepChildScan(node, 3, 0)` then spreads into ctx
+- Temporary debug: `[classify] <name> hasChevrons: … allChildNames: …` when name contains `clickable` or childCount ≥ 3
+
+If `hasChevrons` is `undefined` in logs → a caller forgot `await gatherContext` (regression).
 
 ### Accordion classification (strict)
-- **+4 compound only** when ≥2 direct children each contain co-located TEXT + chevron (depth ≤4), vertical layout
-- **Layout gate**: `HORIZONTAL` / `GRID` / `WRAP` → accordion bonus = 0
-- **No generic `"item"`** pattern scoring; only `accordion-item`, `accordion-header`, `accordion-panel`
-- **Counters**: pill children (−6), small repeating rows &lt;44px (−4), multi-select copy ("select all…") → accordion = 0
-- **Checkbox group boost**: repeating items + select-all copy → +4 on checkbox spec
+
+- **main branch**: +8 when ≥2 compound rows OR (`hasChevrons` + ≥2 `repeatingPatterns`), vertical layout
+- **ux branch**: cumulative accordion score (≥7 to compete) — see `scoreAccordionSignals` on that branch
+- **Layout gate**: `HORIZONTAL` / `GRID` / `WRAP` → accordion blocked
+- **Tablist counter**: avg direct child height &gt; 48px → tablist −4 (accordion-like stacks)
+- **No generic `"item"`** pattern; multi-select copy cancels accordion
+- **Checkbox group boost**: repeating + select-all copy → +4 on checkbox spec
 
 ### Type competition
 All specs scored; highest wins. Margin &lt; 3 vs runner-up → Vision tiebreak (`vision-tiebreak` path).
@@ -82,7 +109,7 @@ Always check: `if (node.parent?.type === "COMPONENT_SET") readFrom = node.parent
 | `"rating-star"` (semantic slug) | subtree search by name match |
 | `"123:456"` (real ID) | direct |
 
-This is **required** before any `figma.getNodeById()` call on AI-returned suggestions.
+Resolve to real IDs, then **`await getNodeById(id)`** — never sync `figma.getNodeById`.
 
 ---
 
@@ -205,12 +232,14 @@ in subtree depth ≤3, (3) spatial text ≤40px above, (4) node name title/heade
 
 ---
 
-What NOT to Change
+## What NOT to Change
 
-`resolveSuggestions()` — all four resolution paths are needed
-Dispatch map pattern in `window.onmessage` — handlers must be defined before listener
-`refreshSummaryBanner()` after autofix — removing it causes stale blocker banner
-`node.parent?.type === "COMPONENT_SET"` guard — removing it causes runtime throws
+- `resolveSuggestions()` — all four resolution paths are needed
+- `await getNodeById` / `getNodeByIdAsync` — never reintroduce sync `figma.getNodeById`
+- `await gatherContext` → `await deepChildScan` — never `forEach(async …)` or missing await
+- `refreshSummaryBanner()` after autofix — stale blocker banner if removed
+- `node.parent?.type === "COMPONENT_SET"` guard — runtime throw if removed
+- Do **not** add `fetch` to `figma.com` — Figma AI stays clipboard-only (no REST)
 
 ---
 
@@ -274,3 +303,11 @@ _Cursor agent appends here after each task. Format: ✅ Task — what/why/gotcha
 - ✅ Visibility filter + contrast autofix — `isNodeVisible()` on deep scan, matrix checks, audits;
   `fixLowContrast` (HSL L binary search); Figma AI prompts include node ID, colors, ratio, action.
   - Gotcha: `refreshSummaryBanner()` runs in UI via `REFRESH_SUMMARY_BANNER` postMessage after contrast fix.
+
+- ✅ Production publish fixes — `getNodeByIdAsync` throughout; manifest `id` + `documentAccess: dynamic-page`;
+  login password UI; no Figma REST calls.
+  - Gotcha: published build throws on sync `getNodeById`; dev import can hide the bug until publish.
+
+- ✅ Classification async regression — `deepChildScan` / `gatherContext` fully async (`for` + `await`);
+  accordion vs tablist signals (chevrons, repeating patterns, row-height tablist penalty).
+  - Gotcha: `forEach(async () => …)` does not await — breaks `hasChevrons` and accordion detection.

@@ -1,5 +1,9 @@
 "use strict";
 
+// Network: only OpenAI (manifest networkAccess). Do NOT call Figma REST (e.g.
+// /api/custom_tools/owned_by_user) — not part of Plugin API and will 403/404.
+// TODO: Figma AI is not exposed to plugins via REST; keep copy-to-clipboard flow only.
+
 // Published plugins must use getNodeByIdAsync — sync getNodeById throws at runtime.
 async function getNodeById(id) {
   if (!id) return null;
@@ -145,64 +149,76 @@ function emptyDeepScan() {
   };
 }
 
+function isChevronLayerName(name) {
+  return CHEVRON_NAME_RE.test(name || "");
+}
+
+function mergeDeepScanResults(target, sub) {
+  if (!sub) return;
+  let ti;
+  for (ti = 0; ti < sub.allChildNames.length; ti++) target.allChildNames.push(sub.allChildNames[ti]);
+  for (ti = 0; ti < sub.allChildTypes.length; ti++) target.allChildTypes.push(sub.allChildTypes[ti]);
+  for (ti = 0; ti < sub.textHierarchy.length; ti++) target.textHierarchy.push(sub.textHierarchy[ti]);
+  for (ti = 0; ti < sub.leafTextNodes.length; ti++) {
+    if (target.leafTextNodes.indexOf(sub.leafTextNodes[ti]) < 0) target.leafTextNodes.push(sub.leafTextNodes[ti]);
+  }
+  if (sub.hasChevrons) target.hasChevrons = true;
+}
+
 // Walk subtree up to maxDepth; collect names, types, text hierarchy, chevrons.
-async function deepChildScan(node, maxDepth, currentDepth) {
+// Must use for-loop + await (never forEach with async callback).
+async function deepChildScan(node, maxDepth, depth) {
   maxDepth = maxDepth !== undefined ? maxDepth : 3;
-  currentDepth = currentDepth !== undefined ? currentDepth : 0;
-  if (!node) return emptyDeepScan();
+  depth = depth !== undefined ? depth : 0;
+  if (!node || depth >= maxDepth) return emptyDeepScan();
 
   try {
-    const allChildNames = [];
-    const allChildTypes = [];
-    const textHierarchy = [];
-    const leafTextNodes = [];
-    let hasChevrons = false;
+    const result = emptyDeepScan();
 
-    async function walk(n, depth) {
-      if (!n || depth > maxDepth) return;
-      if (!isNodeVisible(n)) return;
-
-      if (n.type === "TEXT") {
-        const chars = (n.characters || "").trim();
-        if (chars) {
-          leafTextNodes.push(chars);
-          const st = readTextStyle(n);
-          textHierarchy.push({
-            text: chars,
-            fontSize: st.fontSize,
-            fontWeight: st.fontWeight,
-            depth: depth,
-            name: n.name,
-          });
-        }
-        return;
+    if (node.type === "TEXT") {
+      const chars = (node.characters || "").trim();
+      if (chars) {
+        result.leafTextNodes.push(chars);
+        const st = readTextStyle(node);
+        result.textHierarchy.push({
+          text: chars,
+          fontSize: st.fontSize,
+          fontWeight: st.fontWeight,
+          depth: depth,
+          name: node.name,
+        });
       }
-
-      if (!("children" in n)) return;
-      const limit = Math.min(n.children.length, 80);
-      for (let i = 0; i < limit; i++) {
-        const c = n.children[i];
-        const nm = c.name || "";
-        allChildNames.push(nm);
-        allChildTypes.push(c.type);
-        if (CHEVRON_NAME_RE.test(nm)) hasChevrons = true;
-        await walk(c, depth + 1);
-      }
+      return result;
     }
 
-    if ("children" in node) {
-      const topLimit = Math.min(node.children.length, 40);
-      for (let i = 0; i < topLimit; i++) await walk(node.children[i], currentDepth + 1);
+    if (!("children" in node) || !node.children.length) {
+      if (depth === 0) {
+        result.repeatingPatterns = detectRepeatingPatterns(node, maxDepth);
+      }
+      return result;
     }
 
-    return {
-      allChildNames: allChildNames,
-      allChildTypes: allChildTypes,
-      repeatingPatterns: detectRepeatingPatterns(node, maxDepth),
-      textHierarchy: textHierarchy,
-      hasChevrons: hasChevrons,
-      leafTextNodes: leafTextNodes,
-    };
+    const limit = Math.min(node.children.length, depth === 0 ? 40 : 80);
+    for (let i = 0; i < limit; i++) {
+      const child = node.children[i];
+      if (!isNodeVisible(child)) continue;
+
+      const nm = child.name || "";
+      result.allChildNames.push(nm);
+      result.allChildTypes.push(child.type);
+      if (isChevronLayerName(nm) || subtreeHasChevronName(child, 3)) {
+        result.hasChevrons = true;
+      }
+
+      const sub = await deepChildScan(child, maxDepth, depth + 1);
+      mergeDeepScanResults(result, sub);
+    }
+
+    if (depth === 0) {
+      result.repeatingPatterns = detectRepeatingPatterns(node, maxDepth);
+    }
+
+    return result;
   } catch (e) {
     console.warn("[deepChildScan] failed:", e && e.message ? e.message : String(e));
     return emptyDeepScan();
@@ -444,6 +460,16 @@ async function gatherContext(node, allTextNodes) {
   }
 
   const deep = await deepChildScan(node, 3, 0);
+
+  const nodeNameLower = (node.name || "").toLowerCase();
+  if (nodeNameLower.indexOf("clickable") >= 0 || childCount >= 3) {
+    console.log(
+      "[classify]", node.name,
+      "hasChevrons:", deep.hasChevrons,
+      "allChildNames:", (deep.allChildNames || []).slice(0, 8)
+    );
+  }
+
   const innerMerged = innerText.slice();
   for (let li = 0; li < deep.leafTextNodes.length; li++) {
     if (innerMerged.indexOf(deep.leafTextNodes[li]) < 0) innerMerged.push(deep.leafTextNodes[li]);
@@ -2010,16 +2036,6 @@ function runRuleEngine(ctx) {
 // count < 2 → rule engine fallback (spec attached for audit if count === 1).
 
 function detectComponent(ctx, node) {
-  const dbgName = (ctx.nodeName || "").toLowerCase();
-  if (dbgName.indexOf("clickable") >= 0 || (ctx.childCount && ctx.childCount >= 3)) {
-    console.log(
-      "[classify] hasChevrons:", ctx.hasChevrons,
-      "repeatingPatterns:", ctx.repeatingPatterns ? ctx.repeatingPatterns.length : 0,
-      "allChildNames sample:", (ctx.allChildNames || []).slice(0, 5),
-      "accordionCoLocatedRows:", ctx.accordionCoLocatedRows
-    );
-  }
-
   const ranked = [];
 
   for (let i = 0; i < COMPONENT_SPECS.length; i++) {
